@@ -17,7 +17,13 @@ export type Call = {
 
 export function getCalls(limit = 25): Call[] {
   const files: { file: string; mtime: number }[] = [];
-  for (const dir of fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true })) {
+  let dirs: fs.Dirent[];
+  try {
+    dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
+  } catch {
+    return []; // no transcripts on this machine (e.g. deployed)
+  }
+  for (const dir of dirs) {
     if (!dir.isDirectory()) continue;
     const dirPath = path.join(PROJECTS_ROOT, dir.name);
     for (const f of fs.readdirSync(dirPath)) {

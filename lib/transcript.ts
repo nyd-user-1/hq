@@ -18,7 +18,13 @@ export type Turn = { role: "user" | "assistant"; text: string; at: string };
 
 export function latestSessionId(): string | null {
   let best: { id: string; mtime: number } | null = null;
-  for (const f of fs.readdirSync(SESSIONS_DIR)) {
+  let names: string[];
+  try {
+    names = fs.readdirSync(SESSIONS_DIR);
+  } catch {
+    return null; // no transcripts on this machine (e.g. deployed)
+  }
+  for (const f of names) {
     if (!f.endsWith(".jsonl")) continue;
     const mtime = fs.statSync(path.join(SESSIONS_DIR, f)).mtimeMs;
     if (!best || mtime > best.mtime) best = { id: f.slice(0, -6), mtime };

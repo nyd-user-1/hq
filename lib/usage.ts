@@ -80,7 +80,13 @@ function parseNewLines(file: string, cache: FileCache): void {
 function transcriptFiles(maxAgeMs: number): string[] {
   const cutoff = Date.now() - maxAgeMs;
   const files: string[] = [];
-  for (const dir of fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true })) {
+  let dirs: fs.Dirent[];
+  try {
+    dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
+  } catch {
+    return []; // no ~/.claude here (e.g. deployed) — meter renders empty
+  }
+  for (const dir of dirs) {
     if (!dir.isDirectory()) continue;
     const dirPath = path.join(PROJECTS_ROOT, dir.name);
     for (const f of fs.readdirSync(dirPath)) {
@@ -103,8 +109,10 @@ function transcriptFiles(maxAgeMs: number): string[] {
 // usage (e.g. background Haiku) apparently doesn't count toward limits —
 // so the block-total anchor wins. Recalibrate when /usage disagrees.
 // Second observation 3:31am: meter read 94% (17.95M) when /usage flashed
-// 96% ⇒ limit ≈18.7M. Two-point error now well under the ±3-5pt estimate.
-export const SESSION_LIMIT_WEIGHTED = 18_700_000;
+// 96% ⇒ limit ≈18.7M. Third, ~3:45am: meter 98% (18.33M) at real 100%
+// ⇒ ≈18.3M. Error is converging ~1-2pts low per reading — the meter may
+// lag real accounting slightly; bias the limit down.
+export const SESSION_LIMIT_WEIGHTED = 18_300_000;
 export const WEEK_LIMIT_WEIGHTED = 2_150_000_000;
 
 const BLOCK_MS = 5 * 60 * 60 * 1000;

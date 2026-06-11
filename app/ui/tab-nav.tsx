@@ -13,7 +13,7 @@ export type Tab = {
 export default function TabNav({ tabs }: { tabs: Tab[] }) {
   const active = useSelectedLayoutSegment();
   return (
-    <nav className="mb-2 flex gap-2">
+    <nav className="mb-2 flex flex-wrap gap-2">
       {tabs.map((tab) => {
         const isActive = active === tab.segment;
         return (
