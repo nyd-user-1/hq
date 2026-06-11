@@ -42,11 +42,11 @@ export default function RootLayout({
           </header>
           <Boundary label="layout.tsx">
             <div className="grid flex-1 items-start gap-5 lg:grid-cols-3">
-              <div className="flex lg:col-span-2">{children}</div>
-              <div className="flex flex-col gap-5">
-                {activity}
-                {consolePanel}
+              <div className="order-2 flex min-w-0 lg:order-1 lg:col-span-2 lg:row-span-2">
+                {children}
               </div>
+              <div className="order-1 flex min-w-0 lg:order-2">{activity}</div>
+              <div className="order-3 flex min-w-0">{consolePanel}</div>
             </div>
           </Boundary>
         </div>

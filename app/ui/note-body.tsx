@@ -11,7 +11,7 @@ function inline(line: string): string {
 export default function NoteBody({ md }: { md: string }) {
   const lines = md.split("\n");
   return (
-    <div className="flex flex-col gap-2 text-sm leading-relaxed text-zinc-300">
+    <div className="flex flex-col gap-2 break-words text-sm leading-relaxed text-zinc-300">
       {lines.map((raw, i) => {
         const line = raw.trimEnd();
         if (!line.trim()) return null;

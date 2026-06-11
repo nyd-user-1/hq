@@ -13,16 +13,16 @@ export type Tab = {
 export default function TabNav({ tabs }: { tabs: Tab[] }) {
   const active = useSelectedLayoutSegment();
   return (
-    <nav className="flex gap-2">
+    <nav className="mb-2 flex gap-2">
       {tabs.map((tab) => {
         const isActive = active === tab.segment;
         return (
           <Link
             key={tab.href}
             href={tab.href}
-            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
               isActive
-                ? "bg-zinc-100 text-zinc-900"
+                ? "bg-blue-600 text-white"
                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
             }`}
           >

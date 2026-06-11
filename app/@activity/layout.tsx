@@ -10,9 +10,9 @@ export default function ActivityLayout({
     <Boundary label="@activity/layout.tsx">
       <TabNav
         tabs={[
+          { title: "Usage", href: "/usage", segment: "usage" },
           { title: "Home", href: "/", segment: null },
           { title: "Runs", href: "/runs", segment: "runs" },
-          { title: "Usage", href: "/usage", segment: "usage" },
         ]}
       />
       {children}

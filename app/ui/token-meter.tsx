@@ -1,0 +1,94 @@
+import { getUsage, weighted, type Totals } from "@/lib/usage";
+
+function fmt(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(0)}k`;
+  return `${Math.round(n)}`;
+}
+
+const SEGMENTS: { key: keyof Totals; label: string; color: string }[] = [
+  { key: "cacheRead", label: "cache read", color: "bg-zinc-700" },
+  { key: "cacheCreate", label: "cache write", color: "bg-zinc-500" },
+  { key: "input", label: "fresh input", color: "bg-zinc-300" },
+  { key: "output", label: "output", color: "bg-blue-500" },
+];
+
+export default function TokenMeter() {
+  const { windows } = getUsage();
+  const maxWeighted = Math.max(...windows.map((w) => weighted(w.totals)), 1);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {windows.map((w) => {
+        const raw =
+          w.totals.input +
+          w.totals.cacheCreate +
+          w.totals.cacheRead +
+          w.totals.output;
+        const wt = weighted(w.totals);
+        const pct = w.limit ? Math.min((wt / w.limit) * 100, 100) : null;
+        return (
+          <div key={w.label} className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <span className="text-sm text-zinc-300">
+                {w.label}
+                {pct !== null && (
+                  <span className="ml-2 font-mono text-xs text-zinc-100">
+                    ≈{Math.round(pct)}% used
+                  </span>
+                )}
+              </span>
+              <span className="font-mono text-xs text-zinc-500">
+                {fmt(wt)} weighted · {fmt(raw)} raw · {w.totals.messages} msgs
+              </span>
+            </div>
+            {pct !== null ? (
+              // limit window: /usage-style track + fill
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className="h-full rounded-full bg-blue-600"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            ) : (
+              // no limit: bar length = weighted share vs the week; fill = raw composition
+              <div
+                className="flex h-2.5 overflow-hidden rounded-full bg-zinc-900"
+                style={{
+                  width: `${Math.max((wt / maxWeighted) * 100, 2)}%`,
+                }}
+              >
+                {SEGMENTS.map((s) => (
+                  <div
+                    key={s.key}
+                    className={s.color}
+                    style={{
+                      width: `${raw ? (w.totals[s.key] / raw) * 100 : 0}%`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {SEGMENTS.map((s) => (
+          <span
+            key={s.key}
+            className="flex items-center gap-1.5 text-xs text-zinc-500"
+          >
+            <span className={`size-2 rounded-full ${s.color}`} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+      <p className="text-xs text-zinc-600">
+        local transcripts on this machine · weighted = input-equivalents
+        (cache read ×0.1, output ×5) · limits calibrated against /usage
+        2026-06-11 2:51am (session 83%, week 35%) · estimates
+      </p>
+    </div>
+  );
+}
