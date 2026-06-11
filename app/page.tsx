@@ -1,3 +1,4 @@
+import Boundary from "@/app/ui/boundary";
 import { getProjects, vaultRoot } from "@/lib/vault";
 
 export const dynamic = "force-dynamic";
@@ -5,9 +6,11 @@ export const dynamic = "force-dynamic";
 export default function Portfolio() {
   const projects = getProjects();
   return (
-    <div className="flex flex-col gap-4">
+    <Boundary label="page.tsx">
+      <h2 className="text-xl font-semibold tracking-tight">Portfolio</h2>
       <p className="text-sm text-zinc-500">
-        One row per project folder in <code className="font-mono">{vaultRoot()}</code>
+        One row per project folder in{" "}
+        <code className="font-mono">{vaultRoot()}</code>
       </p>
       <ul className="flex flex-col gap-4">
         {projects.map((p) => (
@@ -39,6 +42,6 @@ export default function Portfolio() {
           </li>
         ))}
       </ul>
-    </div>
+    </Boundary>
   );
 }

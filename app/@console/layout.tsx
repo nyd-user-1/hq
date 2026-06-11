@@ -1,3 +1,4 @@
+import Boundary from "@/app/ui/boundary";
 import TabNav from "@/app/ui/tab-nav";
 
 export default function ConsoleLayout({
@@ -6,7 +7,7 @@ export default function ConsoleLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4">
+    <Boundary label="@console/layout.tsx">
       <TabNav
         tabs={[
           { title: "Home", href: "/", segment: null },
@@ -15,6 +16,6 @@ export default function ConsoleLayout({
         ]}
       />
       {children}
-    </div>
+    </Boundary>
   );
 }
