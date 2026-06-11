@@ -1,4 +1,5 @@
 import Boundary from "@/app/ui/boundary";
+import FlashOnNav from "@/app/ui/flash-on-nav";
 import TabNav from "@/app/ui/tab-nav";
 
 export default function ConsoleLayout({
@@ -15,7 +16,7 @@ export default function ConsoleLayout({
           { title: "Routines", href: "/routines", segment: "routines" },
         ]}
       />
-      {children}
+      <FlashOnNav>{children}</FlashOnNav>
     </Boundary>
   );
 }

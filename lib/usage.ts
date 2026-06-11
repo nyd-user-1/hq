@@ -102,7 +102,9 @@ function transcriptFiles(maxAgeMs: number): string[] {
 // ⇒ ≈2.15B. A marginal 73%→83% calibration disagreed — some transcript
 // usage (e.g. background Haiku) apparently doesn't count toward limits —
 // so the block-total anchor wins. Recalibrate when /usage disagrees.
-export const SESSION_LIMIT_WEIGHTED = 19_100_000;
+// Second observation 3:31am: meter read 94% (17.95M) when /usage flashed
+// 96% ⇒ limit ≈18.7M. Two-point error now well under the ±3-5pt estimate.
+export const SESSION_LIMIT_WEIGHTED = 18_700_000;
 export const WEEK_LIMIT_WEIGHTED = 2_150_000_000;
 
 const BLOCK_MS = 5 * 60 * 60 * 1000;
@@ -144,11 +146,10 @@ export function getUsage(): { windows: Window[]; generatedAt: number } {
   const block = sessionBlock();
   const resetLabel = new Date(block.reset)
     .toLocaleTimeString("en-US", { hour: "numeric" })
-    .toLowerCase()
     .replace(" ", "");
   const windows: Window[] = [
     {
-      label: `Session (resets ${resetLabel})`,
+      label: `Session Reset: ${resetLabel}`,
       since: block.start,
       totals: zero(),
       limit: SESSION_LIMIT_WEIGHTED,
@@ -179,6 +180,23 @@ export function getUsage(): { windows: Window[]; generatedAt: number } {
   }
 
   return { windows, generatedAt: now };
+}
+
+// Per-transcript lifetime totals from the file cache (call getUsage() first).
+export function perFileTotals(): Map<string, Totals> {
+  const m = new Map<string, Totals>();
+  for (const [file, { buckets }] of fileCache) {
+    const sum = zero();
+    for (const b of buckets.values()) {
+      sum.input += b.input;
+      sum.cacheCreate += b.cacheCreate;
+      sum.cacheRead += b.cacheRead;
+      sum.output += b.output;
+      sum.messages += b.messages;
+    }
+    m.set(file, sum);
+  }
+  return m;
 }
 
 // Cost-proxy in input-token equivalents, standard Anthropic price ratios:

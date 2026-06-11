@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HQ",
+  title: "Terminal 2",
   description: "Portfolio dashboard over the HQ vault",
 };
 
@@ -35,7 +35,7 @@ export default function RootLayout({
       <body className="min-h-full bg-zinc-950 text-zinc-100">
         <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-5 p-4 lg:p-6">
           <header className="flex items-baseline gap-3 px-1">
-            <h1 className="text-lg font-semibold tracking-tight">HQ</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Terminal 2</h1>
             <p className="text-sm text-zinc-500">
               one vault · every project · localhost only
             </p>

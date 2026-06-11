@@ -14,13 +14,21 @@ const SEGMENTS: { key: keyof Totals; label: string; color: string }[] = [
   { key: "output", label: "output", color: "bg-blue-500" },
 ];
 
-export default function TokenMeter() {
+// part="head" renders only the first window (always-visible accordion row);
+// part="rest" renders the remaining windows + legend + footnote.
+export default function TokenMeter({
+  part,
+}: {
+  part?: "head" | "rest";
+} = {}) {
   const { windows } = getUsage();
   const maxWeighted = Math.max(...windows.map((w) => weighted(w.totals)), 1);
+  const shown =
+    part === "head" ? windows.slice(0, 1) : part === "rest" ? windows.slice(1) : windows;
 
   return (
     <div className="flex flex-col gap-4">
-      {windows.map((w) => {
+      {shown.map((w) => {
         const raw =
           w.totals.input +
           w.totals.cacheCreate +
@@ -28,19 +36,28 @@ export default function TokenMeter() {
           w.totals.output;
         const wt = weighted(w.totals);
         const pct = w.limit ? Math.min((wt / w.limit) * 100, 100) : null;
+        const pctColor =
+          pct === null
+            ? ""
+            : pct < 50
+              ? "text-green-500"
+              : pct < 75
+                ? "text-yellow-500"
+                : pct < 90
+                  ? "text-orange-500"
+                  : "text-red-500";
         return (
           <div key={w.label} className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <span className="text-sm text-zinc-300">
-                {w.label}
-                {pct !== null && (
-                  <span className="ml-2 font-mono text-xs text-zinc-100">
-                    ≈{Math.round(pct)}% used
-                  </span>
-                )}
-              </span>
+              <span className="text-sm text-zinc-300">{w.label}</span>
               <span className="font-mono text-xs text-zinc-500">
                 {fmt(wt)} weighted · {fmt(raw)} raw · {w.totals.messages} msgs
+                {pct !== null && (
+                  <>
+                    {" · "}
+                    <span className={pctColor}>{Math.round(pct)}%</span>
+                  </>
+                )}
               </span>
             </div>
             {pct !== null ? (
@@ -73,6 +90,8 @@ export default function TokenMeter() {
           </div>
         );
       })}
+      {part === "head" ? null : (
+        <>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {SEGMENTS.map((s) => (
           <span
@@ -89,6 +108,8 @@ export default function TokenMeter() {
         (cache read ×0.1, output ×5) · limits calibrated against /usage
         2026-06-11 2:51am (session 83%, week 35%) · estimates
       </p>
+        </>
+      )}
     </div>
   );
 }
