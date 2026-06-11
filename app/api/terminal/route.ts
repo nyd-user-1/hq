@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { NextResponse } from "next/server";
 import { latestSessionId } from "@/lib/transcript";
 
-export const maxDuration = 600;
+export const maxDuration = 300; // Vercel hobby cap; locally the dev server has no limit
 
 // Continues the newest session headlessly. Resume forks to a new session
 // file that carries the full history, so the transcript view follows along.
