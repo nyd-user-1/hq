@@ -1,4 +1,4 @@
-import { getUsage, weighted, type Totals } from "@/lib/usage";
+import { getUsage, type Totals } from "@/lib/usage";
 
 function fmt(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -22,7 +22,7 @@ export default function TokenMeter({
   part?: "head" | "rest";
 } = {}) {
   const { windows } = getUsage();
-  const maxWeighted = Math.max(...windows.map((w) => weighted(w.totals)), 1);
+  const maxWeighted = Math.max(...windows.map((w) => w.weightedTotal), 1);
   const shown =
     part === "head" ? windows.slice(0, 1) : part === "rest" ? windows.slice(1) : windows;
 
@@ -34,7 +34,7 @@ export default function TokenMeter({
           w.totals.cacheCreate +
           w.totals.cacheRead +
           w.totals.output;
-        const wt = weighted(w.totals);
+        const wt = w.weightedTotal;
         const pct = w.limit ? Math.min((wt / w.limit) * 100, 100) : null;
         const pctColor =
           pct === null
@@ -104,9 +104,10 @@ export default function TokenMeter({
         ))}
       </div>
       <p className="text-xs text-zinc-600">
-        local transcripts on this machine · weighted = input-equivalents
-        (cache read ×0.1, output ×5) · limits calibrated against /usage
-        2026-06-11 2:51am (session 83%, week 35%) · estimates
+        local transcripts · deduped by request · weighted = input-equivalents
+        (cache read ×0.1, output ×5) × per-model tier (opus ×5) · limits
+        recalibrated against /usage 2026-06-11 6:32pm (session 23%, week 43%) ·
+        estimates
       </p>
         </>
       )}

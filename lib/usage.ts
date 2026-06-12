@@ -4,11 +4,19 @@ import os from "node:os";
 
 // Token meter over Claude Code's local transcripts (~/.claude/projects/**/*.jsonl).
 // Same source the /usage screen aggregates: every assistant message logs a
-// `usage` block. Files are append-only, so each file is cached by byte offset
-// and only new bytes are parsed after the first load.
+// `usage` block.
+//
+// TWO corrections over the naive "sum every line with usage" approach:
+//  1. DEDUPE by requestId. Claude Code writes a message's usage block ~3x
+//     (streaming partials), so summing every line triple-counts. We keep one
+//     record per requestId (last-wins = the final streamed totals).
+//  2. PER-MODEL weighting. A token on Opus costs the rate limit far more than
+//     one on Sonnet/Haiku. We scale each entry by a model tier multiplier so a
+//     shifting model mix tracks the real /usage % instead of drifting.
+// Files are append-only, so each is cached by byte offset and only new bytes
+// are parsed after the first load.
 
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
-const BUCKET_MS = 10 * 60 * 1000; // 10-minute buckets
 
 export type Totals = {
   input: number;
@@ -26,19 +34,53 @@ const zero = (): Totals => ({
   messages: 0,
 });
 
-type FileCache = {
-  offset: number;
-  buckets: Map<number, Totals>;
+// Within-model token shape, standard Anthropic price ratios:
+// fresh input ×1, cache write ×1.25, cache read ×0.1, output ×5.
+function shape(input: number, cw: number, cr: number, out: number): number {
+  return input + 1.25 * cw + 0.1 * cr + 5 * out;
+}
+
+// Backward-compatible model-agnostic weight over a Totals block.
+export function weighted(t: Totals): number {
+  return shape(t.input, t.cacheCreate, t.cacheRead, t.output);
+}
+
+// Per-model multiplier relative to Sonnet = 1.0 — a price-tier proxy for how
+// fast each model burns the rate limit. CALIBRATION KNOB: tune as /usage
+// readings across different model mixes accumulate. (Fable/Mythos priced as a
+// premium tier ≥ Opus; placeholder until a Fable-heavy block is measured.)
+const MODEL_WEIGHT: Array<[string, number]> = [
+  ["opus", 5.0],
+  ["sonnet", 1.0],
+  ["haiku", 0.33],
+  ["fable", 5.0],
+  ["mythos", 5.0],
+];
+function modelWeight(model?: string): number {
+  if (!model) return 1.0;
+  const m = model.toLowerCase();
+  for (const [key, w] of MODEL_WEIGHT) if (m.includes(key)) return w;
+  return 1.0;
+}
+
+// One deduped record per requestId.
+type Rec = {
+  ts: number;
+  model?: string;
+  input: number;
+  cw: number;
+  cr: number;
+  out: number;
 };
+type FileCache = { offset: number; recs: Map<string, Rec> };
 
 const fileCache = new Map<string, FileCache>();
 
 function parseNewLines(file: string, cache: FileCache): void {
   const size = fs.statSync(file).size;
   if (size < cache.offset) {
-    // truncated/rewritten — start over
     cache.offset = 0;
-    cache.buckets = new Map();
+    cache.recs = new Map();
   }
   if (size === cache.offset) return;
 
@@ -49,7 +91,7 @@ function parseNewLines(file: string, cache: FileCache): void {
 
   const text = buf.toString("utf8");
   const lastNewline = text.lastIndexOf("\n");
-  if (lastNewline === -1) return; // no complete line yet
+  if (lastNewline === -1) return;
   cache.offset += Buffer.byteLength(text.slice(0, lastNewline + 1), "utf8");
 
   for (const line of text.slice(0, lastNewline).split("\n")) {
@@ -63,17 +105,17 @@ function parseNewLines(file: string, cache: FileCache): void {
     const usage = entry?.message?.usage;
     const t = Date.parse(entry?.timestamp);
     if (!usage || Number.isNaN(t)) continue;
-    const bucketKey = Math.floor(t / BUCKET_MS);
-    let b = cache.buckets.get(bucketKey);
-    if (!b) {
-      b = zero();
-      cache.buckets.set(bucketKey, b);
-    }
-    b.input += usage.input_tokens ?? 0;
-    b.cacheCreate += usage.cache_creation_input_tokens ?? 0;
-    b.cacheRead += usage.cache_read_input_tokens ?? 0;
-    b.output += usage.output_tokens ?? 0;
-    b.messages += 1;
+    // dedupe key: requestId, else message.id, else a per-file unique fallback
+    const id: string =
+      entry?.requestId ?? entry?.message?.id ?? `_n${cache.recs.size}`;
+    cache.recs.set(id, {
+      ts: t,
+      model: entry?.message?.model,
+      input: usage.input_tokens ?? 0,
+      cw: usage.cache_creation_input_tokens ?? 0,
+      cr: usage.cache_read_input_tokens ?? 0,
+      out: usage.output_tokens ?? 0,
+    });
   }
 }
 
@@ -102,18 +144,35 @@ function transcriptFiles(maxAgeMs: number): string[] {
   return files;
 }
 
-// Limits in weighted tokens, calibrated against the real /usage screen
-// 2026-06-11 ~2:51am: the session block (since midnight) stood at ~15.8M
-// weighted when /usage read 83% ⇒ limit ≈19.1M; week read 35% at ~751M
-// ⇒ ≈2.15B. A marginal 73%→83% calibration disagreed — some transcript
-// usage (e.g. background Haiku) apparently doesn't count toward limits —
-// so the block-total anchor wins. Recalibrate when /usage disagrees.
-// Second observation 3:31am: meter read 94% (17.95M) when /usage flashed
-// 96% ⇒ limit ≈18.7M. Third, ~3:45am: meter 98% (18.33M) at real 100%
-// ⇒ ≈18.3M. Error is converging ~1-2pts low per reading — the meter may
-// lag real accounting slightly; bias the limit down.
-export const SESSION_LIMIT_WEIGHTED = 18_300_000;
-export const WEEK_LIMIT_WEIGHTED = 2_150_000_000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function refreshCache(): void {
+  for (const file of transcriptFiles(WEEK_MS)) {
+    let cache = fileCache.get(file);
+    if (!cache) {
+      cache = { offset: 0, recs: new Map() };
+      fileCache.set(file, cache);
+    }
+    try {
+      parseNewLines(file, cache);
+    } catch {
+      // unreadable — skip
+    }
+  }
+}
+
+function* allRecs(): Generator<Rec> {
+  for (const { recs } of fileCache.values()) {
+    for (const r of recs.values()) yield r;
+  }
+}
+
+// Limits in weighted tokens, recalibrated 2026-06-11 ~6:32pm AFTER dedupe +
+// per-model weighting, anchored to the real /usage screen (session 23%, week
+// 43%). The pre-dedupe limits (18.3M / 2.15B) were fit to ~3.3x inflated,
+// model-agnostic numbers; these replace them. Recalibrate when /usage disagrees.
+export const SESSION_LIMIT_WEIGHTED = 212_000_000;
+export const WEEK_LIMIT_WEIGHTED = 4_300_000_000;
 
 const BLOCK_MS = 5 * 60 * 60 * 1000;
 
@@ -131,25 +190,13 @@ export type Window = {
   label: string;
   since: number;
   totals: Totals;
+  weightedTotal: number;
   limit?: number;
 };
 
 export function getUsage(): { windows: Window[]; generatedAt: number } {
+  refreshCache();
   const now = Date.now();
-  const weekMs = 7 * 24 * 60 * 60 * 1000;
-
-  for (const file of transcriptFiles(weekMs + BUCKET_MS)) {
-    let cache = fileCache.get(file);
-    if (!cache) {
-      cache = { offset: 0, buckets: new Map() };
-      fileCache.set(file, cache);
-    }
-    try {
-      parseNewLines(file, cache);
-    } catch {
-      // unreadable file — skip
-    }
-  }
 
   const block = sessionBlock();
   const resetLabel = new Date(block.reset)
@@ -160,29 +207,35 @@ export function getUsage(): { windows: Window[]; generatedAt: number } {
       label: `Session Reset: ${resetLabel}`,
       since: block.start,
       totals: zero(),
+      weightedTotal: 0,
       limit: SESSION_LIMIT_WEIGHTED,
     },
-    { label: "Last 24h", since: now - 24 * 60 * 60 * 1000, totals: zero() },
+    {
+      label: "Last 24h",
+      since: now - 24 * 60 * 60 * 1000,
+      totals: zero(),
+      weightedTotal: 0,
+    },
     {
       label: "Week (last 7d)",
-      since: now - weekMs,
+      since: now - WEEK_MS,
       totals: zero(),
+      weightedTotal: 0,
       limit: WEEK_LIMIT_WEIGHTED,
     },
   ];
 
-  for (const { buckets } of fileCache.values()) {
-    for (const [bucketKey, b] of buckets) {
-      const bucketTime = bucketKey * BUCKET_MS;
-      if (now - bucketTime > weekMs) continue;
-      for (const w of windows) {
-        if (bucketTime >= w.since) {
-          w.totals.input += b.input;
-          w.totals.cacheCreate += b.cacheCreate;
-          w.totals.cacheRead += b.cacheRead;
-          w.totals.output += b.output;
-          w.totals.messages += b.messages;
-        }
+  for (const r of allRecs()) {
+    if (now - r.ts > WEEK_MS) continue;
+    const ew = shape(r.input, r.cw, r.cr, r.out) * modelWeight(r.model);
+    for (const w of windows) {
+      if (r.ts >= w.since) {
+        w.totals.input += r.input;
+        w.totals.cacheCreate += r.cw;
+        w.totals.cacheRead += r.cr;
+        w.totals.output += r.out;
+        w.totals.messages += 1;
+        w.weightedTotal += ew;
       }
     }
   }
@@ -190,25 +243,61 @@ export function getUsage(): { windows: Window[]; generatedAt: number } {
   return { windows, generatedAt: now };
 }
 
-// Per-transcript lifetime totals from the file cache (call getUsage() first).
+// Per-transcript deduped lifetime totals from the file cache (call getUsage()
+// or getForecast() first to warm it). Consumed by lib/sessions.ts.
 export function perFileTotals(): Map<string, Totals> {
   const m = new Map<string, Totals>();
-  for (const [file, { buckets }] of fileCache) {
+  for (const [file, { recs }] of fileCache) {
     const sum = zero();
-    for (const b of buckets.values()) {
-      sum.input += b.input;
-      sum.cacheCreate += b.cacheCreate;
-      sum.cacheRead += b.cacheRead;
-      sum.output += b.output;
-      sum.messages += b.messages;
+    for (const r of recs.values()) {
+      sum.input += r.input;
+      sum.cacheCreate += r.cw;
+      sum.cacheRead += r.cr;
+      sum.output += r.out;
+      sum.messages += 1;
     }
     m.set(file, sum);
   }
   return m;
 }
 
-// Cost-proxy in input-token equivalents, standard Anthropic price ratios:
-// fresh input ×1, cache write ×1.25, cache read ×0.1, output ×5.
-export function weighted(t: Totals): number {
-  return t.input + 1.25 * t.cacheCreate + 0.1 * t.cacheRead + 5 * t.output;
+export type Forecast = {
+  burnPerMin: number; // weighted tokens/min over a trailing window
+  blockWeighted: number; // weighted used in the current session block
+  limit: number;
+  blockReset: number;
+  projectedCapAt: number | null; // ms; null = won't hit cap before the reset
+  underCap: boolean;
+};
+
+const TRAIL_MS = 15 * 60 * 1000; // trailing window for the burn rate
+
+// Forward-looking companion to getUsage(): a burn-rate forecast. Stock vs flow
+// — getUsage answers "how much of the cap is used", this answers "at the
+// current rate, when do we hit it".
+export function getForecast(): Forecast {
+  refreshCache();
+  const now = Date.now();
+  const block = sessionBlock();
+  let blockWeighted = 0;
+  let trailWeighted = 0;
+  for (const r of allRecs()) {
+    const ew = shape(r.input, r.cw, r.cr, r.out) * modelWeight(r.model);
+    if (r.ts >= block.start) blockWeighted += ew;
+    if (now - r.ts <= TRAIL_MS) trailWeighted += ew;
+  }
+  const burnPerMin = trailWeighted / (TRAIL_MS / 60000);
+  const remaining = Math.max(SESSION_LIMIT_WEIGHTED - blockWeighted, 0);
+  const minsToCap = burnPerMin > 0 ? remaining / burnPerMin : Infinity;
+  const capTime = now + minsToCap * 60000;
+  const projectedCapAt =
+    Number.isFinite(minsToCap) && capTime < block.reset ? capTime : null;
+  return {
+    burnPerMin,
+    blockWeighted,
+    limit: SESSION_LIMIT_WEIGHTED,
+    blockReset: block.reset,
+    projectedCapAt,
+    underCap: projectedCapAt === null,
+  };
 }
