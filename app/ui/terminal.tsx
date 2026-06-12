@@ -94,6 +94,8 @@ export default function Terminal() {
   const [contextTokens, setContextTokens] = useState(0);
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [wrapCopied, setWrapCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false); // send guard dialog open
+  const stoppedRef = useRef(false); // true when the user killed the run via stop
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -129,6 +131,7 @@ export default function Terminal() {
   useEffect(() => {
     setLoading(true);
     setError(null);
+    setConfirming(false); // a stale confirm must not carry over to a new target
     loadTurns().finally(() => setLoading(false));
   }, [loadTurns]);
 
@@ -179,10 +182,22 @@ export default function Terminal() {
     setDraft("");
   }
 
-  async function send() {
+  // The send guard (001.8): sending spawns a headless Claude that can edit the
+  // resumed project's repo. Requires a PINNED target (no "newest" roulette) and
+  // an explicit confirm that names the project and prices the context re-read.
+  function requestSend() {
+    if (sending || !pinned) return;
+    if (queue.length === 0 && !draft.trim()) return;
+    setConfirming(true);
+  }
+
+  async function doSend() {
+    setConfirming(false);
+    if (!pinned) return;
     const prompt = [...queue, draft.trim()].filter(Boolean).join("\n\n");
     if (!prompt || sending) return;
     setQueue([]);
+    stoppedRef.current = false;
     setSending(true);
     busyRef.current = true;
     setError(null);
@@ -195,10 +210,14 @@ export default function Terminal() {
       const res = await fetch("/api/terminal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, sessionId: pinned ?? undefined }),
+        body: JSON.stringify({ prompt, sessionId: pinned }),
       });
       if (!res.ok) {
-        setError((await res.text()) || `error ${res.status}`);
+        setError(
+          stoppedRef.current
+            ? "stopped — the headless run was killed"
+            : (await res.text()) || `error ${res.status}`
+        );
         return;
       }
       const data = await res.json();
@@ -213,10 +232,25 @@ export default function Terminal() {
           },
         ]);
     } catch (e) {
-      setError(String(e));
+      setError(
+        stoppedRef.current ? "stopped — the headless run was killed" : String(e)
+      );
     } finally {
       setSending(false);
       busyRef.current = false;
+    }
+  }
+
+  // Kill the HQ-spawned run; the in-flight POST settles and cleans up state.
+  async function stopSend() {
+    if (!pinned) return;
+    stoppedRef.current = true;
+    try {
+      await fetch(`/api/terminal?session=${encodeURIComponent(pinned)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      // the POST's own error path will surface anything real
     }
   }
 
@@ -229,6 +263,10 @@ export default function Terminal() {
       ? CACHE_TTL_MS - (now - lastWrite)
       : null;
   const ctxPct = (contextTokens / CONTEXT_LIMIT) * 100;
+  // What a send costs: the headless fork re-reads the whole history — at cache
+  // prices if warm (~$1.5/M), full input price if cold (~$15/M, Opus tier).
+  const cacheWarm = cacheLeft !== null && cacheLeft > 0;
+  const sendCost = (contextTokens / 1e6) * (cacheWarm ? 1.5 : 15);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -439,6 +477,41 @@ export default function Terminal() {
             ))}
           </div>
         )}
+        {confirming && pinned && (
+          <div className="flex flex-col gap-2 rounded-md border border-red-500/40 bg-red-500/5 p-3">
+            <p className="font-mono text-[11px] leading-relaxed text-zinc-300">
+              <span className="text-red-400">⚠ headless fork — </span>
+              this spawns a separate Claude resumed from{" "}
+              <span className="text-zinc-100">{project || "this session"}</span>{" "}
+              ({resolvedId ? resolvedId.slice(0, 8) : "?"}). It can edit files
+              and commit in that project, in parallel with any live terminal.
+              It will re-read ~{fmtTokens(contextTokens)} tokens of history ≈ $
+              {sendCost.toFixed(2)}{" "}
+              {cacheWarm
+                ? "(cache warm — ~10% price)"
+                : "(cache cold — full price)"}
+              .
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirming(false)}
+                autoFocus
+                className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100"
+              >
+                cancel
+              </button>
+              <button
+                onClick={doSend}
+                className="rounded-md border border-red-500/50 px-2.5 py-1 text-xs text-red-400 transition-colors hover:border-red-400 hover:text-red-300"
+              >
+                send anyway
+                {queue.length > 0
+                  ? ` ×${queue.length + (draft.trim() ? 1 : 0)}`
+                  : ""}
+              </button>
+            </div>
+          </div>
+        )}
         {/* one container: textarea + controls inside, ↵ sends / ⇧↵ newline */}
         <div className="flex items-end gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
           <textarea
@@ -447,11 +520,16 @@ export default function Terminal() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                send();
+                requestSend();
               }
+              if (e.key === "Escape") setConfirming(false);
             }}
             rows={2}
-            placeholder={`message ${project || "session"} — ↵ send · ⇧↵ newline`}
+            placeholder={
+              pinned
+                ? `message ${project || "session"} — ↵ send · ⇧↵ newline`
+                : "observe-only — pin a session (Sessions panel) to send"
+            }
             className="min-h-0 flex-1 resize-none bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <button
@@ -462,17 +540,30 @@ export default function Terminal() {
           >
             + queue
           </button>
-          <button
-            onClick={send}
-            disabled={sending || (!draft.trim() && queue.length === 0)}
-            className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {sending
-              ? "…"
-              : queue.length > 0
+          {sending ? (
+            <button
+              onClick={stopSend}
+              title="kill the HQ-spawned headless run"
+              className="shrink-0 rounded-md border border-red-500/50 px-2.5 py-1 text-xs text-red-400 transition-colors hover:border-red-400 hover:text-red-300"
+            >
+              stop
+            </button>
+          ) : (
+            <button
+              onClick={requestSend}
+              disabled={!pinned || (!draft.trim() && queue.length === 0)}
+              title={
+                pinned
+                  ? undefined
+                  : "unpinned send is disabled — it could resume the wrong session (the 001.8 incident)"
+              }
+              className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {queue.length > 0
                 ? `send ×${queue.length + (draft.trim() ? 1 : 0)}`
                 : "send"}
-          </button>
+            </button>
+          )}
         </div>
       </div>
     </div>

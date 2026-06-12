@@ -24,10 +24,16 @@ export default function SkillLauncher() {
     setRunning(label);
     setError(null);
     try {
+      // the API refuses implicit targets (001.8 guard) — name the session
+      const sessionId = (await (await fetch("/api/terminal/turns")).json())?.id;
+      if (!sessionId) {
+        setError("no session to target");
+        return;
+      }
       const res = await fetch("/api/terminal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, sessionId }),
       });
       if (!res.ok) setError((await res.text()) || `error ${res.status}`);
     } catch (e) {

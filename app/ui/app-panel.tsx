@@ -38,18 +38,20 @@ export default function AppPanel({
     >
       {open && (
         <div className="relative flex h-full w-full flex-col">
-          {/* inset from the top-right so they're not glued to the panel border */}
-          <div className="absolute right-3 top-3 z-10 flex gap-1">
+          {/* chips resting ON the first boundary's border (the terminal-toggle
+              pattern): content starts pt-3 → border at 12px; ~20px chips at
+              top 2px sit centered on the line, opposite the path chip */}
+          <div className="absolute right-3 top-[2px] z-10 flex gap-1.5">
             <button
               onClick={() => setExpanded((v) => !v)}
               aria-label={expanded ? "Collapse to a third" : "Expand to half"}
-              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+              className="flex shrink-0 items-center bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
             >
               {/* columns icon shows the TARGET layout: Columns2 (→ half) when
                   collapsed, Columns3 (→ third) when expanded */}
               <svg
-                width="15"
-                height="15"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -71,11 +73,11 @@ export default function AppPanel({
             <button
               onClick={onClose}
               aria-label="Close panel"
-              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+              className="flex shrink-0 items-center bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
             >
               <svg
-                width="15"
-                height="15"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"

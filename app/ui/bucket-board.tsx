@@ -92,10 +92,16 @@ function BucketCard({ bucket }: { bucket: Bucket }) {
   async function confirm() {
     setSend({ status: "running" });
     try {
+      // the API refuses implicit targets (001.8 guard) — name the session
+      const sessionId = (await (await fetch("/api/terminal/turns")).json())?.id;
+      if (!sessionId) {
+        setSend({ status: "error", msg: "no session to target" });
+        return;
+      }
       const res = await fetch("/api/terminal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: bucket.dispatchPrompt }),
+        body: JSON.stringify({ prompt: bucket.dispatchPrompt, sessionId }),
       });
       if (!res.ok) setSend({ status: "error", msg: (await res.text()) || `error ${res.status}` });
       else setSend({ status: "done" });
