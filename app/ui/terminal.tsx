@@ -30,6 +30,12 @@ function fmtTokens(n: number): string {
 function fmtElapsed(s: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
+function fmtAgo(ms: number): string {
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ${m % 60}m ago`;
+}
 
 // The Anthropic prompt cache holds ~5 minutes; reply inside the window and the
 // whole history is read at ~10% price. The header counts the window down.
@@ -155,6 +161,14 @@ export default function Terminal() {
     }, 1000);
     return () => clearInterval(t);
   }, [working, loadTurns]);
+
+  // Slow tick while idle so the "last activity Nm ago" line stays honest even
+  // after the cache countdown's 1s tick stops.
+  useEffect(() => {
+    if (working) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [working]);
 
   // Tick 1s while the cache window is open and the session is idle, so the
   // countdown stays live (the working effect already ticks mid-turn).
@@ -365,7 +379,25 @@ export default function Terminal() {
           <p className="text-sm text-zinc-600">no session transcript found</p>
         )}
         {items.map((it, i) =>
-          it.kind === "turn" ? (
+          it.kind === "command" ? (
+            <div
+              key={i}
+              className="flex items-center gap-2 font-mono text-[11px] text-zinc-600"
+            >
+              <span className="h-px w-6 shrink-0 bg-zinc-800" />
+              <span className="shrink-0">
+                {it.command}
+                {it.arg ? ` ${it.arg}` : ""}
+                {it.command === "/clear" && " · context reset"}
+              </span>
+              {it.at && (
+                <span className="shrink-0">
+                  · {new Date(it.at).toLocaleTimeString()}
+                </span>
+              )}
+              <span className="h-px min-w-6 flex-1 bg-zinc-800" />
+            </div>
+          ) : it.kind === "turn" ? (
             <div key={i} className="flex flex-col gap-1">
               <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
                 <span
@@ -431,6 +463,15 @@ export default function Terminal() {
             </details>
           )
         )}
+        {!loading && items.length > 0 && items.every((it) => it.kind === "command") && (
+          <div className="flex flex-col gap-1 font-mono text-xs">
+            <p className="text-zinc-400">fresh session — no turns yet</p>
+            <p className="text-zinc-600">
+              type in your Claude terminal to start it, or pin a session
+              (Sessions panel) to follow that one here
+            </p>
+          </div>
+        )}
         {status ? (
           <div className="flex flex-col gap-0.5">
             <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
@@ -448,6 +489,11 @@ export default function Terminal() {
           </div>
         ) : sending ? (
           <p className="font-mono text-xs text-zinc-500">starting…</p>
+        ) : !loading && lastWrite && now > 0 ? (
+          <p className="font-mono text-xs text-zinc-600">
+            ◦ idle — nothing running
+            {now > lastWrite && ` · last activity ${fmtAgo(now - lastWrite)}`}
+          </p>
         ) : null}
         {error && (
           <p className="whitespace-pre-wrap font-mono text-xs text-red-400">

@@ -168,6 +168,7 @@ export function recentTurns(count: number): Turn[] {
 
 export type TimelineItem =
   | { kind: "turn"; role: "user" | "assistant"; text: string; at: string }
+  | { kind: "command"; command: string; arg: string; at: string } // local command marker (/clear, /model, …)
   | {
       kind: "tool";
       id: string;
@@ -347,10 +348,20 @@ export function timelineFor(
         }
         continue;
       }
-      const t = clean(typeof c === "string" ? c : blocksToText(c));
-      if (!t) continue;
-      if (t.includes("<command-name>") || t.includes("<local-command-stdout>"))
+      const raw = typeof c === "string" ? c : blocksToText(c);
+      // Local commands (/clear, /model, …) show as dim markers — the user's own
+      // action reflected back, instead of a silently blank timeline.
+      const cmd = raw.match(/<command-name>([^<]*)<\/command-name>/);
+      if (cmd) {
+        const arg =
+          raw.match(/<command-args>([\s\S]*?)<\/command-args>/)?.[1].trim() ??
+          "";
+        items.push({ kind: "command", command: cmd[1].trim(), arg, at });
         continue;
+      }
+      if (raw.includes("<local-command-stdout>")) continue;
+      const t = clean(raw);
+      if (!t) continue;
       items.push({ kind: "turn", role: "user", text: t, at });
     }
   }
@@ -408,6 +419,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
     role: "user" | "assistant";
     ts: number;
     isUserPrompt: boolean;
+    isMeta: boolean; // local-command record (/clear etc.) — never gets a reply
     stop: string | null;
     out: number;
     phases: string[];
@@ -430,12 +442,17 @@ export function workingStatus(id: string | null): WorkingStatus | null {
     const hasText =
       (typeof c === "string" && c.trim().length > 0) ||
       blocks.some((b) => b?.type === "text" && (b.text ?? "").trim().length > 0);
-    const isCmd = typeof c === "string" && c.includes("<command-name>");
+    const isMeta =
+      typeof c === "string" &&
+      (c.includes("<command-name>") ||
+        c.includes("<local-command-stdout>") ||
+        c.includes("<local-command-caveat>"));
     const ts = Date.parse(e.timestamp);
     entries.push({
       role: e.type,
       ts: Number.isNaN(ts) ? 0 : ts,
-      isUserPrompt: e.type === "user" && !isToolResult && hasText && !isCmd,
+      isUserPrompt: e.type === "user" && !isToolResult && hasText && !isMeta,
+      isMeta,
       stop: e.message?.stop_reason ?? null,
       out: e.message?.usage?.output_tokens ?? 0,
       phases: blocks.map(blockPhase).filter(Boolean),
@@ -469,7 +486,10 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   let working: boolean;
   let phase = "thinking";
   if (last.role === "user") {
-    working = true; // prompt or tool-result with no assistant reply yet
+    // Prompt or tool-result with no assistant reply yet = a turn in flight.
+    // Local-command records (/clear etc.) are the exception: Claude is never
+    // invoked for them, so a trailing one means idle, not thinking.
+    working = !last.isMeta;
   } else if (
     last.stop === "end_turn" ||
     last.stop === "stop_sequence" ||
