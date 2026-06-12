@@ -132,6 +132,181 @@ export function recentTurns(count: number): Turn[] {
   return turnsFor(null, count).turns;
 }
 
+// ── Timeline: text turns + tool steps interleaved ─────────────────────────────
+// The terminal's full view. Unlike turnsFor (text only), this surfaces every
+// tool_use as a step and attaches its tool_result output — the "what's Claude
+// actually doing" stream (Edit diffs, Bash commands + output, Reads, Tasks).
+
+export type TimelineItem =
+  | { kind: "turn"; role: "user" | "assistant"; text: string; at: string }
+  | {
+      kind: "tool";
+      id: string;
+      tool: string; // "Edit", "Bash", "Read", …
+      title: string; // file basename / command / pattern
+      detail: string; // expand body: diff / command + output / input + output
+      at: string;
+      isError?: boolean;
+    };
+
+function baseName(p: unknown): string {
+  return typeof p === "string" ? p.split("/").pop() || p : "";
+}
+
+function resultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content))
+    return content
+      .map((b) =>
+        typeof b === "string" ? b : b?.type === "text" ? (b.text ?? "") : ""
+      )
+      .join("\n");
+  return "";
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function toolTitle(name: string, input: any): string {
+  switch (name) {
+    case "Edit":
+    case "MultiEdit":
+    case "Write":
+    case "Read":
+    case "NotebookEdit":
+      return baseName(input?.file_path ?? input?.notebook_path) || name;
+    case "Bash":
+      return (input?.command ?? "").split("\n")[0].slice(0, 90);
+    case "Grep":
+    case "Glob":
+      return input?.pattern ?? name;
+    case "Task":
+      return input?.description ?? input?.subagent_type ?? name;
+    case "WebFetch":
+      return input?.url ?? name;
+    case "WebSearch":
+      return input?.query ?? name;
+    case "TodoWrite":
+      return "todos";
+    default: {
+      const v = input && Object.values(input).find((x) => typeof x === "string");
+      return typeof v === "string" ? v.slice(0, 90) : name;
+    }
+  }
+}
+
+function inputDetail(name: string, input: any): string {
+  if (name === "Edit") {
+    const o = String(input?.old_string ?? "")
+      .split("\n")
+      .map((l: string) => `- ${l}`)
+      .join("\n");
+    const n = String(input?.new_string ?? "")
+      .split("\n")
+      .map((l: string) => `+ ${l}`)
+      .join("\n");
+    return `${o}\n${n}`;
+  }
+  if (name === "Write")
+    return `+ ${input?.file_path ?? ""}\n\n${input?.content ?? ""}`;
+  if (name === "Bash") return `$ ${input?.command ?? ""}`;
+  if (name === "Read") return String(input?.file_path ?? "");
+  return input ? JSON.stringify(input, null, 2) : "";
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+const trimDetail = (s: string) =>
+  s.length > 4000 ? s.slice(0, 4000) + "\n…(truncated)" : s;
+
+export function timelineFor(
+  id: string | null,
+  count: number
+): { id: string | null; items: TimelineItem[]; project: string } {
+  const sid = id ?? latestSessionId();
+  if (!sid) return { id: null, items: [], project: "" };
+  let text: string;
+  let partial = false;
+  try {
+    const file = sessionFilePath(sid);
+    const size = fs.statSync(file).size;
+    const startAt = Math.max(0, size - TAIL_BYTES);
+    partial = startAt > 0;
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(size - startAt);
+    fs.readSync(fd, buf, 0, buf.length, startAt);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return { id: sid, items: [], project: "" };
+  }
+
+  const lines = text.split("\n");
+  if (partial) lines.shift();
+
+  const items: TimelineItem[] = [];
+  type ToolItem = Extract<TimelineItem, { kind: "tool" }>;
+  const toolById = new Map<string, ToolItem>();
+  let project = "";
+
+  for (const line of lines) {
+    if (!line) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!project && typeof e.cwd === "string")
+      project = e.cwd === os.homedir() ? "~" : path.basename(e.cwd);
+    if (e.isSidechain) continue;
+    if (e.type !== "user" && e.type !== "assistant") continue;
+    const c = e.message?.content;
+    const at = e.timestamp ?? "";
+
+    if (e.type === "assistant") {
+      const blocks = Array.isArray(c) ? c : [];
+      for (const b of blocks) {
+        if (b?.type === "text" && (b.text ?? "").trim()) {
+          const prev = items[items.length - 1];
+          if (prev && prev.kind === "turn" && prev.role === "assistant")
+            prev.text += `\n${b.text}`;
+          else items.push({ kind: "turn", role: "assistant", text: b.text, at });
+        } else if (b?.type === "tool_use") {
+          const step: ToolItem = {
+            kind: "tool",
+            id: b.id ?? `t${items.length}`,
+            tool: b.name ?? "tool",
+            title: toolTitle(b.name, b.input),
+            detail: trimDetail(inputDetail(b.name, b.input)),
+            at,
+          };
+          items.push(step);
+          if (b.id) toolById.set(b.id, step);
+        }
+      }
+    } else {
+      const blocks = Array.isArray(c) ? c : [];
+      const tr = blocks.find((b) => b?.type === "tool_result");
+      if (tr) {
+        const step = tr.tool_use_id ? toolById.get(tr.tool_use_id) : undefined;
+        if (step) {
+          const out = resultText(tr.content).trim();
+          // Edit/Write/TodoWrite outputs are just confirmations — keep the diff.
+          if (out && !["Edit", "Write", "TodoWrite"].includes(step.tool))
+            step.detail = trimDetail(`${step.detail}\n\n${out}`);
+          if (tr.is_error) step.isError = true;
+        }
+        continue;
+      }
+      const t = clean(typeof c === "string" ? c : blocksToText(c));
+      if (!t) continue;
+      if (t.includes("<command-name>") || t.includes("<local-command-stdout>"))
+        continue;
+      items.push({ kind: "turn", role: "user", text: t, at });
+    }
+  }
+
+  return { id: sid, items: items.slice(-count), project };
+}
+
 export type WorkingStatus = {
   startedAt: number; // ms — turn start (the last real user prompt)
   outputTokens: number; // accumulating output tokens for the in-flight turn

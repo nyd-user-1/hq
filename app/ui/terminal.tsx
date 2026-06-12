@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
+import type { TimelineItem } from "@/lib/transcript";
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
 // remounts as the sidebar navigates the panel — it only re-renders when
 // ?session changes, swapping which session it shows/drives. Client island:
-// never imports a node:fs lib; it fetches via /api/terminal/* instead.
-type Turn = { role: "user" | "assistant"; text: string; at: string };
+// never imports a node:fs lib runtime value; it fetches via /api/terminal/* and
+// uses `import type` only.
 type Status = {
   startedAt: number;
   outputTokens: number;
@@ -36,7 +37,7 @@ let mountCount = 0;
 
 export default function Terminal() {
   const pinned = useSearchParams().get("session"); // null = newest session
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [items, setItems] = useState<TimelineItem[]>([]);
   const [project, setProject] = useState("");
   const [resolvedId, setResolvedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +59,7 @@ export default function Terminal() {
     const q = pinned ? `?session=${encodeURIComponent(pinned)}` : "";
     try {
       const d = await (await fetch(`/api/terminal/turns${q}`)).json();
-      setTurns(d.turns ?? []);
+      setItems(d.items ?? []);
       setProject(d.project ?? "");
       setResolvedId(d.id ?? null);
       setStatus(d.status ?? null);
@@ -100,7 +101,7 @@ export default function Terminal() {
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [turns, sending, status]);
+  }, [items, sending, status]);
 
   async function send() {
     const prompt = draft.trim();
@@ -108,9 +109,9 @@ export default function Terminal() {
     setSending(true);
     busyRef.current = true;
     setError(null);
-    setTurns((t) => [
+    setItems((t) => [
       ...t,
-      { role: "user", text: prompt, at: new Date().toISOString() },
+      { kind: "turn", role: "user", text: prompt, at: new Date().toISOString() },
     ]);
     setDraft("");
     try {
@@ -125,9 +126,10 @@ export default function Terminal() {
       }
       const data = await res.json();
       if (data?.output)
-        setTurns((t) => [
+        setItems((t) => [
           ...t,
           {
+            kind: "turn",
             role: "assistant",
             text: String(data.output).trim(),
             at: new Date().toISOString(),
@@ -177,40 +179,64 @@ export default function Terminal() {
         ref={scrollRef}
         className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
       >
-        {loading && turns.length === 0 && (
+        {loading && items.length === 0 && (
           <p className="text-sm text-zinc-600">loading session…</p>
         )}
-        {!loading && turns.length === 0 && (
+        {!loading && items.length === 0 && (
           <p className="text-sm text-zinc-600">no session transcript found</p>
         )}
-        {turns.map((t, i) => (
-          <div key={i} className="flex flex-col gap-1">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-              <span
-                className={`mr-1.5 normal-case ${
-                  t.role === "user" ? "text-blue-500" : "text-orange-500"
+        {items.map((it, i) =>
+          it.kind === "turn" ? (
+            <div key={i} className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+                <span
+                  className={`mr-1.5 normal-case ${
+                    it.role === "user" ? "text-blue-500" : "text-orange-500"
+                  }`}
+                >
+                  ●
+                </span>
+                {it.role === "user" ? "brendan" : "claude"}
+                {it.at && (
+                  <span className="ml-2 normal-case tracking-normal text-zinc-600">
+                    {new Date(it.at).toLocaleTimeString()}
+                  </span>
+                )}
+              </span>
+              <div
+                className={`break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
+                  it.role === "user"
+                    ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
+                    : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
                 }`}
               >
-                ●
-              </span>
-              {t.role === "user" ? "brendan" : "claude"}
-              {t.at && (
-                <span className="ml-2 normal-case tracking-normal text-zinc-600">
-                  {new Date(t.at).toLocaleTimeString()}
-                </span>
-              )}
-            </span>
-            <div
-              className={`break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
-                t.role === "user"
-                  ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
-                  : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
-              }`}
-            >
-              {t.role === "assistant" ? <Markdown text={t.text} /> : t.text}
+                {it.role === "assistant" ? <Markdown text={it.text} /> : it.text}
+              </div>
             </div>
-          </div>
-        ))}
+          ) : (
+            <details
+              key={i}
+              className="group rounded-md border border-zinc-800 bg-zinc-900/30"
+            >
+              <summary className="flex cursor-pointer list-none items-baseline gap-2 px-3 py-1.5 font-mono text-xs marker:content-none">
+                <span className="text-zinc-600 transition-transform group-open:rotate-90">
+                  ›
+                </span>
+                <span
+                  className={`shrink-0 text-[10px] uppercase tracking-wide ${
+                    it.isError ? "text-red-400" : "text-zinc-500"
+                  }`}
+                >
+                  {it.tool}
+                </span>
+                <span className="min-w-0 truncate text-zinc-300">{it.title}</span>
+              </summary>
+              <pre className="scrollbar-none max-h-72 overflow-auto whitespace-pre-wrap break-words border-t border-zinc-800 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+                {it.detail}
+              </pre>
+            </details>
+          )
+        )}
         {status ? (
           <div className="flex flex-col gap-0.5">
             <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
