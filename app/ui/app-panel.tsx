@@ -62,7 +62,8 @@ export default function AppPanel({
               </svg>
             </button>
           </div>
-          <div className="scrollbar-none flex h-full min-h-0 flex-col overflow-y-auto">
+          {/* pt-3 so the first boundary chip (sits 10px above its box) isn't clipped */}
+          <div className="scrollbar-none flex h-full min-h-0 flex-col overflow-y-auto pt-3">
             {children}
           </div>
         </div>

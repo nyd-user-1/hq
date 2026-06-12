@@ -14,6 +14,10 @@ export const SIDEBAR_NAV: NavGroup[] = [
     ],
   },
   {
+    label: "Metrics",
+    items: [{ title: "Usage & Burn", href: "/metrics" }],
+  },
+  {
     label: "Console",
     items: [
       { title: "Vault Pulse", href: "/pulse" },
