@@ -132,6 +132,9 @@ export default function Terminal() {
   const [wrapCopied, setWrapCopied] = useState(false);
   const stoppedRef = useRef(false); // true when the user killed the run via stop
   const sendTargetRef = useRef<string | null>(null); // session the in-flight send went to
+  const [escArmed, setEscArmed] = useState(false); // first Esc pressed, waiting for the second
+  const [escNote, setEscNote] = useState<string | null>(null); // why Esc couldn't interrupt
+  const escTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
@@ -218,6 +221,34 @@ export default function Terminal() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [items, sending, status]);
 
+  // Esc parity with the real CLI: first Esc arms ("press esc again to
+  // interrupt"), second Esc within 2s interrupts. HQ can only kill runs it
+  // spawned — for an external turn the second Esc says so instead of lying.
+  // No dep array: rebinding each render keeps the closures fresh.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (!sending && !working) return;
+      if (escTimer.current) clearTimeout(escTimer.current);
+      if (!escArmed) {
+        setEscArmed(true);
+        escTimer.current = setTimeout(() => setEscArmed(false), 2000);
+        return;
+      }
+      setEscArmed(false);
+      if (sending) {
+        stopSend();
+      } else {
+        setEscNote(
+          "this turn is running in its own terminal — HQ can only interrupt runs it started"
+        );
+        escTimer.current = setTimeout(() => setEscNote(null), 4000);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   // Park the current draft in the queue; everything queued goes out as ONE
   // message — one context read instead of several.
   function queueDraft() {
@@ -253,9 +284,10 @@ export default function Terminal() {
         body: JSON.stringify({ prompt, sessionId: target }),
       });
       if (!res.ok) {
+        // an interrupt already left its marker in the timeline — no error line
         setError(
           stoppedRef.current
-            ? "stopped — the headless run was killed"
+            ? null
             : (await res.text()) || `error ${res.status}`
         );
         return;
@@ -272,9 +304,7 @@ export default function Terminal() {
           },
         ]);
     } catch (e) {
-      setError(
-        stoppedRef.current ? "stopped — the headless run was killed" : String(e)
-      );
+      setError(stoppedRef.current ? null : String(e));
     } finally {
       setSending(false);
       busyRef.current = false;
@@ -283,11 +313,21 @@ export default function Terminal() {
 
   // Kill the HQ-spawned run; the in-flight POST settles and cleans up state.
   // Aims at the snapshotted send target, so it kills the right run even if a
-  // different session card was clicked since.
+  // different session card was clicked since. Drops the CLI-style interrupt
+  // marker into the timeline — same record the real terminal shows.
   async function stopSend() {
     const target = sendTargetRef.current;
     if (!target) return;
     stoppedRef.current = true;
+    setItems((t) => [
+      ...t,
+      {
+        kind: "turn",
+        role: "user",
+        text: "[Request interrupted by user]",
+        at: new Date().toISOString(),
+      },
+    ]);
     try {
       await fetch(`/api/terminal?session=${encodeURIComponent(target)}`, {
         method: "DELETE",
@@ -388,12 +428,15 @@ export default function Terminal() {
             onClick={() => {
               navigator.clipboard.writeText(WRAP_UP_PROMPT);
               setWrapCopied(true);
-              setTimeout(() => setWrapCopied(false), 1500);
+              setTimeout(() => setWrapCopied(false), 2500);
             }}
             className="rounded-md border border-zinc-700 px-2 py-0.5 text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
           >
-            {wrapCopied ? "copied ✓" : "copy wrap-up prompt"}
+            {wrapCopied ? "copied ✓ — paste it in your terminal" : "improve context"}
           </button>
+          <span className="text-zinc-600">
+            → it writes a handoff memo · /clear · this pane offers the kickoff
+          </span>
         </div>
       )}
 
@@ -571,6 +614,14 @@ export default function Terminal() {
             {now > lastWrite && ` · last activity ${fmtAgo(now - lastWrite)}`}
           </p>
         ) : null}
+        {escArmed && (
+          <p className="font-mono text-[11px] text-zinc-500">
+            press esc again to interrupt
+          </p>
+        )}
+        {escNote && (
+          <p className="font-mono text-[11px] text-zinc-500">{escNote}</p>
+        )}
         {error && (
           <p className="whitespace-pre-wrap font-mono text-xs text-red-400">
             {error}
