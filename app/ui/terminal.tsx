@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
-import { useSidebar } from "@/app/ui/sidebar-state";
 import type { TimelineItem } from "@/lib/transcript";
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
@@ -84,7 +83,6 @@ function CopyButton({ text }: { text: string }) {
 
 export default function Terminal() {
   const pinned = useSearchParams().get("session"); // null = newest session
-  const sidebar = useSidebar();
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [project, setProject] = useState("");
   const [resolvedId, setResolvedId] = useState<string | null>(null);
@@ -236,31 +234,6 @@ export default function Terminal() {
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
       <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <button
-          onClick={sidebar.toggle}
-          aria-label={sidebar.open ? "Collapse sidebar" : "Expand sidebar"}
-          className="-ml-1 rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-        >
-          {/* lucide PanelLeftClose / PanelLeftOpen */}
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <path d="M9 3v18" />
-            {sidebar.open ? (
-              <path d="m16 15-3-3 3-3" />
-            ) : (
-              <path d="m14 9 3 3-3 3" />
-            )}
-          </svg>
-        </button>
         <span className="flex items-center gap-1.5 text-xs">
           <span
             className={`size-2 rounded-full ${pinned ? "bg-blue-500" : "bg-green-500"}`}
@@ -270,7 +243,8 @@ export default function Terminal() {
         <span className="font-mono text-[11px] text-zinc-600">
           {resolvedId ? resolvedId.slice(0, 8) : "—"}
         </span>
-        <span className="ml-auto flex items-center gap-3">
+        {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
+        <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
           {cacheLeft !== null &&
             (cacheLeft > 0 ? (
               <span

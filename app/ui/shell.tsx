@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Boundary from "@/app/ui/boundary";
 import Sidebar from "@/app/ui/sidebar";
 import SidebarColumn from "@/app/ui/sidebar-column";
+import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import Terminal from "@/app/ui/terminal";
 import PanelWrapper from "@/app/ui/panel-wrapper";
@@ -32,7 +33,7 @@ export default function Shell({
             </SidebarColumn>
 
             <div className="flex min-w-0 flex-1 flex-col gap-4">
-              <Boundary label="terminal.tsx">
+              <Boundary label="terminal.tsx" lead={<SidebarToggle />}>
                 <Suspense
                   fallback={
                     <p className="text-sm text-zinc-600">loading terminal…</p>

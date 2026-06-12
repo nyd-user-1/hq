@@ -14,7 +14,7 @@ export default function SidebarColumn({
 
   return (
     <div
-      className={`flex min-h-0 shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
+      className={`flex min-h-0 shrink-0 transition-all duration-300 ease-in-out [clip-path:inset(-12px_0px_0px_0px)] ${
         open ? "mr-4 w-[210px]" : "w-0"
       }`}
     >

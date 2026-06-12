@@ -13,13 +13,16 @@ export default function ActivityLayout({
 }) {
   return (
     <Boundary label="@panel/(activity)/layout.tsx">
-      <TabNav
-        tabs={[
-          { title: "Sessions", href: "/sessions", segment: "sessions" },
-          { title: "Calls", href: "/calls", segment: "calls" },
-          { title: "To Do", href: "/todo", segment: "todo" },
-        ]}
-      />
+      {/* pr-16 keeps the tabs clear of the panel's floating columns/✕ controls */}
+      <div className="pr-16">
+        <TabNav
+          tabs={[
+            { title: "Sessions", href: "/sessions", segment: "sessions" },
+            { title: "Calls", href: "/calls", segment: "calls" },
+            { title: "To Do", href: "/todo", segment: "todo" },
+          ]}
+        />
+      </div>
       <FlashOnNav>{children}</FlashOnNav>
     </Boundary>
   );
