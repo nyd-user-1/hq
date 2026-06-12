@@ -26,6 +26,9 @@ const MOODS = [
 function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 }
+function fmtElapsed(s: number): string {
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
 
 // Module-scoped so it survives re-renders; stays 1 across soft nav (proof the
 // terminal is not remounting). Resets only on a full reload.
@@ -213,7 +216,7 @@ export default function Terminal() {
             <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
               <span className="text-orange-400">✶ {mood}…</span>
               <span className="text-zinc-500">
-                ({elapsed}s · ↓ {fmtTokens(status.outputTokens)} tokens
+                ({fmtElapsed(elapsed)} · ↑ {fmtTokens(status.outputTokens)} tokens
                 {status.phase ? ` · ${status.phase}` : ""})
               </span>
             </p>
