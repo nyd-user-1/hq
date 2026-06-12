@@ -19,7 +19,11 @@ export const SIDEBAR_NAV: NavGroup[] = [
   },
   {
     label: "Metrics",
-    items: [{ title: "Usage & Burn", href: "/metrics" }],
+    items: [
+      { title: "Usage & Burn", href: "/metrics" },
+      { title: "Savings", href: "/savings" },
+      { title: "Memory Audit", href: "/audit" },
+    ],
   },
   {
     label: "Console",

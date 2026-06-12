@@ -176,6 +176,7 @@ export type TimelineItem =
       detail: string; // expand body: diff / command + output / input + output
       at: string;
       isError?: boolean;
+      resultTokens?: number; // ~chars/4 of input + result, UNtruncated — the context cost
     };
 
 function baseName(p: unknown): string {
@@ -248,23 +249,32 @@ const trimDetail = (s: string) =>
 export function timelineFor(
   id: string | null,
   count: number
-): { id: string | null; items: TimelineItem[]; project: string } {
+): {
+  id: string | null;
+  items: TimelineItem[];
+  project: string;
+  contextTokens: number; // current context size = the last assistant entry's full usage
+  lastWrite: number; // transcript mtime ms — drives the cache-warm countdown
+} {
   const sid = id ?? latestSessionId();
-  if (!sid) return { id: null, items: [], project: "" };
+  if (!sid)
+    return { id: null, items: [], project: "", contextTokens: 0, lastWrite: 0 };
   let text: string;
   let partial = false;
+  let lastWrite = 0;
   try {
     const file = sessionFilePath(sid);
-    const size = fs.statSync(file).size;
-    const startAt = Math.max(0, size - TAIL_BYTES);
+    const st = fs.statSync(file);
+    lastWrite = st.mtimeMs;
+    const startAt = Math.max(0, st.size - TAIL_BYTES);
     partial = startAt > 0;
     const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(size - startAt);
+    const buf = Buffer.alloc(st.size - startAt);
     fs.readSync(fd, buf, 0, buf.length, startAt);
     fs.closeSync(fd);
     text = buf.toString("utf8");
   } catch {
-    return { id: sid, items: [], project: "" };
+    return { id: sid, items: [], project: "", contextTokens: 0, lastWrite: 0 };
   }
 
   const lines = text.split("\n");
@@ -274,6 +284,7 @@ export function timelineFor(
   type ToolItem = Extract<TimelineItem, { kind: "tool" }>;
   const toolById = new Map<string, ToolItem>();
   let project = "";
+  let contextTokens = 0;
 
   for (const line of lines) {
     if (!line) continue;
@@ -291,6 +302,13 @@ export function timelineFor(
     const at = e.timestamp ?? "";
 
     if (e.type === "assistant") {
+      const u = e.message?.usage;
+      if (u)
+        contextTokens =
+          (u.input_tokens ?? 0) +
+          (u.cache_read_input_tokens ?? 0) +
+          (u.cache_creation_input_tokens ?? 0) +
+          (u.output_tokens ?? 0);
       const blocks = Array.isArray(c) ? c : [];
       for (const b of blocks) {
         if (b?.type === "text" && (b.text ?? "").trim()) {
@@ -299,13 +317,15 @@ export function timelineFor(
             prev.text += `\n${b.text}`;
           else items.push({ kind: "turn", role: "assistant", text: b.text, at });
         } else if (b?.type === "tool_use") {
+          const input = inputDetail(b.name, b.input);
           const step: ToolItem = {
             kind: "tool",
             id: b.id ?? `t${items.length}`,
             tool: b.name ?? "tool",
             title: toolTitle(b.name, b.input),
-            detail: trimDetail(inputDetail(b.name, b.input)),
+            detail: trimDetail(input),
             at,
+            resultTokens: Math.round(input.length / 4),
           };
           items.push(step);
           if (b.id) toolById.set(b.id, step);
@@ -318,6 +338,8 @@ export function timelineFor(
         const step = tr.tool_use_id ? toolById.get(tr.tool_use_id) : undefined;
         if (step) {
           const out = resultText(tr.content).trim();
+          step.resultTokens =
+            (step.resultTokens ?? 0) + Math.round(out.length / 4);
           // Edit/Write/TodoWrite outputs are just confirmations — keep the diff.
           if (out && !["Edit", "Write", "TodoWrite"].includes(step.tool))
             step.detail = trimDetail(`${step.detail}\n\n${out}`);
@@ -333,7 +355,7 @@ export function timelineFor(
     }
   }
 
-  return { id: sid, items: items.slice(-count), project };
+  return { id: sid, items: items.slice(-count), project, contextTokens, lastWrite };
 }
 
 export type WorkingStatus = {

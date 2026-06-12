@@ -18,6 +18,7 @@ export type SessionInfo = {
   active: boolean;
   messages: number;
   weightedTokens: number;
+  contextTokens: number; // current context size (last assistant entry's usage)
   snippet: string;
 };
 
@@ -29,7 +30,11 @@ function cleanText(text: string): string {
     .trim();
 }
 
-function tailInfo(file: string): { cwd: string | null; snippet: string } {
+function tailInfo(file: string): {
+  cwd: string | null;
+  snippet: string;
+  contextTokens: number;
+} {
   const size = fs.statSync(file).size;
   const start = Math.max(0, size - TAIL);
   const fd = fs.openSync(file, "r");
@@ -41,6 +46,7 @@ function tailInfo(file: string): { cwd: string | null; snippet: string } {
 
   let cwd: string | null = null;
   let snippet = "";
+  let contextTokens = 0;
   for (const line of lines) {
     if (!line) continue;
     let e;
@@ -51,6 +57,13 @@ function tailInfo(file: string): { cwd: string | null; snippet: string } {
     }
     if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
     if (e.type !== "user" && e.type !== "assistant") continue;
+    const u = e.type === "assistant" ? e.message?.usage : undefined;
+    if (u)
+      contextTokens =
+        (u.input_tokens ?? 0) +
+        (u.cache_read_input_tokens ?? 0) +
+        (u.cache_creation_input_tokens ?? 0) +
+        (u.output_tokens ?? 0);
     const content = e.message?.content;
     const text =
       typeof content === "string"
@@ -64,7 +77,7 @@ function tailInfo(file: string): { cwd: string | null; snippet: string } {
     const cleaned = cleanText(text);
     if (cleaned) snippet = cleaned;
   }
-  return { cwd, snippet };
+  return { cwd, snippet, contextTokens };
 }
 
 export function getSessions(limit = 12): SessionInfo[] {
@@ -96,7 +109,7 @@ export function getSessions(limit = 12): SessionInfo[] {
   files.sort((a, b) => b.mtime - a.mtime);
 
   return files.slice(0, limit).map(({ file, mtime }) => {
-    const { cwd, snippet } = tailInfo(file);
+    const { cwd, snippet, contextTokens } = tailInfo(file);
     const t = totals.get(file);
     return {
       id: path.basename(file, ".jsonl"),
@@ -110,6 +123,7 @@ export function getSessions(limit = 12): SessionInfo[] {
       active: now - mtime < ACTIVE_MS,
       messages: t?.messages ?? 0,
       weightedTokens: t ? weighted(t) : 0,
+      contextTokens,
       snippet: snippet.slice(0, 120),
     };
   });

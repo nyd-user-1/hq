@@ -61,6 +61,8 @@ export default async function Sessions({
       <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
         {shown.map((s) => {
           const selected = s.id === selectedId;
+          const warm = Date.now() - s.lastActive < 5 * 60 * 1000; // prompt-cache TTL
+          const ctxPct = (s.contextTokens / 200_000) * 100;
           return (
             <li key={s.id}>
               <Link
@@ -86,12 +88,31 @@ export default async function Sessions({
                       in terminal
                     </span>
                   )}
-                  <span className="ml-auto font-mono text-xs text-zinc-500">
+                  <span className="ml-auto flex items-center gap-2 font-mono text-xs text-zinc-500">
+                    {warm && (
+                      <span className="text-[10px] text-amber-400">warm</span>
+                    )}
                     {ago(s.lastActive)}
                   </span>
                 </div>
                 <p className="font-mono text-xs text-zinc-500">
                   {s.messages} msgs · {fmt(s.weightedTokens)} weighted
+                  {s.contextTokens > 0 && (
+                    <>
+                      {" · "}
+                      <span
+                        className={
+                          ctxPct >= 80
+                            ? "text-red-400"
+                            : ctxPct >= 70
+                              ? "text-amber-400"
+                              : ""
+                        }
+                      >
+                        ctx {fmt(s.contextTokens)}
+                      </span>
+                    </>
+                  )}
                 </p>
                 {s.snippet && (
                   <p className="truncate text-xs text-zinc-400">{s.snippet}</p>
@@ -110,7 +131,8 @@ export default async function Sessions({
         {showAll
           ? "every Claude Code session on this machine, last 7 days"
           : "sessions active in the last 2 minutes"}{" "}
-        · green = active · blue = showing in the terminal · click one to drive it
+        · green = active · warm = prompt cache still hot · blue = showing in the
+        terminal · click one to drive it
       </p>
     </Boundary>
   );

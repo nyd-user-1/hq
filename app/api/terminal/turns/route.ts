@@ -8,7 +8,15 @@ export const dynamic = "force-dynamic";
 // whether it's mid-turn right now and what it's doing. Keeps node:fs server-side.
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("session");
-  const { id: resolved, items, project } = timelineFor(id, 24);
+  const { id: resolved, items, project, contextTokens, lastWrite } =
+    timelineFor(id, 24);
   const status = workingStatus(resolved);
-  return NextResponse.json({ id: resolved, items, project, status });
+  return NextResponse.json({
+    id: resolved,
+    items,
+    project,
+    status,
+    contextTokens,
+    lastWrite,
+  });
 }
