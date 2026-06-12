@@ -59,9 +59,13 @@ export default function Terminal() {
     const q = pinned ? `?session=${encodeURIComponent(pinned)}` : "";
     try {
       const d = await (await fetch(`/api/terminal/turns${q}`)).json();
-      setItems(d.items ?? []);
-      setProject(d.project ?? "");
-      setResolvedId(d.id ?? null);
+      // Mid-send, the optimistic items own the view — but always refresh status
+      // so the live "working" line shows even while a send is in flight.
+      if (!busyRef.current) {
+        setItems(d.items ?? []);
+        setProject(d.project ?? "");
+        setResolvedId(d.id ?? null);
+      }
       setStatus(d.status ?? null);
     } catch {
       // transient — the stream will re-ping
@@ -80,9 +84,7 @@ export default function Terminal() {
   useEffect(() => {
     const q = pinned ? `?session=${encodeURIComponent(pinned)}` : "";
     const es = new EventSource(`/api/terminal/stream${q}`);
-    es.addEventListener("change", () => {
-      if (!busyRef.current) loadTurns();
-    });
+    es.addEventListener("change", () => loadTurns());
     return () => es.close();
   }, [pinned, loadTurns]);
 

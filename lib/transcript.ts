@@ -12,20 +12,50 @@ const TAIL_BYTES = 8 * 1024 * 1024;
 
 export type Turn = { role: "user" | "assistant"; text: string; at: string };
 
-export function latestSessionId(): string | null {
-  let best: { id: string; mtime: number } | null = null;
-  let names: string[];
+// Every Claude Code transcript on the machine (across ALL project dirs), newest
+// first. The terminal observes any session — not just home — so lookups must
+// search every dir, matching what the Sessions list (lib/sessions.ts) shows.
+function allSessions(): { id: string; file: string; mtime: number }[] {
+  const out: { id: string; file: string; mtime: number }[] = [];
+  let dirs: fs.Dirent[];
   try {
-    names = fs.readdirSync(SESSIONS_DIR);
+    dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
   } catch {
-    return null; // no transcripts on this machine (e.g. deployed)
+    return [];
   }
-  for (const f of names) {
-    if (!f.endsWith(".jsonl")) continue;
-    const mtime = fs.statSync(path.join(SESSIONS_DIR, f)).mtimeMs;
-    if (!best || mtime > best.mtime) best = { id: f.slice(0, -6), mtime };
+  for (const dir of dirs) {
+    if (!dir.isDirectory()) continue;
+    const dirPath = path.join(PROJECTS_ROOT, dir.name);
+    let names: string[];
+    try {
+      names = fs.readdirSync(dirPath);
+    } catch {
+      continue;
+    }
+    for (const f of names) {
+      if (!f.endsWith(".jsonl")) continue;
+      const full = path.join(dirPath, f);
+      try {
+        out.push({
+          id: f.slice(0, -6),
+          file: full,
+          mtime: fs.statSync(full).mtimeMs,
+        });
+      } catch {
+        // vanished mid-scan
+      }
+    }
   }
-  return best?.id ?? null;
+  return out.sort((a, b) => b.mtime - a.mtime);
+}
+
+// Session ids are UUIDs (globally unique), so a single match across all dirs.
+function findSessionFile(id: string): string | null {
+  return allSessions().find((s) => s.id === id)?.file ?? null;
+}
+
+export function latestSessionId(): string | null {
+  return allSessions()[0]?.id ?? null;
 }
 
 function blocksToText(content: unknown): string {
@@ -44,9 +74,11 @@ function clean(text: string): string {
     .trim();
 }
 
-// Absolute path of a session's transcript (consumed by the SSE stream route).
+// Absolute path of a session's transcript — searched across ALL project dirs
+// (the terminal observes any session). Falls back to the home dir for an
+// unknown id.
 export function sessionFilePath(id: string): string {
-  return path.join(SESSIONS_DIR, `${id}.jsonl`);
+  return findSessionFile(id) ?? path.join(SESSIONS_DIR, `${id}.jsonl`);
 }
 
 // A cheap "did anything change" number the SSE stream polls. Pinned → the file's
@@ -55,14 +87,11 @@ export function sessionFilePath(id: string): string {
 // another terminal becomes the active session. -1 if unreadable.
 export function streamSignature(pinned: string | null): number {
   try {
-    if (pinned) return fs.statSync(sessionFilePath(pinned)).size;
-    let max = 0;
-    for (const f of fs.readdirSync(SESSIONS_DIR)) {
-      if (!f.endsWith(".jsonl")) continue;
-      const m = fs.statSync(path.join(SESSIONS_DIR, f)).mtimeMs;
-      if (m > max) max = m;
+    if (pinned) {
+      const f = findSessionFile(pinned);
+      return f ? fs.statSync(f).size : -1;
     }
-    return max;
+    return allSessions()[0]?.mtime ?? -1; // newest mtime across all dirs
   } catch {
     return -1;
   }
