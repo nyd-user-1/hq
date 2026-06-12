@@ -422,6 +422,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
     isToolResult: boolean; // mid-turn tool result — proof a turn is in flight
     stop: string | null;
     out: number;
+    mid: string | null; // API message id — output_tokens accumulates per id
     phases: string[];
   };
   const entries: E[] = [];
@@ -455,6 +456,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
       isToolResult,
       stop: e.message?.stop_reason ?? null,
       out: e.message?.usage?.output_tokens ?? 0,
+      mid: e.message?.id ?? null,
       phases: blocks.map(blockPhase).filter(Boolean),
     });
   }
@@ -469,17 +471,23 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   }
   const startedAt = entries[startIdx >= 0 ? startIdx : entries.length - 1].ts;
 
-  // Token total + the phase progression across this turn's assistant entries.
-  let outputTokens = 0;
+  // Token total: one turn spans MANY API calls (each tool result starts a new
+  // one, whose output_tokens counter resets). The counter accumulates across
+  // entries WITHIN a call (same message id) — so take the max per id, then sum
+  // across ids. Matches the CLI's running ticker, modulo flush lag.
+  const outByMsg = new Map<string, number>();
   const seq: string[] = [];
   for (let i = Math.max(0, startIdx); i < entries.length; i++) {
     if (entries[i].role !== "assistant") continue;
-    outputTokens = Math.max(outputTokens, entries[i].out);
+    const k = entries[i].mid ?? `#${i}`;
+    outByMsg.set(k, Math.max(outByMsg.get(k) ?? 0, entries[i].out));
     for (const p of entries[i].phases) {
       const human = p.startsWith("tool:") ? p.slice(5) : p;
       if (seq[seq.length - 1] !== human) seq.push(human);
     }
   }
+  let outputTokens = 0;
+  for (const v of outByMsg.values()) outputTokens += v;
 
   const last = entries[entries.length - 1];
   const lastBlock = last.phases[last.phases.length - 1] ?? "";
