@@ -20,10 +20,11 @@ function fmt(n: number): string {
 
 // Clicking a session pins the center terminal to it via ?session=<id> — the
 // terminal switches without remounting. The selected card (pinned, or the newest
-// when unpinned — which is what the terminal shows) gets a blue outline.
-// [Live · All] filters the list: Live (default) = active in the last 2 minutes
-// (plus the selected card, so the outline never vanishes); All = everything,
-// with the <ul> as the scroll region so the boundary stays bounded.
+// when unpinned — which is what the terminal shows) gets a green outline.
+// [Live · All] filters the list: Live (default) = active within the prompt-cache
+// TTL (5 min — see lib/sessions.ts) plus the selected card, so the outline never
+// vanishes; All = everything, with the <ul> as the scroll region so the
+// boundary stays bounded.
 export default async function Sessions({
   searchParams,
 }: {
@@ -70,7 +71,7 @@ export default async function Sessions({
                 scroll={false}
                 className={`flex flex-col gap-1 rounded-md border px-3 py-2 transition-colors ${
                   selected
-                    ? "border-blue-500 bg-blue-500/5 ring-1 ring-blue-500/40"
+                    ? "border-green-500 bg-green-500/5 ring-1 ring-green-500/40"
                     : "border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/50"
                 }`}
               >
@@ -84,7 +85,7 @@ export default async function Sessions({
                     {s.project}
                   </span>
                   {selected && (
-                    <span className="font-mono text-[10px] uppercase tracking-wide text-blue-400">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-green-400">
                       in terminal
                     </span>
                   )}
@@ -130,9 +131,9 @@ export default async function Sessions({
       <p className="text-xs text-zinc-600">
         {showAll
           ? "every Claude Code session on this machine, last 7 days"
-          : "sessions active in the last 2 minutes"}{" "}
-        · green = active · warm = prompt cache still hot · blue = showing in the
-        terminal · click one to drive it
+          : "sessions active in the last 5 minutes (the cache window)"}{" "}
+        · green dot = active · warm = prompt cache still hot · green outline =
+        showing in the terminal · click one to drive it
       </p>
     </Boundary>
   );

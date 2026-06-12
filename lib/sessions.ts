@@ -9,7 +9,9 @@ import { getUsage, perFileTotals, weighted } from "./usage";
 
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
 const TAIL = 64 * 1024;
-const ACTIVE_MS = 2 * 60 * 1000;
+// "Active" = written to within the prompt-cache TTL (5 min) — green means
+// "still cheap to continue", one definition of alive across the whole app.
+const ACTIVE_MS = 5 * 60 * 1000;
 
 export type SessionInfo = {
   id: string;

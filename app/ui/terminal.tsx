@@ -319,8 +319,24 @@ export default function Terminal() {
       {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
       <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="flex items-center gap-1.5 text-xs">
+          {/* Activity dot, same vocabulary as the session cards: blinking =
+              writing right now, solid = active within the cache window (5 min),
+              muted = idle. Pin state lives in the send switch, not here. */}
           <span
-            className={`size-2 rounded-full ${pinned ? "bg-blue-500" : "bg-green-500"}`}
+            title={
+              working
+                ? "writing right now"
+                : cacheWarm
+                  ? "active — within the cache window"
+                  : "idle — no recent activity"
+            }
+            className={`size-2 rounded-full ${
+              working
+                ? "animate-pulse bg-green-500"
+                : cacheWarm
+                  ? "bg-green-500"
+                  : "bg-green-500/30"
+            }`}
           />
           <span className="font-mono text-zinc-300">{project || "session"}</span>
         </span>
@@ -366,17 +382,35 @@ export default function Terminal() {
               ctx {fmtTokens(contextTokens)}
             </span>
           )}
+          {/* The send switch — pinning IS arming the send path (001.8), so say
+              it like a switch. Off = observe-only, following the newest session. */}
           {pinned ? (
-            <Link
-              href="/sessions"
-              scroll={false}
-              className="font-mono text-[11px] text-blue-400 hover:text-blue-300"
-            >
-              pinned · unpin →
-            </Link>
+            <span className="flex items-center gap-2">
+              <span className="font-mono text-[11px] text-zinc-600">
+                locked to this session
+              </span>
+              <Link
+                href="/sessions"
+                scroll={false}
+                title="send is armed at this session — click to switch off (back to observe-only, following newest)"
+                className="rounded-md border border-amber-500/40 px-2 py-0.5 font-mono text-[11px] text-amber-400 transition-colors hover:border-amber-400 hover:text-amber-300"
+              >
+                send · on
+              </Link>
+            </span>
           ) : (
-            <span className="font-mono text-[11px] text-zinc-600">
-              newest · live
+            <span className="flex items-center gap-2">
+              <span className="font-mono text-[11px] text-zinc-600">
+                following newest
+              </span>
+              <Link
+                href="/sessions"
+                scroll={false}
+                title="send is off (observe-only) — pick a session card to arm it"
+                className="rounded-md border border-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-600 transition-colors hover:border-zinc-600 hover:text-zinc-400"
+              >
+                send · off
+              </Link>
             </span>
           )}
         </span>
@@ -653,7 +687,7 @@ export default function Terminal() {
             placeholder={
               pinned
                 ? `message ${project || "session"} — ↵ send · ⇧↵ newline`
-                : "observe-only — pin a session (Sessions panel) to send"
+                : "observe-only · send off — click a session card to arm it"
             }
             className="min-h-0 flex-1 resize-none bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
@@ -680,7 +714,7 @@ export default function Terminal() {
               title={
                 pinned
                   ? undefined
-                  : "unpinned send is disabled — it could resume the wrong session (the 001.8 incident)"
+                  : "send is off — an unaimed send could resume the wrong session (the 001.8 incident); pick a session card to arm it"
               }
               className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
