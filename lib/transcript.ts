@@ -419,7 +419,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
     role: "user" | "assistant";
     ts: number;
     isUserPrompt: boolean;
-    isMeta: boolean; // local-command record (/clear etc.) — never gets a reply
+    isToolResult: boolean; // mid-turn tool result — proof a turn is in flight
     stop: string | null;
     out: number;
     phases: string[];
@@ -452,7 +452,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
       role: e.type,
       ts: Number.isNaN(ts) ? 0 : ts,
       isUserPrompt: e.type === "user" && !isToolResult && hasText && !isMeta,
-      isMeta,
+      isToolResult,
       stop: e.message?.stop_reason ?? null,
       out: e.message?.usage?.output_tokens ?? 0,
       phases: blocks.map(blockPhase).filter(Boolean),
@@ -486,10 +486,11 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   let working: boolean;
   let phase = "thinking";
   if (last.role === "user") {
-    // Prompt or tool-result with no assistant reply yet = a turn in flight.
-    // Local-command records (/clear etc.) are the exception: Claude is never
-    // invoked for them, so a trailing one means idle, not thinking.
-    working = !last.isMeta;
+    // Only a mid-turn tool result PROVES a turn is in flight. A plain trailing
+    // prompt may never run (interrupt, /clear record, abandoned message) —
+    // claiming "thinking" for it is a lie the user can't disprove. Stay idle
+    // until assistant blocks actually appear in the transcript.
+    working = last.isToolResult;
   } else if (
     last.stop === "end_turn" ||
     last.stop === "stop_sequence" ||

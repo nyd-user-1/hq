@@ -130,8 +130,8 @@ export default function Terminal() {
   const [contextTokens, setContextTokens] = useState(0);
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [wrapCopied, setWrapCopied] = useState(false);
-  const [confirming, setConfirming] = useState(false); // send guard dialog open
   const stoppedRef = useRef(false); // true when the user killed the run via stop
+  const sendTargetRef = useRef<string | null>(null); // session the in-flight send went to
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
@@ -169,7 +169,6 @@ export default function Terminal() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    setConfirming(false); // a stale confirm must not carry over to a new target
     loadTurns().finally(() => setLoading(false));
   }, [loadTurns]);
 
@@ -228,20 +227,15 @@ export default function Terminal() {
     setDraft("");
   }
 
-  // The send guard (001.8): sending spawns a headless Claude that can edit the
-  // resumed project's repo. Requires a PINNED target (no "newest" roulette) and
-  // an explicit confirm that names the project and prices the context re-read.
-  function requestSend() {
-    if (sending || !pinned) return;
-    if (queue.length === 0 && !draft.trim()) return;
-    setConfirming(true);
-  }
-
+  // The send goes to the session ON SCREEN — its id is snapshotted here, at
+  // send time, so "newest" can't silently re-aim it between typing and sending
+  // (the 001.8 roulette). The guard lives in the plumbing, not the UI: the API
+  // refuses anonymous sends, this never sends one.
   async function doSend() {
-    setConfirming(false);
-    if (!pinned) return;
+    const target = pinned ?? resolvedId;
     const prompt = [...queue, draft.trim()].filter(Boolean).join("\n\n");
-    if (!prompt || sending) return;
+    if (!target || !prompt || sending) return;
+    sendTargetRef.current = target;
     setQueue([]);
     stoppedRef.current = false;
     setSending(true);
@@ -256,7 +250,7 @@ export default function Terminal() {
       const res = await fetch("/api/terminal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, sessionId: pinned }),
+        body: JSON.stringify({ prompt, sessionId: target }),
       });
       if (!res.ok) {
         setError(
@@ -288,11 +282,14 @@ export default function Terminal() {
   }
 
   // Kill the HQ-spawned run; the in-flight POST settles and cleans up state.
+  // Aims at the snapshotted send target, so it kills the right run even if a
+  // different session card was clicked since.
   async function stopSend() {
-    if (!pinned) return;
+    const target = sendTargetRef.current;
+    if (!target) return;
     stoppedRef.current = true;
     try {
-      await fetch(`/api/terminal?session=${encodeURIComponent(pinned)}`, {
+      await fetch(`/api/terminal?session=${encodeURIComponent(target)}`, {
         method: "DELETE",
       });
     } catch {
@@ -309,10 +306,7 @@ export default function Terminal() {
       ? CACHE_TTL_MS - (now - lastWrite)
       : null;
   const ctxPct = (contextTokens / CONTEXT_LIMIT) * 100;
-  // What a send costs: the headless fork re-reads the whole history — at cache
-  // prices if warm (~$1.5/M), full input price if cold (~$15/M, Opus tier).
   const cacheWarm = cacheLeft !== null && cacheLeft > 0;
-  const sendCost = (contextTokens / 1e6) * (cacheWarm ? 1.5 : 15);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -380,37 +374,6 @@ export default function Terminal() {
                 />
               </span>
               ctx {fmtTokens(contextTokens)}
-            </span>
-          )}
-          {/* The send switch — pinning IS arming the send path (001.8), so say
-              it like a switch. Off = observe-only, following the newest session. */}
-          {pinned ? (
-            <span className="flex items-center gap-2">
-              <span className="font-mono text-[11px] text-zinc-600">
-                locked to this session
-              </span>
-              <Link
-                href="/sessions"
-                scroll={false}
-                title="send is armed at this session — click to switch off (back to observe-only, following newest)"
-                className="rounded-md border border-amber-500/40 px-2 py-0.5 font-mono text-[11px] text-amber-400 transition-colors hover:border-amber-400 hover:text-amber-300"
-              >
-                send · on
-              </Link>
-            </span>
-          ) : (
-            <span className="flex items-center gap-2">
-              <span className="font-mono text-[11px] text-zinc-600">
-                following newest
-              </span>
-              <Link
-                href="/sessions"
-                scroll={false}
-                title="send is off (observe-only) — pick a session card to arm it"
-                className="rounded-md border border-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-600 transition-colors hover:border-zinc-600 hover:text-zinc-400"
-              >
-                send · off
-              </Link>
             </span>
           )}
         </span>
@@ -552,15 +515,15 @@ export default function Terminal() {
             {(resume?.sessions.length ?? 0) > 0 && (
               <div className="flex flex-col gap-1.5">
                 <p className="text-[11px] text-zinc-600">
-                  recent sessions — click to follow here (free) · copy to
-                  resume in your terminal
+                  recent sessions — click to open here · copy to resume in
+                  your terminal
                 </p>
                 {resume!.sessions.map((s) => (
                   <div key={s.id} className="flex items-center gap-2">
                     <Link
                       href={`/sessions?session=${s.id}`}
                       scroll={false}
-                      title="pin the terminal to this session — observe-only"
+                      title="open this session in the terminal"
                       className="group/resume flex min-w-0 flex-1 items-baseline gap-2 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
                     >
                       <span className="shrink-0 text-zinc-300 group-hover/resume:text-zinc-100">
@@ -636,41 +599,6 @@ export default function Terminal() {
             ))}
           </div>
         )}
-        {confirming && pinned && (
-          <div className="flex flex-col gap-2 rounded-md border border-red-500/40 bg-red-500/5 p-3">
-            <p className="font-mono text-[11px] leading-relaxed text-zinc-300">
-              <span className="text-red-400">⚠ headless fork — </span>
-              this spawns a separate Claude resumed from{" "}
-              <span className="text-zinc-100">{project || "this session"}</span>{" "}
-              ({resolvedId ? resolvedId.slice(0, 8) : "?"}). It can edit files
-              and commit in that project, in parallel with any live terminal.
-              It will re-read ~{fmtTokens(contextTokens)} tokens of history ≈ $
-              {sendCost.toFixed(2)}{" "}
-              {cacheWarm
-                ? "(cache warm — ~10% price)"
-                : "(cache cold — full price)"}
-              .
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setConfirming(false)}
-                autoFocus
-                className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100"
-              >
-                cancel
-              </button>
-              <button
-                onClick={doSend}
-                className="rounded-md border border-red-500/50 px-2.5 py-1 text-xs text-red-400 transition-colors hover:border-red-400 hover:text-red-300"
-              >
-                send anyway
-                {queue.length > 0
-                  ? ` ×${queue.length + (draft.trim() ? 1 : 0)}`
-                  : ""}
-              </button>
-            </div>
-          </div>
-        )}
         {/* one container: textarea + controls inside, ↵ sends / ⇧↵ newline */}
         <div className="flex items-end gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
           <textarea
@@ -679,16 +607,11 @@ export default function Terminal() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                requestSend();
+                doSend();
               }
-              if (e.key === "Escape") setConfirming(false);
             }}
             rows={2}
-            placeholder={
-              pinned
-                ? `message ${project || "session"} — ↵ send · ⇧↵ newline`
-                : "observe-only · send off — click a session card to arm it"
-            }
+            placeholder={`message ${project || "session"} — ↵ send · ⇧↵ newline`}
             className="min-h-0 flex-1 resize-none bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <button
@@ -709,13 +632,8 @@ export default function Terminal() {
             </button>
           ) : (
             <button
-              onClick={requestSend}
-              disabled={!pinned || (!draft.trim() && queue.length === 0)}
-              title={
-                pinned
-                  ? undefined
-                  : "send is off — an unaimed send could resume the wrong session (the 001.8 incident); pick a session card to arm it"
-              }
+              onClick={doSend}
+              disabled={!draft.trim() && queue.length === 0}
               className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {queue.length > 0
