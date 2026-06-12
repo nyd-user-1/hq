@@ -135,7 +135,8 @@ export function recentTurns(count: number): Turn[] {
 export type WorkingStatus = {
   startedAt: number; // ms — turn start (the last real user prompt)
   outputTokens: number; // accumulating output tokens for the in-flight turn
-  phase: string; // "thinking" | "writing" | "using <tool>"
+  phase: string; // current: "thinking" | "writing" | "using <tool>"
+  phases: string[]; // the progression so far: thinking → Bash → Read → writing …
 };
 
 // Is a session mid-turn right now, and if so, what's it doing? Inferred from the
@@ -167,13 +168,23 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   const lines = text.split("\n");
   if (partial) lines.shift();
 
+  // Map a content block to a phase token: thinking / writing / tool:<Name>.
+  const blockPhase = (b: { type?: string; name?: string }): string =>
+    b?.type === "tool_use"
+      ? `tool:${b.name}`
+      : b?.type === "thinking"
+        ? "thinking"
+        : b?.type === "text"
+          ? "writing"
+          : "";
+
   type E = {
     role: "user" | "assistant";
     ts: number;
     isUserPrompt: boolean;
     stop: string | null;
     out: number;
-    lastBlock: string;
+    phases: string[];
   };
   const entries: E[] = [];
   for (const line of lines) {
@@ -194,12 +205,6 @@ export function workingStatus(id: string | null): WorkingStatus | null {
       (typeof c === "string" && c.trim().length > 0) ||
       blocks.some((b) => b?.type === "text" && (b.text ?? "").trim().length > 0);
     const isCmd = typeof c === "string" && c.includes("<command-name>");
-    const lb = blocks[blocks.length - 1];
-    const lastBlock = lb
-      ? lb.type === "tool_use"
-        ? `tool:${lb.name}`
-        : (lb.type ?? "")
-      : "";
     const ts = Date.parse(e.timestamp);
     entries.push({
       role: e.type,
@@ -207,7 +212,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
       isUserPrompt: e.type === "user" && !isToolResult && hasText && !isCmd,
       stop: e.message?.stop_reason ?? null,
       out: e.message?.usage?.output_tokens ?? 0,
-      lastBlock,
+      phases: blocks.map(blockPhase).filter(Boolean),
     });
   }
   if (entries.length === 0) return null;
@@ -221,12 +226,20 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   }
   const startedAt = entries[startIdx >= 0 ? startIdx : entries.length - 1].ts;
 
+  // Token total + the phase progression across this turn's assistant entries.
   let outputTokens = 0;
-  for (let i = Math.max(0, startIdx); i < entries.length; i++)
-    if (entries[i].role === "assistant")
-      outputTokens = Math.max(outputTokens, entries[i].out);
+  const seq: string[] = [];
+  for (let i = Math.max(0, startIdx); i < entries.length; i++) {
+    if (entries[i].role !== "assistant") continue;
+    outputTokens = Math.max(outputTokens, entries[i].out);
+    for (const p of entries[i].phases) {
+      const human = p.startsWith("tool:") ? p.slice(5) : p;
+      if (seq[seq.length - 1] !== human) seq.push(human);
+    }
+  }
 
   const last = entries[entries.length - 1];
+  const lastBlock = last.phases[last.phases.length - 1] ?? "";
   let working: boolean;
   let phase = "thinking";
   if (last.role === "user") {
@@ -239,9 +252,9 @@ export function workingStatus(id: string | null): WorkingStatus | null {
     working = false;
   } else {
     working = true; // stop null or "tool_use"
-    phase = last.lastBlock.startsWith("tool:")
-      ? `using ${last.lastBlock.slice(5)}`
-      : last.lastBlock === "thinking"
+    phase = lastBlock.startsWith("tool:")
+      ? `using ${lastBlock.slice(5)}`
+      : lastBlock === "thinking"
         ? "thinking"
         : "writing";
   }
@@ -250,7 +263,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   if (working && Date.now() - mtime > 300_000) working = false;
   if (!working) return null;
 
-  return { startedAt, outputTokens, phase };
+  return { startedAt, outputTokens, phase, phases: seq };
 }
 
 export type CommandRun = {

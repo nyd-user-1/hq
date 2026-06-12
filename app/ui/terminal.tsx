@@ -10,7 +10,12 @@ import Markdown from "@/app/ui/md";
 // ?session changes, swapping which session it shows/drives. Client island:
 // never imports a node:fs lib; it fetches via /api/terminal/* instead.
 type Turn = { role: "user" | "assistant"; text: string; at: string };
-type Status = { startedAt: number; outputTokens: number; phase: string } | null;
+type Status = {
+  startedAt: number;
+  outputTokens: number;
+  phase: string;
+  phases: string[];
+} | null;
 
 // Spinner mood words, cycled by elapsed — the live "it's alive" flavor the real
 // CLI shows ("Sprouting…", "Marinating…").
@@ -204,13 +209,20 @@ export default function Terminal() {
           </div>
         ))}
         {status ? (
-          <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
-            <span className="text-orange-400">✶ {mood}…</span>
-            <span className="text-zinc-500">
-              ({elapsed}s · ↓ {fmtTokens(status.outputTokens)} tokens
-              {status.phase ? ` · ${status.phase}` : ""})
-            </span>
-          </p>
+          <div className="flex flex-col gap-0.5">
+            <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
+              <span className="text-orange-400">✶ {mood}…</span>
+              <span className="text-zinc-500">
+                ({elapsed}s · ↓ {fmtTokens(status.outputTokens)} tokens
+                {status.phase ? ` · ${status.phase}` : ""})
+              </span>
+            </p>
+            {status.phases.length > 1 && (
+              <p className="font-mono text-[11px] text-zinc-600">
+                phases · {status.phases.slice(-6).join(" → ")}
+              </p>
+            )}
+          </div>
         ) : sending ? (
           <p className="font-mono text-xs text-zinc-500">starting…</p>
         ) : null}

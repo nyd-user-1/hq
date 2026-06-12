@@ -38,17 +38,33 @@ export default function AppPanel({
     >
       {open && (
         <div className="relative flex h-full w-full flex-col">
-          <div className="absolute right-1 top-1 z-10 flex gap-1">
+          {/* inset from the top-right so they're not glued to the panel border */}
+          <div className="absolute right-3 top-3 z-10 flex gap-1">
             <button
               onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? "Collapse panel" : "Expand panel"}
+              aria-label={expanded ? "Collapse to a third" : "Expand to half"}
               className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              {/* columns icon shows the TARGET layout: Columns2 (→ half) when
+                  collapsed, Columns3 (→ third) when expanded */}
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="2" />
                 {expanded ? (
-                  <path d="M6 2v12M6 2H3v3M6 14H3v-3M10 2v12M10 2h3v3M10 14h3v-3" strokeLinecap="round" />
+                  <>
+                    <path d="M9 3v18" />
+                    <path d="M15 3v18" />
+                  </>
                 ) : (
-                  <path d="M8 2v12M8 2H4v3M8 14H4v-3M8 2h4v3M8 14h4v-3" strokeLinecap="round" />
+                  <path d="M12 3v18" />
                 )}
               </svg>
             </button>
@@ -57,8 +73,17 @@ export default function AppPanel({
               aria-label="Close panel"
               className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
