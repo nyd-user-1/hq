@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Boundary from "@/app/ui/boundary";
 import Sidebar from "@/app/ui/sidebar";
+import SidebarColumn from "@/app/ui/sidebar-column";
 import Terminal from "@/app/ui/terminal";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 
@@ -20,11 +21,11 @@ export default function Shell({
     <div className="flex h-dvh flex-col bg-zinc-950 p-3 text-zinc-100 lg:p-4">
       <Boundary label="layout.tsx">
         <div className="flex min-h-0 flex-1 gap-4">
-          <div className="flex w-[210px] shrink-0">
+          <SidebarColumn>
             <Boundary label="sidebar.tsx">
               <Sidebar />
             </Boundary>
-          </div>
+          </SidebarColumn>
 
           <div className="flex min-w-0 flex-1 flex-col gap-4">
             <Boundary label="terminal.tsx">
