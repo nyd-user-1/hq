@@ -1,6 +1,7 @@
 import Boundary from "@/app/ui/boundary";
 import Link from "next/link";
 import Markdown from "@/app/ui/md";
+import SearchInput from "@/app/ui/search-input";
 import { ago } from "@/lib/ago";
 import {
   search,
@@ -94,22 +95,14 @@ export default async function Search({
 
   return (
     <Boundary label="@panel/search/page.tsx">
-      <form action="/search" className="flex flex-col gap-2">
-        <input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder="search transcripts + memory…"
-          autoComplete="off"
-          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
-        />
-        <input type="hidden" name="scope" value={scope} />
+      <div className="flex flex-col gap-2">
+        <SearchInput initial={q} scope={scope} />
         <div className="flex gap-2">
           {scopeChip("All", "all")}
           {scopeChip("Transcripts", "transcripts")}
           {scopeChip("Memory", "memory")}
         </div>
-      </form>
+      </div>
 
       <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
         {hits.map((h) => (
@@ -123,8 +116,14 @@ export default async function Search({
               scroll={false}
               className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
             >
-              <div className="flex items-baseline gap-3">
-                <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+                    h.kind === "memory"
+                      ? "bg-violet-500/15 text-violet-300"
+                      : "bg-emerald-500/15 text-emerald-300"
+                  }`}
+                >
                   {h.kind}
                 </span>
                 <span className="truncate text-sm font-medium text-zinc-200">

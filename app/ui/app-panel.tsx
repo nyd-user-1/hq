@@ -37,9 +37,9 @@ export default function AppPanel({
       }`}
     >
       {open && (
-        <div className="flex h-full w-full flex-col">
-          {/* slim header row — keeps the controls clear of the boundary chip */}
-          <div className="flex shrink-0 justify-end gap-1 pb-2">
+        <div className="relative flex h-full w-full flex-col">
+          {/* inset from the top-right so they're not glued to the panel border */}
+          <div className="absolute right-3 top-3 z-10 flex gap-1">
             <button
               onClick={() => setExpanded((v) => !v)}
               aria-label={expanded ? "Collapse to a third" : "Expand to half"}
@@ -88,7 +88,7 @@ export default function AppPanel({
             </button>
           </div>
           {/* pt-3 so the first boundary chip (sits 10px above its box) isn't clipped */}
-          <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto pt-3">
+          <div className="scrollbar-none flex h-full min-h-0 flex-col overflow-y-auto pt-3">
             {children}
           </div>
         </div>

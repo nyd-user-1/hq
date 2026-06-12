@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
+import { useSidebar } from "@/app/ui/sidebar-state";
 import type { TimelineItem } from "@/lib/transcript";
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
@@ -35,8 +36,46 @@ function fmtElapsed(s: number): string {
 // terminal is not remounting). Resets only on a full reload.
 let mountCount = 0;
 
+// Hover-reveal copy button for a message block — grab a reply/prompt verbatim
+// instead of asking Claude to reprint it.
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      aria-label="Copy message"
+      className="absolute right-2 top-2 rounded-md border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-500 opacity-0 transition-opacity hover:text-zinc-200 focus:opacity-100 group-hover/turn:opacity-100"
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {copied ? (
+          <path d="M20 6 9 17l-5-5" className="text-green-500" />
+        ) : (
+          <>
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
+
 export default function Terminal() {
   const pinned = useSearchParams().get("session"); // null = newest session
+  const sidebar = useSidebar();
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [project, setProject] = useState("");
   const [resolvedId, setResolvedId] = useState<string | null>(null);
@@ -152,7 +191,33 @@ export default function Terminal() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          onClick={sidebar.toggle}
+          aria-label={sidebar.open ? "Collapse sidebar" : "Expand sidebar"}
+          className="-ml-1 rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          {/* lucide PanelLeftClose / PanelLeftOpen */}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M9 3v18" />
+            {sidebar.open ? (
+              <path d="m16 15-3-3 3-3" />
+            ) : (
+              <path d="m14 9 3 3-3 3" />
+            )}
+          </svg>
+        </button>
         <span className="flex items-center gap-1.5 text-xs">
           <span
             className={`size-2 rounded-full ${pinned ? "bg-blue-500" : "bg-green-500"}`}
@@ -206,12 +271,13 @@ export default function Terminal() {
                 )}
               </span>
               <div
-                className={`break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
+                className={`group/turn relative break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
                   it.role === "user"
                     ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
                     : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
                 }`}
               >
+                <CopyButton text={it.text} />
                 {it.role === "assistant" ? <Markdown text={it.text} /> : it.text}
               </div>
             </div>
