@@ -167,7 +167,13 @@ export function recentTurns(count: number): Turn[] {
 // actually doing" stream (Edit diffs, Bash commands + output, Reads, Tasks).
 
 export type TimelineItem =
-  | { kind: "turn"; role: "user" | "assistant"; text: string; at: string }
+  | {
+      kind: "turn";
+      role: "user" | "assistant";
+      text: string;
+      at: string;
+      turnTokens?: number; // set on the LAST assistant card of a work block: the whole block's output-token burn
+    }
   | { kind: "command"; command: string; arg: string; at: string } // local command marker (/clear, /model, …)
   | {
       kind: "tool";
@@ -283,9 +289,25 @@ export function timelineFor(
 
   const items: TimelineItem[] = [];
   type ToolItem = Extract<TimelineItem, { kind: "tool" }>;
+  type TurnItem = Extract<TimelineItem, { kind: "turn" }>;
   const toolById = new Map<string, ToolItem>();
   let project = "";
   let contextTokens = 0;
+
+  // Per-block token burn: a block runs from one user prompt to the next. Output
+  // tokens accumulate per API message id (max per id, summed — same math as
+  // workingStatus); the total is stamped on the block's last assistant card.
+  let blockTokens = new Map<string, number>();
+  let lastReply: TurnItem | null = null;
+  const closeBlock = () => {
+    if (lastReply) {
+      let t = 0;
+      for (const v of blockTokens.values()) t += v;
+      if (t > 0) lastReply.turnTokens = t;
+    }
+    blockTokens = new Map();
+    lastReply = null;
+  };
 
   for (const line of lines) {
     if (!line) continue;
@@ -310,13 +332,29 @@ export function timelineFor(
           (u.cache_read_input_tokens ?? 0) +
           (u.cache_creation_input_tokens ?? 0) +
           (u.output_tokens ?? 0);
+      const mid = e.message?.id;
+      if (mid)
+        blockTokens.set(
+          mid,
+          Math.max(blockTokens.get(mid) ?? 0, u?.output_tokens ?? 0)
+        );
       const blocks = Array.isArray(c) ? c : [];
       for (const b of blocks) {
         if (b?.type === "text" && (b.text ?? "").trim()) {
           const prev = items[items.length - 1];
-          if (prev && prev.kind === "turn" && prev.role === "assistant")
+          if (prev && prev.kind === "turn" && prev.role === "assistant") {
             prev.text += `\n${b.text}`;
-          else items.push({ kind: "turn", role: "assistant", text: b.text, at });
+            lastReply = prev;
+          } else {
+            const reply: TurnItem = {
+              kind: "turn",
+              role: "assistant",
+              text: b.text,
+              at,
+            };
+            items.push(reply);
+            lastReply = reply;
+          }
         } else if (b?.type === "tool_use") {
           const input = inputDetail(b.name, b.input);
           const step: ToolItem = {
@@ -362,10 +400,12 @@ export function timelineFor(
       if (raw.includes("<local-command-stdout>")) continue;
       const t = clean(raw);
       if (!t) continue;
+      closeBlock(); // a new prompt ends the previous work block
       items.push({ kind: "turn", role: "user", text: t, at });
     }
   }
 
+  closeBlock(); // stamp the final (possibly in-flight) block
   return { id: sid, items: items.slice(-count), project, contextTokens, lastWrite };
 }
 

@@ -495,6 +495,14 @@ export default function Terminal() {
               >
                 <CopyButton text={it.text} />
                 {it.role === "assistant" ? <Markdown text={it.text} /> : it.text}
+                {it.role === "assistant" && it.turnTokens ? (
+                  <span
+                    title="output tokens this whole work block burned (every API call from your prompt to this reply)"
+                    className="absolute -bottom-[9px] right-3 rounded-md border border-zinc-800 bg-zinc-950 px-1.5 py-px font-mono text-[10px] text-zinc-500"
+                  >
+                    block · {fmtTokens(it.turnTokens)} tok
+                  </span>
+                ) : null}
               </div>
             </div>
           ) : (
