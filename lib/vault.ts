@@ -108,6 +108,51 @@ export function vaultRoot(): string {
   return VAULT_ROOT;
 }
 
+export type HandoffNote = { name: string; path: string; mtime: number };
+
+// Newest vault note whose frontmatter says `kind: handoff` — the resume
+// candidate the terminal offers on a fresh (post-/clear) session. Head-reads
+// newest-first and exits on the first hit.
+export function latestHandoff(): HandoffNote | null {
+  const files: { full: string; name: string; mtime: number }[] = [];
+  function walk(dir: string, depth: number) {
+    if (depth > 3) return;
+    for (const e of safeReadDir(dir)) {
+      if (e.name.startsWith(".")) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        walk(full, depth + 1);
+      } else if (e.name.endsWith(".md")) {
+        try {
+          files.push({
+            full,
+            name: e.name.replace(/\.md$/, ""),
+            mtime: fs.statSync(full).mtimeMs,
+          });
+        } catch {
+          // vanished mid-scan
+        }
+      }
+    }
+  }
+  walk(VAULT_ROOT, 0);
+  files.sort((a, b) => b.mtime - a.mtime);
+  for (const f of files.slice(0, 200)) {
+    try {
+      const fd = fs.openSync(f.full, "r");
+      const buf = Buffer.alloc(512);
+      const n = fs.readSync(fd, buf, 0, 512, 0);
+      fs.closeSync(fd);
+      const head = buf.toString("utf8", 0, n);
+      if (head.startsWith("---") && /\nkind:\s*handoff\b/.test(head))
+        return { name: f.name, path: f.full, mtime: f.mtime };
+    } catch {
+      // unreadable — skip
+    }
+  }
+  return null;
+}
+
 export type PulseEntry = {
   project: string; // vault folder slug
   name: string; // file name

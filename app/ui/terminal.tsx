@@ -18,6 +18,18 @@ type Status = {
   phases: string[];
 } | null;
 
+// Resume options the API attaches on a fresh (post-/clear) session. Every
+// affordance here either observes (pin) or copies — never spends (001.8).
+type ResumeOptions = {
+  handoff: { name: string; path: string; mtime: number } | null;
+  sessions: {
+    id: string;
+    project: string;
+    lastActive: number;
+    snippet: string;
+  }[];
+} | null;
+
 // Spinner mood words, cycled by elapsed — the live "it's alive" flavor the real
 // CLI shows ("Sprouting…", "Marinating…").
 const MOODS = [
@@ -49,6 +61,24 @@ const WRAP_UP_PROMPT = `We're close to the context limit — let's wrap up inste
 // Module-scoped so it survives re-renders; stays 1 across soft nav (proof the
 // terminal is not remounting). Resets only on a full reload.
 let mountCount = 0;
+
+// Labeled click-to-copy chip — the "deliberately copy, not send" affordance
+// (wrap-up strip precedent): the action happens in YOUR terminal, not HQ's.
+function CopyChip({ label, text }: { label: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="shrink-0 rounded-md border border-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+    >
+      {copied ? "copied ✓" : label}
+    </button>
+  );
+}
 
 // Hover-reveal copy button for a message block — grab a reply/prompt verbatim
 // instead of asking Claude to reprint it.
@@ -103,6 +133,7 @@ export default function Terminal() {
   const [confirming, setConfirming] = useState(false); // send guard dialog open
   const stoppedRef = useRef(false); // true when the user killed the run via stop
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
+  const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
   const scrollRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
@@ -123,6 +154,7 @@ export default function Terminal() {
         setItems(d.items ?? []);
         setProject(d.project ?? "");
         setResolvedId(d.id ?? null);
+        setResume(d.resume ?? null);
       }
       setStatus(d.status ?? null);
       setContextTokens(d.contextTokens ?? 0);
@@ -464,12 +496,59 @@ export default function Terminal() {
           )
         )}
         {!loading && items.length > 0 && items.every((it) => it.kind === "command") && (
-          <div className="flex flex-col gap-1 font-mono text-xs">
-            <p className="text-zinc-400">fresh session — no turns yet</p>
-            <p className="text-zinc-600">
-              type in your Claude terminal to start it, or pin a session
-              (Sessions panel) to follow that one here
-            </p>
+          <div className="flex flex-col gap-3 font-mono text-xs">
+            <div className="flex flex-col gap-1">
+              <p className="text-zinc-400">fresh session — no turns yet</p>
+              <p className="text-zinc-600">
+                type in your Claude terminal to start it, or pick up where you
+                left off:
+              </p>
+            </div>
+            {resume?.handoff && (
+              <div className="flex items-center gap-2">
+                <CopyChip
+                  label={`copy handoff kickoff · ${resume.handoff.name}`}
+                  text={`Read "${resume.handoff.path}" in full — it's the latest handoff memo — then pick up where it left off.`}
+                />
+                <span className="text-[11px] text-zinc-600">
+                  paste into your terminal to resume from the memo
+                </span>
+              </div>
+            )}
+            {(resume?.sessions.length ?? 0) > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] text-zinc-600">
+                  recent sessions — click to follow here (free) · copy to
+                  resume in your terminal
+                </p>
+                {resume!.sessions.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2">
+                    <Link
+                      href={`/sessions?session=${s.id}`}
+                      scroll={false}
+                      title="pin the terminal to this session — observe-only"
+                      className="group/resume flex min-w-0 flex-1 items-baseline gap-2 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
+                    >
+                      <span className="shrink-0 text-zinc-300 group-hover/resume:text-zinc-100">
+                        {s.project}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-zinc-600">
+                        {s.id.slice(0, 8)} · {fmtAgo(now - s.lastActive)}
+                      </span>
+                      {s.snippet && (
+                        <span className="min-w-0 truncate text-[11px] text-zinc-500">
+                          {s.snippet}
+                        </span>
+                      )}
+                    </Link>
+                    <CopyChip
+                      label="copy resume cmd"
+                      text={`claude --resume ${s.id}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {status ? (
