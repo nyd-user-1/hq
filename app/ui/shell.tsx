@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Boundary from "@/app/ui/boundary";
 
-// Client shell: owns the top-level page tabs (Dashboard / Meters) after the
-// "Terminal 2" title and decides the layout. The parallel-route slots resolve
-// to their default.tsx on /meters; we simply don't place them there, so the
-// Meters page runs full-width without any slot-folder surgery.
+// Client shell: owns the top-level page tabs (Dashboard / Meters / Buckets)
+// after the "Terminal 2" title and decides the layout. The parallel-route slots
+// resolve to their default.tsx on the full-width routes; we simply don't place
+// them there, so those pages run full-width without any slot-folder surgery.
+const FULL_WIDTH = new Set(["/meters", "/buckets"]);
+
 export default function Shell({
   children,
   activity,
@@ -18,10 +20,11 @@ export default function Shell({
   console: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "/";
-  const isMeters = pathname === "/meters";
+  const isFullWidth = FULL_WIDTH.has(pathname);
   const tabs = [
-    { title: "Dashboard", href: "/", active: !isMeters },
-    { title: "Meters", href: "/meters", active: isMeters },
+    { title: "Dashboard", href: "/", active: pathname === "/" },
+    { title: "Meters", href: "/meters", active: pathname === "/meters" },
+    { title: "Buckets", href: "/buckets", active: pathname === "/buckets" },
   ];
 
   return (
@@ -48,7 +51,7 @@ export default function Shell({
         </p>
       </header>
 
-      {isMeters ? (
+      {isFullWidth ? (
         children
       ) : (
         <Boundary label="layout.tsx">
