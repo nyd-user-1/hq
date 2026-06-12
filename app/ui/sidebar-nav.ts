@@ -6,6 +6,10 @@ export type NavGroup = { label: string; items: NavItem[] };
 
 export const SIDEBAR_NAV: NavGroup[] = [
   {
+    label: "", // unlabeled — Search stands alone at the top
+    items: [{ title: "Search", href: "/search" }],
+  },
+  {
     label: "Activity",
     items: [
       { title: "Sessions", href: "/sessions" },

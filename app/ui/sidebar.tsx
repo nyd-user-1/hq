@@ -21,9 +21,11 @@ export default function Sidebar() {
 
       {SIDEBAR_NAV.map((group) => (
         <div key={group.label} className="flex flex-col gap-0.5">
-          <span className="px-2.5 pb-1 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-            {group.label}
-          </span>
+          {group.label && (
+            <span className="px-2.5 pb-1 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+              {group.label}
+            </span>
+          )}
           {group.items.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(item.href + "/");
