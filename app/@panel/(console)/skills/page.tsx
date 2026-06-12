@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default function Skills() {
   const runs = recentCommands(8);
   return (
-    <Boundary label="@console/skills/page.tsx">
+    <Boundary label="@panel/skills/page.tsx">
       <div className="flex flex-col gap-4">
         <SkillLauncher />
 

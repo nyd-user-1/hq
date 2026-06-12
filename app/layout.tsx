@@ -20,22 +20,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-  activity,
-  console: consolePanel,
+  panel,
 }: Readonly<{
   children: React.ReactNode;
-  activity: React.ReactNode;
-  console: React.ReactNode;
+  panel: React.ReactNode;
 }>) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-zinc-950 text-zinc-100">
-        <Shell activity={activity} console={consolePanel}>
-          {children}
-        </Shell>
+      <body className="h-full overflow-hidden bg-zinc-950 text-zinc-100">
+        <Shell panel={panel}>{children}</Shell>
       </body>
     </html>
   );

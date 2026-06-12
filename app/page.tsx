@@ -1,12 +1,8 @@
-import Boundary from "@/app/ui/boundary";
-import Terminal from "@/app/ui/terminal";
-
 export const dynamic = "force-dynamic";
 
-export default function Dashboard() {
-  return (
-    <Boundary label="page.tsx">
-      <Terminal />
-    </Boundary>
-  );
+// The center column is owned by the always-on Terminal (mounted in the shell).
+// "/" is terminal-only focus — the panel is closed — so this landing renders
+// nothing under it.
+export default function Home() {
+  return null;
 }

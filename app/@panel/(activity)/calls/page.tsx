@@ -13,7 +13,7 @@ function fmt(n: number): string {
 export default function Calls() {
   const calls = getCalls();
   return (
-    <Boundary label="@activity/page.tsx">
+    <Boundary label="@panel/calls/page.tsx">
       <ul className="flex flex-col gap-1.5">
         {calls.map((c, i) => (
           <li
@@ -32,8 +32,8 @@ export default function Calls() {
         ))}
       </ul>
       <p className="text-xs text-zinc-600">
-        last {calls.length} API calls across the newest sessions · wt =
-        weighted input-equivalents
+        last {calls.length} API calls across the newest sessions · wt = weighted
+        input-equivalents
       </p>
     </Boundary>
   );

@@ -44,21 +44,41 @@ function clean(text: string): string {
     .trim();
 }
 
-export function recentTurns(count: number): Turn[] {
-  const id = latestSessionId();
-  if (!id) return [];
-  const file = path.join(SESSIONS_DIR, `${id}.jsonl`);
-  const size = fs.statSync(file).size;
-  const start = Math.max(0, size - TAIL_BYTES);
-  const fd = fs.openSync(file, "r");
-  const buf = Buffer.alloc(size - start);
-  fs.readSync(fd, buf, 0, buf.length, start);
-  fs.closeSync(fd);
+// Absolute path of a session's transcript (consumed by the SSE stream route).
+export function sessionFilePath(id: string): string {
+  return path.join(SESSIONS_DIR, `${id}.jsonl`);
+}
 
-  const lines = buf.toString("utf8").split("\n");
-  if (start > 0) lines.shift(); // first line is partial
+// A cheap "did anything change" number the SSE stream polls. Pinned → the file's
+// byte size (grows as the session is written). Unpinned → the newest mtime
+// across all sessions, so it also fires when a send forks a new transcript or
+// another terminal becomes the active session. -1 if unreadable.
+export function streamSignature(pinned: string | null): number {
+  try {
+    if (pinned) return fs.statSync(sessionFilePath(pinned)).size;
+    let max = 0;
+    for (const f of fs.readdirSync(SESSIONS_DIR)) {
+      if (!f.endsWith(".jsonl")) continue;
+      const m = fs.statSync(path.join(SESSIONS_DIR, f)).mtimeMs;
+      if (m > max) max = m;
+    }
+    return max;
+  } catch {
+    return -1;
+  }
+}
 
+// Parse user/assistant turns out of a transcript-tail buffer. `partial` drops
+// the first (truncated) line when reading from a mid-file byte offset. Merges
+// consecutive same-role entries (streaming splits one reply across lines).
+export function parseTurns(
+  text: string,
+  partial: boolean
+): { turns: Turn[]; project: string } {
+  const lines = text.split("\n");
+  if (partial) lines.shift();
   const turns: Turn[] = [];
+  let project = "";
   for (const line of lines) {
     if (!line) continue;
     let entry;
@@ -67,22 +87,49 @@ export function recentTurns(count: number): Turn[] {
     } catch {
       continue;
     }
+    if (!project && typeof entry.cwd === "string")
+      project = entry.cwd === os.homedir() ? "~" : path.basename(entry.cwd);
     if (entry.isSidechain) continue;
     if (entry.type !== "user" && entry.type !== "assistant") continue;
-    const text = clean(blocksToText(entry.message?.content));
-    if (!text) continue;
-    // skip slash-command wrappers and their stdout echoes
-    if (text.includes("<command-name>") || text.includes("<local-command-stdout>"))
+    const t = clean(blocksToText(entry.message?.content));
+    if (!t) continue;
+    if (t.includes("<command-name>") || t.includes("<local-command-stdout>"))
       continue;
     const prev = turns[turns.length - 1];
-    if (prev && prev.role === entry.type) {
-      // streaming splits one reply across entries — merge same-role runs
-      prev.text += `\n\n${text}`;
-    } else {
-      turns.push({ role: entry.type, text, at: entry.timestamp ?? "" });
-    }
+    if (prev && prev.role === entry.type) prev.text += `\n\n${t}`;
+    else turns.push({ role: entry.type, text: t, at: entry.timestamp ?? "" });
   }
-  return turns.slice(-count);
+  return { turns, project };
+}
+
+// Turns for a specific session (id = null → the newest session).
+export function turnsFor(
+  id: string | null,
+  count: number
+): { id: string | null; turns: Turn[]; project: string } {
+  const sid = id ?? latestSessionId();
+  if (!sid) return { id: null, turns: [], project: "" };
+  let text: string;
+  let partial = false;
+  try {
+    const file = sessionFilePath(sid);
+    const size = fs.statSync(file).size;
+    const startAt = Math.max(0, size - TAIL_BYTES);
+    partial = startAt > 0;
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(size - startAt);
+    fs.readSync(fd, buf, 0, buf.length, startAt);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return { id: sid, turns: [], project: "" };
+  }
+  const { turns, project } = parseTurns(text, partial);
+  return { id: sid, turns: turns.slice(-count), project };
+}
+
+export function recentTurns(count: number): Turn[] {
+  return turnsFor(null, count).turns;
 }
 
 export type CommandRun = {

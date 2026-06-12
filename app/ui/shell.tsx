@@ -1,69 +1,49 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 import Boundary from "@/app/ui/boundary";
+import Sidebar from "@/app/ui/sidebar";
+import Terminal from "@/app/ui/terminal";
+import PanelWrapper from "@/app/ui/panel-wrapper";
 
-// Client shell: owns the top-level page tabs (Dashboard / Meters / Buckets)
-// after the "Terminal 2" title and decides the layout. The parallel-route slots
-// resolve to their default.tsx on the full-width routes; we simply don't place
-// them there, so those pages run full-width without any slot-folder surgery.
-const FULL_WIDTH = new Set(["/meters", "/buckets"]);
-
+// Full-screen OS shell. LAYOUT.TSX wraps three peers: SIDEBAR (left, 210px),
+// TERMINAL (center, always mounted — the persistent heart), and the right
+// app-panel portal anchor. The terminal lives here (root layout) so it never
+// unmounts as the sidebar navigates the panel. Server component: it renders the
+// client Sidebar/PanelWrapper and the (client) Terminal island as children.
 export default function Shell({
   children,
-  activity,
-  console: consolePanel,
+  panel,
 }: {
   children: React.ReactNode;
-  activity: React.ReactNode;
-  console: React.ReactNode;
+  panel: React.ReactNode;
 }) {
-  const pathname = usePathname() ?? "/";
-  const isFullWidth = FULL_WIDTH.has(pathname);
-  const tabs = [
-    { title: "Dashboard", href: "/", active: pathname === "/" },
-    { title: "Meters", href: "/meters", active: pathname === "/meters" },
-    { title: "Buckets", href: "/buckets", active: pathname === "/buckets" },
-  ];
-
   return (
-    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-5 p-4 lg:p-6">
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-2 px-1">
-        <h1 className="text-lg font-semibold tracking-tight">Agentic OS</h1>
-        <nav className="flex gap-2">
-          {tabs.map((t) => (
-            <Link
-              key={t.href}
-              href={t.href}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                t.active
-                  ? "bg-blue-600 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-              }`}
-            >
-              {t.title}
-            </Link>
-          ))}
-        </nav>
-        <p className="ml-auto text-sm text-zinc-500">
-          one vault · every project · localhost only
-        </p>
-      </header>
-
-      {isFullWidth ? (
-        children
-      ) : (
-        <Boundary label="layout.tsx">
-          <div className="grid flex-1 items-start gap-5 lg:grid-cols-3">
-            <div className="order-2 flex min-w-0 lg:order-1 lg:col-span-2 lg:row-span-2">
-              {children}
-            </div>
-            <div className="order-1 flex min-w-0 lg:order-2">{activity}</div>
-            <div className="order-3 flex min-w-0">{consolePanel}</div>
+    <div className="flex h-dvh flex-col bg-zinc-950 p-3 text-zinc-100 lg:p-4">
+      <Boundary label="layout.tsx">
+        <div className="flex min-h-0 flex-1 gap-4">
+          <div className="flex w-[210px] shrink-0">
+            <Boundary label="sidebar.tsx">
+              <Sidebar />
+            </Boundary>
           </div>
-        </Boundary>
-      )}
+
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
+            <Boundary label="terminal.tsx">
+              <Suspense
+                fallback={
+                  <p className="text-sm text-zinc-600">loading terminal…</p>
+                }
+              >
+                <Terminal />
+              </Suspense>
+            </Boundary>
+            {children}
+          </div>
+
+          <div id="app-panel-root" className="flex h-full shrink-0" />
+        </div>
+      </Boundary>
+
+      <PanelWrapper panel={panel} />
     </div>
   );
 }

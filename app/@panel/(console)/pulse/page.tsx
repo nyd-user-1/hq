@@ -4,12 +4,11 @@ import { ago } from "@/lib/ago";
 
 export const dynamic = "force-dynamic";
 
-// Console Home = Vault Pulse: the most recently touched files across the whole
-// vault — the heartbeat of every project, read live from disk.
-export default function ConsoleHome() {
+// Vault Pulse: the most recently touched files across the whole vault.
+export default function VaultPulse() {
   const pulse = vaultPulse(12);
   return (
-    <Boundary label="@console/page.tsx">
+    <Boundary label="@panel/pulse/page.tsx">
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-semibold text-zinc-300">Vault Pulse</h3>
         <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
@@ -36,7 +35,9 @@ export default function ConsoleHome() {
       ) : (
         <p className="text-sm text-zinc-600">vault not found on this machine</p>
       )}
-      <p className="text-xs text-zinc-600">~/vaults/hq · markdown & notes, newest first</p>
+      <p className="text-xs text-zinc-600">
+        ~/vaults/hq · markdown &amp; notes, newest first
+      </p>
     </Boundary>
   );
 }

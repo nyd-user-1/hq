@@ -7,11 +7,12 @@ export const maxDuration = 300; // Vercel hobby cap; locally the dev server has 
 // Continues the newest session headlessly. Resume forks to a new session
 // file that carries the full history, so the transcript view follows along.
 export async function POST(req: Request) {
-  const { prompt } = await req.json();
+  const { prompt, sessionId: pinned } = await req.json();
   if (typeof prompt !== "string" || !prompt.trim()) {
     return new NextResponse("empty prompt", { status: 400 });
   }
-  const sessionId = latestSessionId();
+  const sessionId =
+    typeof pinned === "string" && pinned ? pinned : latestSessionId();
   if (!sessionId) {
     return new NextResponse("no session transcript found", { status: 404 });
   }

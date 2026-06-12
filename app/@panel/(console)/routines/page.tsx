@@ -16,7 +16,7 @@ export default function Routines() {
   })).filter((g) => g.items.length > 0);
 
   return (
-    <Boundary label="@console/routines/page.tsx">
+    <Boundary label="@panel/routines/page.tsx">
       <RoutinePanel groups={groups} />
       <p className="font-mono text-[11px] text-zinc-600">
         reads !hq/*launchpad/004 Routines.md live
