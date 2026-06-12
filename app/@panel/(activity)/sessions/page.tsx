@@ -21,24 +21,50 @@ function fmt(n: number): string {
 // Clicking a session pins the center terminal to it via ?session=<id> — the
 // terminal switches without remounting. The selected card (pinned, or the newest
 // when unpinned — which is what the terminal shows) gets a blue outline.
+// [Live · All] filters the list: Live (default) = active in the last 2 minutes
+// (plus the selected card, so the outline never vanishes); All = everything,
+// with the <ul> as the scroll region so the boundary stays bounded.
 export default async function Sessions({
   searchParams,
 }: {
-  searchParams: Promise<{ session?: string }>;
+  searchParams: Promise<{ session?: string; filter?: string }>;
 }) {
-  const { session } = await searchParams;
+  const { session, filter } = await searchParams;
+  const showAll = filter === "all";
   const sessions = getSessions();
   const selectedId = session ?? sessions[0]?.id;
+  const shown = showAll
+    ? sessions
+    : sessions.filter((s) => s.active || s.id === selectedId);
+
+  const chip = (label: string, href: string, on: boolean) => (
+    <Link
+      href={href}
+      scroll={false}
+      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+        on
+          ? "bg-blue-600 text-white"
+          : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+  const keep = session ? `session=${session}&` : "";
 
   return (
     <Boundary label="@panel/sessions/page.tsx">
-      <ul className="flex flex-col gap-2">
-        {sessions.map((s) => {
+      <div className="flex gap-2">
+        {chip("Live", `/sessions?${keep}filter=live`, !showAll)}
+        {chip("All", `/sessions?${keep}filter=all`, showAll)}
+      </div>
+      <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        {shown.map((s) => {
           const selected = s.id === selectedId;
           return (
             <li key={s.id}>
               <Link
-                href={`/sessions?session=${s.id}`}
+                href={`/sessions?session=${s.id}${showAll ? "&filter=all" : ""}`}
                 scroll={false}
                 className={`flex flex-col gap-1 rounded-md border px-3 py-2 transition-colors ${
                   selected
@@ -74,11 +100,17 @@ export default async function Sessions({
             </li>
           );
         })}
+        {shown.length === 0 && (
+          <li className="text-xs text-zinc-600">
+            no live sessions right now — switch to All
+          </li>
+        )}
       </ul>
       <p className="text-xs text-zinc-600">
-        every Claude Code session on this machine, last 7 days · green = active
-        in the last 2 minutes · blue = showing in the terminal · click one to
-        drive it
+        {showAll
+          ? "every Claude Code session on this machine, last 7 days"
+          : "sessions active in the last 2 minutes"}{" "}
+        · green = active · blue = showing in the terminal · click one to drive it
       </p>
     </Boundary>
   );
