@@ -107,3 +107,47 @@ export function getNote(relPath: string): string | null {
 export function vaultRoot(): string {
   return VAULT_ROOT;
 }
+
+export type PulseEntry = {
+  project: string; // vault folder slug
+  name: string; // file name
+  rel: string; // path within the project folder
+  mtime: number;
+};
+
+// Vault Pulse: the most recently touched files across every project folder —
+// the vault's heartbeat. Bounded recursive walk (markdown + notes), newest first.
+export function vaultPulse(limit = 12): PulseEntry[] {
+  const out: PulseEntry[] = [];
+
+  function walk(dir: string, project: string, base: string, depth: number) {
+    if (depth > 3) return;
+    for (const e of safeReadDir(dir)) {
+      if (e.name.startsWith(".")) continue;
+      const full = path.join(dir, e.name);
+      const rel = base ? `${base}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        walk(full, project, rel, depth + 1);
+      } else if (/\.(md|txt|canvas)$/i.test(e.name)) {
+        try {
+          out.push({
+            project,
+            name: e.name,
+            rel,
+            mtime: fs.statSync(full).mtimeMs,
+          });
+        } catch {
+          // vanished mid-scan
+        }
+      }
+    }
+  }
+
+  for (const d of safeReadDir(VAULT_ROOT)) {
+    if (!d.isDirectory() || d.name.startsWith(".")) continue;
+    const slug = d.name.replace(/^[!*@_]/, "");
+    walk(path.join(VAULT_ROOT, d.name), slug, "", 0);
+  }
+
+  return out.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
+}

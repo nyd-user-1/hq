@@ -1,30 +1,26 @@
 import Boundary from "@/app/ui/boundary";
+import RoutinePanel, { type RoutineGroup } from "@/app/ui/routine-panel";
+import { getRoutines, CADENCE_ORDER, CADENCE_BLURB } from "@/lib/routines";
 
-const routines = [
-  { name: "morning portfolio sweep", cadence: "daily" },
-  { name: "roadmap drift check", cadence: "weekly" },
-  { name: "token burn rollup", cadence: "weekly" },
-];
+export const dynamic = "force-dynamic";
 
+// Routines = operator routines by cadence (on-demand · local · cloud · agent),
+// read live from the vault. Grouping happens here (server) so the client panel
+// stays free of lib/routines' node:fs. on-demand fires now; rest → /schedule.
 export default function Routines() {
+  const routines = getRoutines();
+  const groups: RoutineGroup[] = CADENCE_ORDER.map((c) => ({
+    cadence: c,
+    blurb: CADENCE_BLURB[c],
+    items: routines.filter((r) => r.cadence === c),
+  })).filter((g) => g.items.length > 0);
+
   return (
     <Boundary label="@console/routines/page.tsx">
-      <div className="flex flex-col gap-3">
-        <ul className="flex flex-col gap-2">
-          {routines.map((r) => (
-            <li
-              key={r.name}
-              className="flex items-center justify-between rounded-md border border-zinc-700 px-3 py-2"
-            >
-              <span className="text-sm text-zinc-300">{r.name}</span>
-              <span className="text-xs text-zinc-500">{r.cadence}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="text-xs text-zinc-600">
-          sketches only — later: scheduled cloud agents via /schedule
-        </p>
-      </div>
+      <RoutinePanel groups={groups} />
+      <p className="font-mono text-[11px] text-zinc-600">
+        reads !hq/*launchpad/004 Routines.md live
+      </p>
     </Boundary>
   );
 }
