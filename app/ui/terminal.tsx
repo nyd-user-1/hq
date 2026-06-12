@@ -3,12 +3,24 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Markdown from "@/app/ui/md";
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
 // remounts as the sidebar navigates the panel — it only re-renders when
 // ?session changes, swapping which session it shows/drives. Client island:
 // never imports a node:fs lib; it fetches via /api/terminal/* instead.
 type Turn = { role: "user" | "assistant"; text: string; at: string };
+type Status = { startedAt: number; outputTokens: number; phase: string } | null;
+
+// Spinner mood words, cycled by elapsed — the live "it's alive" flavor the real
+// CLI shows ("Sprouting…", "Marinating…").
+const MOODS = [
+  "Sprouting", "Marinating", "Percolating", "Simmering", "Noodling",
+  "Brewing", "Cooking", "Pondering", "Churning", "Conjuring", "Tinkering",
+];
+function fmtTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
 
 // Module-scoped so it survives re-renders; stays 1 across soft nav (proof the
 // terminal is not remounting). Resets only on a full reload.
@@ -23,8 +35,11 @@ export default function Terminal() {
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
+  const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
   const scrollRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
+  const working = status !== null;
 
   useEffect(() => {
     mountCount += 1;
@@ -38,6 +53,7 @@ export default function Terminal() {
       setTurns(d.turns ?? []);
       setProject(d.project ?? "");
       setResolvedId(d.id ?? null);
+      setStatus(d.status ?? null);
     } catch {
       // transient — the stream will re-ping
     }
@@ -61,10 +77,22 @@ export default function Terminal() {
     return () => es.close();
   }, [pinned, loadTurns]);
 
+  // While a turn is in flight, tick every 1s — bumps `now` (smooth elapsed) and
+  // refetches status (live tokens/phase, even between stream writes).
+  useEffect(() => {
+    if (!working) return;
+    setNow(Date.now());
+    const t = setInterval(() => {
+      setNow(Date.now());
+      loadTurns();
+    }, 1000);
+    return () => clearInterval(t);
+  }, [working, loadTurns]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [turns, sending]);
+  }, [turns, sending, status]);
 
   async function send() {
     const prompt = draft.trim();
@@ -104,6 +132,11 @@ export default function Terminal() {
       busyRef.current = false;
     }
   }
+
+  const elapsed = status
+    ? Math.max(0, Math.floor((now - status.startedAt) / 1000))
+    : 0;
+  const mood = MOODS[Math.floor(elapsed / 8) % MOODS.length];
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -160,19 +193,27 @@ export default function Terminal() {
               )}
             </span>
             <div
-              className={`whitespace-pre-wrap break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
+              className={`break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
                 t.role === "user"
-                  ? "border-zinc-700 bg-zinc-900 text-zinc-100"
+                  ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
                   : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
               }`}
             >
-              {t.text}
+              {t.role === "assistant" ? <Markdown text={t.text} /> : t.text}
             </div>
           </div>
         ))}
-        {sending && (
-          <p className="font-mono text-xs text-zinc-500">claude is working…</p>
-        )}
+        {status ? (
+          <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
+            <span className="text-orange-400">✶ {mood}…</span>
+            <span className="text-zinc-500">
+              ({elapsed}s · ↓ {fmtTokens(status.outputTokens)} tokens
+              {status.phase ? ` · ${status.phase}` : ""})
+            </span>
+          </p>
+        ) : sending ? (
+          <p className="font-mono text-xs text-zinc-500">starting…</p>
+        ) : null}
         {error && (
           <p className="whitespace-pre-wrap font-mono text-xs text-red-400">
             {error}

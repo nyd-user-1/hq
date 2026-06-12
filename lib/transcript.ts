@@ -132,6 +132,127 @@ export function recentTurns(count: number): Turn[] {
   return turnsFor(null, count).turns;
 }
 
+export type WorkingStatus = {
+  startedAt: number; // ms — turn start (the last real user prompt)
+  outputTokens: number; // accumulating output tokens for the in-flight turn
+  phase: string; // "thinking" | "writing" | "using <tool>"
+};
+
+// Is a session mid-turn right now, and if so, what's it doing? Inferred from the
+// live transcript: a user prompt with no assistant reply = thinking; an
+// assistant entry whose stop_reason is null/"tool_use" = still generating /
+// running a tool; "end_turn" = done. Output tokens come from the in-flight
+// assistant entry's usage. Powers the terminal's live "working" status line.
+export function workingStatus(id: string | null): WorkingStatus | null {
+  const sid = id ?? latestSessionId();
+  if (!sid) return null;
+  let text: string;
+  let partial = false;
+  let mtime = 0;
+  try {
+    const file = sessionFilePath(sid);
+    const st = fs.statSync(file);
+    mtime = st.mtimeMs;
+    const startAt = Math.max(0, st.size - TAIL_BYTES);
+    partial = startAt > 0;
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(st.size - startAt);
+    fs.readSync(fd, buf, 0, buf.length, startAt);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return null;
+  }
+
+  const lines = text.split("\n");
+  if (partial) lines.shift();
+
+  type E = {
+    role: "user" | "assistant";
+    ts: number;
+    isUserPrompt: boolean;
+    stop: string | null;
+    out: number;
+    lastBlock: string;
+  };
+  const entries: E[] = [];
+  for (const line of lines) {
+    if (!line) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e.isSidechain) continue;
+    if (e.type !== "user" && e.type !== "assistant") continue;
+    const c = e.message?.content;
+    const blocks = Array.isArray(c) ? c : [];
+    const isToolResult =
+      e.type === "user" && blocks.some((b) => b?.type === "tool_result");
+    const hasText =
+      (typeof c === "string" && c.trim().length > 0) ||
+      blocks.some((b) => b?.type === "text" && (b.text ?? "").trim().length > 0);
+    const isCmd = typeof c === "string" && c.includes("<command-name>");
+    const lb = blocks[blocks.length - 1];
+    const lastBlock = lb
+      ? lb.type === "tool_use"
+        ? `tool:${lb.name}`
+        : (lb.type ?? "")
+      : "";
+    const ts = Date.parse(e.timestamp);
+    entries.push({
+      role: e.type,
+      ts: Number.isNaN(ts) ? 0 : ts,
+      isUserPrompt: e.type === "user" && !isToolResult && hasText && !isCmd,
+      stop: e.message?.stop_reason ?? null,
+      out: e.message?.usage?.output_tokens ?? 0,
+      lastBlock,
+    });
+  }
+  if (entries.length === 0) return null;
+
+  let startIdx = -1;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].isUserPrompt) {
+      startIdx = i;
+      break;
+    }
+  }
+  const startedAt = entries[startIdx >= 0 ? startIdx : entries.length - 1].ts;
+
+  let outputTokens = 0;
+  for (let i = Math.max(0, startIdx); i < entries.length; i++)
+    if (entries[i].role === "assistant")
+      outputTokens = Math.max(outputTokens, entries[i].out);
+
+  const last = entries[entries.length - 1];
+  let working: boolean;
+  let phase = "thinking";
+  if (last.role === "user") {
+    working = true; // prompt or tool-result with no assistant reply yet
+  } else if (
+    last.stop === "end_turn" ||
+    last.stop === "stop_sequence" ||
+    last.stop === "max_tokens"
+  ) {
+    working = false;
+  } else {
+    working = true; // stop null or "tool_use"
+    phase = last.lastBlock.startsWith("tool:")
+      ? `using ${last.lastBlock.slice(5)}`
+      : last.lastBlock === "thinking"
+        ? "thinking"
+        : "writing";
+  }
+
+  // Staleness backstop: a turn untouched for 5 min is almost certainly abandoned.
+  if (working && Date.now() - mtime > 300_000) working = false;
+  if (!working) return null;
+
+  return { startedAt, outputTokens, phase };
+}
+
 export type CommandRun = {
   command: string; // "/code-review"
   arg: string; // trailing args, if any
