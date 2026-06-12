@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Terminal 2",
+  title: "Agentic OS",
   description: "Portfolio dashboard over the HQ vault",
 };
 

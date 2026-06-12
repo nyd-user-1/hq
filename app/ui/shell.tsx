@@ -30,7 +30,7 @@ export default function Shell({
   return (
     <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-5 p-4 lg:p-6">
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-2 px-1">
-        <h1 className="text-lg font-semibold tracking-tight">Terminal 2</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Agentic OS</h1>
         <nav className="flex gap-2">
           {tabs.map((t) => (
             <Link
