@@ -317,7 +317,9 @@ export default function Terminal({
       ? "?staged=1"
       : pinned
         ? `?session=${encodeURIComponent(pinned)}`
-        : "";
+        : sibling
+          ? `?exclude=${encodeURIComponent(sibling)}` // unpinned: newest, but not Terminal 2's
+          : "";
     try {
       const d = await (await fetch(`/api/terminal/turns${q}`)).json();
       if (staged) {
@@ -340,6 +342,16 @@ export default function Terminal({
         setResume(d.resume ?? null);
         setLineage(d.lineage ?? null);
         setPredecessorCtx(d.predecessorCtx ?? 0);
+        // Sticky: an unpinned terminal pins itself to the session it just
+        // resolved, so it STAYS there — clicking a Recents row is the only thing
+        // that moves it, instead of live-chasing whatever session is newest.
+        if (!pinned && d.id) {
+          const sp = new URLSearchParams();
+          sp.set(paramKey, d.id);
+          const sibKey = paramKey === "session" ? "pair" : "session";
+          if (sibling) sp.set(sibKey, sibling);
+          router.replace(`${pathname ?? "/"}?${sp.toString()}`, { scroll: false });
+        }
       }
       setStatus(d.status ?? null);
       setContextTokens(d.contextTokens ?? 0);
@@ -355,7 +367,7 @@ export default function Terminal({
           load();
         }, 2000);
     }
-  }, [pinned, staged, router, pathname]);
+  }, [pinned, staged, router, pathname, sibling, paramKey]);
 
   // Entering the staging view: clear the display (nothing is being shown) and
   // stamp the moment — only sessions born after it count as the newborn.
