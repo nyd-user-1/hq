@@ -13,9 +13,12 @@ import os from "node:os";
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
 const POLL_MS = 500;
 const BACKLOG_BYTES = 256 * 1024;
+const MAX_DIFF_LINES = 80; // cap per file edit so a huge rewrite can't flood the follower
 
 const BLUE = "\x1b[34m";
 const ORANGE = "\x1b[38;5;208m";
+const GREEN = "\x1b[32m";
+const RED = "\x1b[31m";
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
 const RESET = "\x1b[0m";
@@ -56,6 +59,57 @@ const clean = (t) =>
 
 let lastRole = null;
 
+// Render an Edit/Write tool_result's structuredPatch as an inline colored diff —
+// the same before/after the native Claude Code TUI shows. The data is already in
+// the transcript (toolUseResult.structuredPatch); we just choose to draw it.
+function printDiff(tur) {
+  const patch = tur?.structuredPatch;
+  if (!Array.isArray(patch) || patch.length === 0) return false;
+  const name = (tur.filePath || "").split("/").pop();
+
+  let added = 0,
+    removed = 0,
+    total = 0;
+  for (const h of patch)
+    for (const ln of h.lines) {
+      total++;
+      if (ln[0] === "+") added++;
+      else if (ln[0] === "-") removed++;
+    }
+
+  console.log(`${DIM}  └ ${name}${RESET}  ${GREEN}+${added}${RESET} ${RED}-${removed}${RESET}`);
+
+  let shown = 0;
+  outer: for (let hi = 0; hi < patch.length; hi++) {
+    const h = patch[hi];
+    if (hi > 0) console.log(`  ${DIM}   ⋯${RESET}`); // gap between hunks
+    let oldN = h.oldStart,
+      newN = h.newStart;
+    for (const ln of h.lines) {
+      if (shown >= MAX_DIFF_LINES) {
+        console.log(`  ${DIM}   … ${total - shown} more lines${RESET}`);
+        break outer;
+      }
+      const sign = ln[0];
+      const body = ln.slice(1);
+      if (sign === "+") {
+        console.log(`  ${GREEN}${String(newN).padStart(4)} + ${body}${RESET}`);
+        newN++;
+      } else if (sign === "-") {
+        console.log(`  ${RED}${String(oldN).padStart(4)} - ${body}${RESET}`);
+        oldN++;
+      } else {
+        console.log(`  ${DIM}${String(newN).padStart(4)}   ${body}${RESET}`);
+        oldN++;
+        newN++;
+      }
+      shown++;
+    }
+  }
+  console.log("");
+  return true;
+}
+
 function printEntry(e) {
   if (e.isSidechain) return;
   if (e.type !== "user" && e.type !== "assistant") return;
@@ -63,7 +117,10 @@ function printEntry(e) {
   const blocks = Array.isArray(c) ? c : [];
 
   if (e.type === "user") {
-    if (blocks.some((b) => b?.type === "tool_result")) return;
+    if (blocks.some((b) => b?.type === "tool_result")) {
+      if (printDiff(e.toolUseResult)) lastRole = "tool";
+      return;
+    }
     const raw = typeof c === "string" ? c : blocks.filter((b) => b?.type === "text").map((b) => b.text ?? "").join("\n");
     const cmd = raw.match(/<command-name>([^<]*)<\/command-name>/);
     if (cmd) {
