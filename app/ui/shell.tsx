@@ -22,7 +22,7 @@ export default function Shell({
   panel: React.ReactNode;
 }) {
   return (
-    <div className="flex h-dvh flex-col bg-zinc-950 p-3 text-zinc-100 lg:p-4">
+    <div className="flex h-dvh flex-col bg-zinc-950 p-6 text-zinc-100">
       {/* no row gap — the sidebar carries mr-4 while open (collapses with it)
           and the app panel brings its own ml-4, so closed = truly full width */}
       <SidebarProvider>
