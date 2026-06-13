@@ -120,6 +120,11 @@ export function search(
   return { hits, building: t.building };
 }
 
+// Absolute path of a memory file — for the reader's click-to-copy path header.
+export function memoryFilePath(name: string): string {
+  return path.join(MEMORY_DIR, path.basename(name));
+}
+
 // Full content of one memory file, for the result-click "open" view.
 // Basename-only so a crafted ?open= can't walk out of the memory dir.
 export function getMemoryFile(name: string): string | null {

@@ -3,10 +3,13 @@ import Link from "next/link";
 import Markdown from "@/app/ui/md";
 import SearchInput from "@/app/ui/search-input";
 import RefreshWhile from "@/app/ui/refresh-while";
+import CopyText from "@/app/ui/copy-text";
 import { ago } from "@/lib/ago";
+import { turnsFor } from "@/lib/transcript";
 import {
   search,
   getMemoryFile,
+  memoryFilePath,
   queryTokens,
   type SearchScope,
 } from "@/lib/search";
@@ -40,35 +43,89 @@ function highlight(text: string, tok: string): React.ReactNode {
 export default async function Search({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; scope?: string; open?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    scope?: string;
+    open?: string;
+    openSession?: string;
+  }>;
 }) {
-  const { q = "", scope: rawScope, open } = await searchParams;
+  const { q = "", scope: rawScope, open, openSession } = await searchParams;
   const scope: SearchScope =
     rawScope === "transcripts" || rawScope === "memory" ? rawScope : "all";
+  const back = `/search?q=${encodeURIComponent(q)}&scope=${scope}`;
 
   // ── opened memory file ──────────────────────────────────────────────────
   if (open) {
     const content = getMemoryFile(open);
-    const back = `/search?q=${encodeURIComponent(q)}&scope=${scope}`;
     return (
       <Boundary label="@panel/search/page.tsx">
         <div className="flex items-baseline gap-3">
           <Link
             href={back}
             scroll={false}
-            className="font-mono text-xs text-blue-400 hover:text-blue-300"
+            className="shrink-0 font-mono text-xs text-blue-400 hover:text-blue-300"
           >
             ← results
           </Link>
-          <span className="truncate font-mono text-xs text-zinc-500">
+          <CopyText
+            text={memoryFilePath(open)}
+            className="min-w-0 truncate font-mono text-xs text-zinc-500 hover:text-zinc-300"
+          >
             memory/{open}
-          </span>
+          </CopyText>
         </div>
         <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto text-sm">
           {content ? (
             <Markdown text={content} />
           ) : (
             <p className="text-xs text-zinc-600">memory file not found</p>
+          )}
+        </div>
+      </Boundary>
+    );
+  }
+
+  // ── opened transcript ───────────────────────────────────────────────────
+  // The clicked transcript opens HERE (in the panel, like a memory note) rather
+  // than hijacking the terminal. Clean user/assistant text only — no tool noise.
+  if (openSession) {
+    const { turns, project } = turnsFor(openSession, 250);
+    return (
+      <Boundary label="@panel/search/page.tsx">
+        <div className="flex items-baseline gap-3">
+          <Link
+            href={back}
+            scroll={false}
+            className="shrink-0 font-mono text-xs text-blue-400 hover:text-blue-300"
+          >
+            ← results
+          </Link>
+          <CopyText
+            text={`claude --resume ${openSession}`}
+            className="min-w-0 truncate font-mono text-xs text-zinc-500 hover:text-zinc-300"
+          >
+            {project || "session"} · {openSession.slice(0, 8)}
+          </CopyText>
+        </div>
+        <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto text-sm">
+          {turns.length === 0 ? (
+            <p className="text-xs text-zinc-600">transcript not found</p>
+          ) : (
+            turns.map((t, i) => (
+              <div key={i} className="flex flex-col gap-1">
+                <span
+                  className={`font-mono text-[10px] uppercase tracking-wide ${
+                    t.role === "user" ? "text-blue-400" : "text-emerald-400"
+                  }`}
+                >
+                  {t.role === "user" ? "you" : "claude"}
+                </span>
+                <div className="text-zinc-300">
+                  <Markdown text={t.text} />
+                </div>
+              </div>
+            ))
           )}
         </div>
       </Boundary>
@@ -111,8 +168,8 @@ export default async function Search({
             <Link
               href={
                 h.kind === "transcript"
-                  ? `/sessions?session=${h.ref}`
-                  : `/search?q=${encodeURIComponent(q)}&scope=${scope}&open=${encodeURIComponent(h.ref)}`
+                  ? `${back}&openSession=${h.ref}`
+                  : `${back}&open=${encodeURIComponent(h.ref)}`
               }
               scroll={false}
               className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
@@ -147,8 +204,8 @@ export default async function Search({
         )}
       </ul>
       <p className="text-xs text-zinc-600">
-        every session ever + memory · transcript → opens in the terminal ·
-        memory → opens the note
+        every session ever + memory · click a result to read it here · paths +
+        resume commands copy on click
         {building && <span className="text-amber-400"> · indexing…</span>}
       </p>
       <RefreshWhile active={building} />
