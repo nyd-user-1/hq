@@ -27,7 +27,23 @@ type ResumeOptions = {
     project: string;
     lastActive: number;
     snippet: string;
+    contextTokens: number;
   }[];
+} | null;
+
+// The session's place in its /clear chain (lib/lineage.ts): predecessor =
+// the session this one continues, successor = the one that continues it,
+// chain = the whole tied line, oldest → newest.
+type LineageNode = {
+  id: string;
+  project: string;
+  bornAt: number;
+  lastActive: number;
+};
+type Lineage = {
+  chain: LineageNode[] | null;
+  predecessor: LineageNode | null;
+  successor: LineageNode | null;
 } | null;
 
 // Spinner mood words, cycled by elapsed — the live "it's alive" flavor the real
@@ -137,6 +153,8 @@ export default function Terminal() {
   const escTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
+  const [lineage, setLineage] = useState<Lineage>(null); // this session's /clear chain
+  const [predecessorCtx, setPredecessorCtx] = useState(0); // continued session's ctx size (fresh pane)
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
   const scrollRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
@@ -159,6 +177,8 @@ export default function Terminal() {
         setProject(d.project ?? "");
         setResolvedId(d.id ?? null);
         setResume(d.resume ?? null);
+        setLineage(d.lineage ?? null);
+        setPredecessorCtx(d.predecessorCtx ?? 0);
       }
       setStatus(d.status ?? null);
       setContextTokens(d.contextTokens ?? 0);
@@ -396,6 +416,43 @@ export default function Terminal() {
         <span className="font-mono text-[11px] text-zinc-600">
           {resolvedId ? resolvedId.slice(0, 8) : "—"}
         </span>
+        {/* The /clear chain: this session's tied line of continuations.
+            Click a row to show that session in the terminal. */}
+        {lineage?.chain && (
+          <details className="relative">
+            <summary
+              title="sessions tied together by /clear continuations"
+              className="cursor-pointer list-none rounded-md border border-zinc-800 px-1.5 py-px font-mono text-[10px] text-zinc-500 transition-colors marker:content-none hover:border-zinc-600 hover:text-zinc-300"
+            >
+              chain · {lineage.chain.length} ▾
+            </summary>
+            <div className="absolute left-0 top-full z-20 mt-1 flex w-72 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+              {lineage.chain.map((c, i) => (
+                <Link
+                  key={c.id}
+                  href={`/sessions?session=${c.id}`}
+                  scroll={false}
+                  className={`flex items-baseline gap-2 rounded px-2 py-1 font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
+                    c.id === resolvedId ? "text-zinc-200" : "text-zinc-500"
+                  }`}
+                >
+                  <span className="shrink-0 text-zinc-600">{i + 1}</span>
+                  <span className="shrink-0">{c.project}</span>
+                  <span className="shrink-0 text-zinc-600">
+                    {c.id.slice(0, 8)}
+                  </span>
+                  <span className="ml-auto shrink-0 text-[10px] text-zinc-600">
+                    {c.id === resolvedId
+                      ? "in terminal"
+                      : i > 0
+                        ? `cleared into at ${new Date(c.bornAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                        : `started ${new Date(c.bornAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </details>
+        )}
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
           {cacheLeft !== null &&
@@ -562,8 +619,51 @@ export default function Terminal() {
             </details>
           )
         )}
+        {/* End-of-the-line marker: this session was wrapped and continued
+            elsewhere — the answer to "that was the end of 2aa29e46, where did
+            it go?". Click follows the continuation. */}
+        {!loading && lineage?.successor && (
+          <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-600">
+            <span className="h-px w-6 shrink-0 bg-zinc-800" />
+            <Link
+              href={`/sessions?session=${lineage.successor.id}`}
+              scroll={false}
+              className="shrink-0 transition-colors hover:text-zinc-300"
+              title="open the session that continues this one"
+            >
+              → continued by {lineage.successor.project} ·{" "}
+              {lineage.successor.id.slice(0, 8)} ·{" "}
+              {new Date(lineage.successor.bornAt).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </Link>
+            <span className="h-px min-w-6 flex-1 bg-zinc-800" />
+          </div>
+        )}
         {!loading && items.length > 0 && items.every((it) => it.kind === "command") && (
           <div className="flex flex-col gap-3 font-mono text-xs">
+            {/* /clear-born: say plainly which session's work continues here. */}
+            {lineage?.predecessor && (
+              <p className="text-zinc-400">
+                <Link
+                  href={`/sessions?session=${lineage.predecessor.id}`}
+                  scroll={false}
+                  className="text-zinc-300 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-zinc-100"
+                  title="open the cleared session read-only"
+                >
+                  {lineage.predecessor.project} ·{" "}
+                  {lineage.predecessor.id.slice(0, 8)}
+                </Link>{" "}
+                was cleared — its work continues here
+                {predecessorCtx > 0 && (
+                  <span className="text-zinc-600">
+                    {" "}
+                    · it ended at ctx {fmtTokens(predecessorCtx)}
+                  </span>
+                )}
+              </p>
+            )}
             <div className="flex flex-col gap-1">
               <p className="text-zinc-400">fresh session — no turns yet</p>
               <p className="text-zinc-600">
@@ -578,7 +678,10 @@ export default function Terminal() {
                   text={`Read "${resume.handoff.path}" in full — it's the latest handoff memo — then pick up where it left off.`}
                 />
                 <span className="text-[11px] text-zinc-600">
-                  paste into your terminal to resume from the memo
+                  paste in your terminal —{" "}
+                  {lineage?.predecessor
+                    ? `picks up ${lineage.predecessor.id.slice(0, 8)} on fresh context`
+                    : "starts fresh from the memo"}
                 </span>
               </div>
             )}
@@ -601,6 +704,8 @@ export default function Terminal() {
                       </span>
                       <span className="shrink-0 text-[11px] text-zinc-600">
                         {s.id.slice(0, 8)} · {fmtAgo(now - s.lastActive)}
+                        {s.contextTokens > 0 &&
+                          ` · ctx ${fmtTokens(s.contextTokens)}`}
                       </span>
                       {s.snippet && (
                         <span className="min-w-0 truncate text-[11px] text-zinc-500">
@@ -609,7 +714,7 @@ export default function Terminal() {
                       )}
                     </Link>
                     <CopyChip
-                      label="copy resume cmd"
+                      label="reopen full session"
                       text={`claude --resume ${s.id}`}
                     />
                   </div>

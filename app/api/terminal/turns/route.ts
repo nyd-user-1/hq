@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { timelineFor, workingStatus } from "@/lib/transcript";
 import { getSessions } from "@/lib/sessions";
 import { latestHandoff } from "@/lib/vault";
+import { lineageFor } from "@/lib/lineage";
 
 export const dynamic = "force-dynamic";
 
@@ -18,20 +19,27 @@ export async function GET(req: Request) {
   // Computed only then — this route polls at 1s while a turn is in flight.
   const fresh =
     items.length > 0 && items.every((it) => it.kind === "command");
-  const resume = fresh
-    ? {
-        handoff: latestHandoff(),
-        sessions: getSessions(8)
-          .filter((s) => s.id !== resolved)
-          .slice(0, 3)
-          .map(({ id, project, lastActive, snippet }) => ({
-            id,
-            project,
-            lastActive,
-            snippet,
-          })),
-      }
-    : null;
+  const lineage = resolved ? lineageFor(resolved) : null;
+  let resume = null;
+  let predecessorCtx = 0; // the continued session's context size, for the fresh-pane line
+  if (fresh) {
+    const recent = getSessions(8);
+    predecessorCtx =
+      recent.find((s) => s.id === lineage?.predecessor?.id)?.contextTokens ?? 0;
+    resume = {
+      handoff: latestHandoff(),
+      sessions: recent
+        .filter((s) => s.id !== resolved)
+        .slice(0, 3)
+        .map(({ id, project, lastActive, snippet, contextTokens }) => ({
+          id,
+          project,
+          lastActive,
+          snippet,
+          contextTokens,
+        })),
+    };
+  }
   return NextResponse.json({
     id: resolved,
     items,
@@ -40,5 +48,7 @@ export async function GET(req: Request) {
     contextTokens,
     lastWrite,
     resume,
+    lineage,
+    predecessorCtx,
   });
 }
