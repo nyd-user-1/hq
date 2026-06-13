@@ -7,6 +7,7 @@ import Markdown from "@/app/ui/md";
 import Efficiency from "@/app/ui/efficiency";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import { PANELS } from "@/app/ui/sidebar-nav";
+import { withPins } from "@/app/ui/keep-pins";
 import type { TimelineItem } from "@/lib/transcript";
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
@@ -693,7 +694,7 @@ export default function Terminal({
               return (
                 <Link
                   key={p.href}
-                  href={p.href}
+                  href={withPins(p.href, params.toString())}
                   scroll={false}
                   onClick={() => {
                     if (panelsRef.current) panelsRef.current.open = false;

@@ -1,17 +1,23 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { withPins } from "@/app/ui/keep-pins";
 
 // Search icon on the terminal boundary, where the "+" used to live: opens the
 // Search panel (@panel/search — every session + memory). Toggles, so clicking it
-// while open closes the panel.
+// while open closes the panel. Keeps the terminal pins so it never closes a
+// paired terminal.
 export default function SearchTrigger() {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const active = pathname.startsWith("/search");
   return (
     <button
-      onClick={() => router.push(active ? "/" : "/search", { scroll: false })}
+      onClick={() =>
+        router.push(withPins(active ? "/" : "/search", window.location.search), {
+          scroll: false,
+        })
+      }
       aria-label="Search every session and memory"
       className={`boundary-flash-chip flex cursor-pointer items-center px-1.5 py-0.5 transition-colors ${
         active
