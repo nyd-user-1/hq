@@ -563,7 +563,9 @@ export default function Terminal() {
                 cache cold
               </span>
             ))}
-          {contextTokens > 0 && (
+          {/* Hidden until 75% — on a 1M window the bar sits near-empty most of
+              a session, so it's noise until context actually matters. */}
+          {ctxPct >= 75 && (
             <span
               className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-500"
               title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} (your 1M tier) before auto-compact territory · the tick at ${fmtTokens(PRICING_CLIFF)} is where long-context pricing kicks in (~2× input)`}
