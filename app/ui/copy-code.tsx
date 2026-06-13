@@ -14,7 +14,6 @@ export default function CopyCode({ children }: { children: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1200);
       }}
-      title={copied ? "copied ✓" : "click to copy"}
       className={`cursor-pointer rounded px-1 py-0.5 text-[0.95em] transition-colors ${
         copied
           ? "bg-emerald-500/15 text-emerald-300"
