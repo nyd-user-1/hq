@@ -4,7 +4,7 @@ import TabNav from "@/app/ui/tab-nav";
 
 export const dynamic = "force-dynamic";
 
-// Console panel: Vault Pulse · Skills · Routines.
+// Console panel: Shipped · Skills · Routines.
 export default function ConsoleLayout({
   children,
 }: {
@@ -14,7 +14,7 @@ export default function ConsoleLayout({
     <Boundary label="@panel/(console)/layout.tsx">
       <TabNav
         tabs={[
-          { title: "Vault Pulse", href: "/pulse", segment: "pulse" },
+          { title: "Shipped", href: "/shipped", segment: "shipped" },
           { title: "Skills", href: "/skills", segment: "skills" },
           { title: "Routines", href: "/routines", segment: "routines" },
         ]}

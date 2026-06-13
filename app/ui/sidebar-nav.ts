@@ -13,7 +13,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
   { title: "Activity", href: "/calls", routes: ["/calls", "/sessions", "/todo"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/savings", "/audit"] },
-  { title: "Console", href: "/pulse", routes: ["/pulse", "/skills", "/routines"] },
+  { title: "Console", href: "/shipped", routes: ["/shipped", "/skills", "/routines"] },
 ];
 
 // Routes that open the right panel (terminal stays mounted underneath).
