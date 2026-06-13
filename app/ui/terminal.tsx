@@ -544,6 +544,26 @@ export default function Terminal() {
             </div>
           </details>
         )}
+        {/* Panels: open the activity panel (Calls · Sessions · To Do); pressing
+            again while it's open closes it back to terminal-only. */}
+        <button
+          onClick={() =>
+            router.push(
+              ["/calls", "/sessions", "/todo"].includes(pathname ?? "")
+                ? "/"
+                : "/calls",
+              { scroll: false }
+            )
+          }
+          title="open the activity panel — Calls · Sessions · To Do"
+          className={`cursor-pointer rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors ${
+            ["/calls", "/sessions", "/todo"].includes(pathname ?? "")
+              ? "border-zinc-600 text-zinc-300"
+              : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+          }`}
+        >
+          panels
+        </button>
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
           {cacheLeft !== null &&

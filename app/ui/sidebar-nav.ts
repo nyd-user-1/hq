@@ -12,8 +12,8 @@ export const SIDEBAR_NAV: NavGroup[] = [
   {
     label: "Activity",
     items: [
-      { title: "Sessions", href: "/sessions" },
       { title: "Calls", href: "/calls" },
+      { title: "Sessions", href: "/sessions" },
       { title: "To Do", href: "/todo" },
     ],
   },

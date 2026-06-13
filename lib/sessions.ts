@@ -82,6 +82,119 @@ function tailInfo(file: string): {
   return { cwd, snippet, contextTokens };
 }
 
+// A lean "recent sessions" row for the sidebar Recents list (Claude-style).
+// Title = the session's FIRST real user prompt (a head read), which reads like
+// a conversation title; falls back to the project name.
+export type RecentSession = {
+  id: string;
+  project: string;
+  title: string;
+  lastActive: number;
+  active: boolean;
+};
+
+// Reads the HEAD of a transcript (not the tail) for cwd + the opening prompt.
+function headInfo(file: string): { cwd: string | null; title: string } {
+  let text: string;
+  try {
+    const fd = fs.openSync(file, "r");
+    const size = fs.fstatSync(fd).size;
+    const len = Math.min(size, 96 * 1024);
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, 0);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return { cwd: null, title: "" };
+  }
+
+  let cwd: string | null = null;
+  let title = "";
+  for (const line of text.split("\n")) {
+    if (!line) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
+    if (title) {
+      if (cwd) break; // have both — stop
+      continue;
+    }
+    // First non-command, non-meta user prompt = the title.
+    if (e.type !== "user" || e.isSidechain || e.isMeta) continue;
+    const content = e.message?.content;
+    const raw =
+      typeof content === "string"
+        ? content
+        : Array.isArray(content)
+          ? content
+              .filter((b: { type?: string }) => b?.type === "text")
+              .map((b: { text?: string }) => b.text ?? "")
+              .join(" ")
+          : "";
+    // Skip slash-command / local-command records — not real prompts.
+    if (!raw || /<command-(name|message)>|<local-command-stdout>/.test(raw))
+      continue;
+    const cleaned = cleanText(raw);
+    if (cleaned.length < 3) continue;
+    title = cleaned.slice(0, 90);
+  }
+  return { cwd, title };
+}
+
+export function getRecentSessions(limit = 24): RecentSession[] {
+  const now = Date.now();
+  let dirs: fs.Dirent[];
+  try {
+    dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files: { file: string; mtime: number }[] = [];
+  for (const dir of dirs) {
+    if (!dir.isDirectory()) continue;
+    const dirPath = path.join(PROJECTS_ROOT, dir.name);
+    let names: string[];
+    try {
+      names = fs.readdirSync(dirPath);
+    } catch {
+      continue;
+    }
+    for (const f of names) {
+      if (!f.endsWith(".jsonl")) continue;
+      const full = path.join(dirPath, f);
+      try {
+        const st = fs.statSync(full);
+        if (st.size > 0 && now - st.mtimeMs <= 7 * 24 * 60 * 60 * 1000)
+          files.push({ file: full, mtime: st.mtimeMs });
+      } catch {
+        // vanished mid-scan
+      }
+    }
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+
+  return files.slice(0, limit).map(({ file, mtime }) => {
+    const { cwd, title } = headInfo(file);
+    const project =
+      cwd === os.homedir()
+        ? "~ (home)"
+        : cwd
+          ? path.basename(cwd)
+          : path.basename(path.dirname(file));
+    return {
+      id: path.basename(file, ".jsonl"),
+      project,
+      title: title || `${project} session`,
+      lastActive: mtime,
+      active: now - mtime < ACTIVE_MS,
+    };
+  });
+}
+
 export function getSessions(limit = 12): SessionInfo[] {
   getUsage(); // refresh the meter's per-file cache
   const totals = perFileTotals();
