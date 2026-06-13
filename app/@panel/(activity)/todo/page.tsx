@@ -1,24 +1,17 @@
 import Boundary from "@/app/ui/boundary";
-import { getProjects } from "@/lib/vault";
+import { getTodos } from "@/lib/todo";
+import TodoList from "@/app/ui/todo-list";
 
 export const dynamic = "force-dynamic";
 
-// To Do = the HQ project's own 002 Roadmap, read live from the vault.
+// To Do = HQ's own list, read from the HQ-native store (~/.claude/hq/todo.json).
+// No vault/Obsidian dependency — it ships and works for any Claude Code user.
 export default function ToDo() {
-  const hq = getProjects().find((p) => p.slug === "hq");
   return (
     <Boundary topOnly label="@panel/todo/page.tsx">
-      {hq && hq.roadmap.length > 0 ? (
-        <ol className="scrollbar-none flex min-h-0 flex-1 list-decimal flex-col gap-2 overflow-y-auto pl-5 text-sm text-zinc-300">
-          {hq.roadmap.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ol>
-      ) : (
-        <p className="text-sm text-zinc-600">no roadmap items found</p>
-      )}
+      <TodoList initial={getTodos()} />
       <p className="text-xs text-zinc-600">
-        reads !hq/*launchpad/002 Roadmap.md live from the vault
+        reads ~/.claude/hq/todo.json — HQ-native, no vault required
       </p>
     </Boundary>
   );
