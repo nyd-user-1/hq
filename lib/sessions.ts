@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { getUsage, perFileTotals, weighted } from "./usage";
+import { baseCost } from "./pricing";
 
 // Fleet view: every Claude Code session on this machine, from the same
 // transcripts the token meter parses. Burn comes from the meter's file
@@ -21,6 +22,7 @@ export type SessionInfo = {
   messages: number;
   weightedTokens: number;
   contextTokens: number; // current context size (last assistant entry's usage)
+  cost: number; // estimated USD this session has cost (floor — see pricing.ts)
   snippet: string;
 };
 
@@ -287,6 +289,14 @@ export function getSessions(limit = 12): SessionInfo[] {
       messages: t?.messages ?? 0,
       weightedTokens: t ? weighted(t) : 0,
       contextTokens,
+      cost: t
+        ? baseCost({
+            input: t.input,
+            cacheCreate: t.cacheCreate,
+            cacheRead: t.cacheRead,
+            output: t.output,
+          })
+        : 0,
       snippet: snippet.slice(0, 120),
     };
   });

@@ -2,6 +2,7 @@ import Boundary from "@/app/ui/boundary";
 import Link from "next/link";
 import { getSessions } from "@/lib/sessions";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
+import { fmtUSD } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +103,7 @@ export default async function Sessions({
                   </span>
                 </div>
                 <p className="font-mono text-xs text-zinc-500">
+                  <span className="text-emerald-300">{fmtUSD(s.cost)}</span> ·{" "}
                   {s.messages} msgs · {fmt(s.weightedTokens)} weighted
                   {s.contextTokens > 0 && (
                     <>

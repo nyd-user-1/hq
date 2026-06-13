@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { callCost } from "./pricing";
 
 // Token meter over Claude Code's local transcripts (~/.claude/projects/**/*.jsonl).
 // Same source the /usage screen aggregates: every assistant message logs a
@@ -184,6 +185,43 @@ export function sessionBlock(): { start: number; reset: number } {
   const diff = Date.now() - anchor.getTime();
   const start = anchor.getTime() + Math.floor(diff / BLOCK_MS) * BLOCK_MS;
   return { start, reset: start + BLOCK_MS };
+}
+
+export type Spend = {
+  session: number; // USD this 5h session block
+  today: number; // USD since local midnight
+  week: number; // USD trailing 7 days
+  generatedAt: number;
+};
+
+// Estimated USD spend over the live session block, today (local), and the
+// trailing week — summed over the SAME deduped per-call records the token meter
+// uses, priced via lib/pricing. Estimates; see pricing.ts header.
+export function getSpend(): Spend {
+  refreshCache();
+  const now = Date.now();
+  const sessStart = sessionBlock().start;
+  const day = new Date();
+  day.setHours(0, 0, 0, 0);
+  const todayStart = day.getTime();
+  const weekStart = now - WEEK_MS;
+  let session = 0;
+  let today = 0;
+  let week = 0;
+  for (const r of allRecs()) {
+    if (r.ts < weekStart) continue;
+    const { usd } = callCost({
+      model: r.model,
+      input: r.input,
+      cacheCreate: r.cw,
+      cacheRead: r.cr,
+      output: r.out,
+    });
+    week += usd;
+    if (r.ts >= todayStart) today += usd;
+    if (r.ts >= sessStart) session += usd;
+  }
+  return { session, today, week, generatedAt: now };
 }
 
 export type Window = {

@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { weighted } from "./usage";
+import { callCost } from "./pricing";
 
-// Recent API calls with per-call token cost, from the newest transcripts.
+// Recent API calls with per-call token cost + USD, from the newest transcripts.
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
 const TAIL = 256 * 1024;
 
@@ -13,6 +14,8 @@ export type Call = {
   output: number;
   raw: number;
   weightedTokens: number;
+  cost: number; // estimated USD for this call
+  premium: boolean; // past the 200k cliff → long-context surcharge applied
 };
 
 export function getCalls(limit = 25): Call[] {
@@ -71,12 +74,21 @@ export function getCalls(limit = 25): Call[] {
         output: u.output_tokens ?? 0,
         messages: 1,
       };
+      const { usd, premium } = callCost({
+        model: e.message?.model,
+        input: t.input,
+        cacheCreate: t.cacheCreate,
+        cacheRead: t.cacheRead,
+        output: t.output,
+      });
       calls.push({
         at: e.timestamp,
         project,
         output: t.output,
         raw: t.input + t.cacheCreate + t.cacheRead + t.output,
         weightedTokens: weighted(t),
+        cost: usd,
+        premium,
       });
     }
   }
