@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
-// first. Clicking one pins the center terminal to it (?session=<id>) without
-// moving the panel — the same switch the session cards do, but always at hand.
+// first, titled by each session's first prompt. Clicking one pins the center
+// terminal to it (?session=<id>). A Group-by control (None/Date/Project) buckets
+// the list — all client-side, the payload already carries lastActive + project.
 type Recent = {
   id: string;
   project: string;
@@ -15,11 +16,92 @@ type Recent = {
   active: boolean;
 };
 
+type GroupBy = "none" | "date" | "project";
+const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
+  { value: "none", label: "None" },
+  { value: "date", label: "Date" },
+  { value: "project", label: "Project" },
+];
+const STORAGE_KEY = "hq:recents-group";
+
+function dateBucket(ts: number, now: number): string {
+  const d = new Date(now);
+  const startOfToday = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate()
+  ).getTime();
+  if (ts >= startOfToday) return "Today";
+  if (ts >= startOfToday - 86_400_000) return "Yesterday";
+  return "Previous 7 days";
+}
+
+// Buckets the (already newest-first) list per the chosen mode, preserving order.
+function groupSessions(
+  sessions: Recent[],
+  mode: GroupBy
+): { label: string; sessions: Recent[] }[] {
+  if (mode === "none") return [{ label: "", sessions }];
+
+  const map = new Map<string, Recent[]>();
+  const keyOf = (s: Recent) =>
+    mode === "project" ? s.project : dateBucket(s.lastActive, Date.now());
+  for (const s of sessions) {
+    const k = keyOf(s);
+    const arr = map.get(k);
+    if (arr) arr.push(s);
+    else map.set(k, [s]);
+  }
+
+  if (mode === "date") {
+    return ["Today", "Yesterday", "Previous 7 days"]
+      .filter((l) => map.has(l))
+      .map((label) => ({ label, sessions: map.get(label)! }));
+  }
+  // project — order groups by their most-recent session
+  return [...map.entries()]
+    .map(([label, ss]) => ({ label, sessions: ss }))
+    .sort((a, b) => b.sessions[0].lastActive - a.sessions[0].lastActive);
+}
+
+function Sliders({ active }: { active: boolean }) {
+  return (
+    <svg
+      className={`size-3.5 transition-colors ${active ? "text-zinc-300" : "text-zinc-600"}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="21" x2="14" y1="4" y2="4" />
+      <line x1="10" x2="3" y1="4" y2="4" />
+      <line x1="21" x2="12" y1="12" y2="12" />
+      <line x1="8" x2="3" y1="12" y2="12" />
+      <line x1="21" x2="16" y1="20" y2="20" />
+      <line x1="12" x2="3" y1="20" y2="20" />
+      <line x1="14" x2="14" y1="2" y2="6" />
+      <line x1="8" x2="8" y1="10" y2="14" />
+      <line x1="16" x2="16" y1="18" y2="22" />
+    </svg>
+  );
+}
+
 export default function SidebarRecents() {
   const pathname = usePathname() ?? "/";
   const current = useSearchParams().get("session");
   const [sessions, setSessions] = useState<Recent[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  const menuRef = useRef<HTMLDetailsElement>(null);
+
+  // Restore the saved grouping (client-only → useEffect, no hydration mismatch).
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === "date" || saved === "project" || saved === "none")
+      setGroupBy(saved);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -45,37 +127,91 @@ export default function SidebarRecents() {
     };
   }, []);
 
-  if (loaded && !sessions.length)
-    return <p className="px-2.5 text-xs text-zinc-600">no recent sessions</p>;
+  const choose = (v: GroupBy) => {
+    setGroupBy(v);
+    try {
+      localStorage.setItem(STORAGE_KEY, v);
+    } catch {
+      // private mode / disabled storage — grouping just won't persist
+    }
+    if (menuRef.current) menuRef.current.open = false;
+  };
+
+  const groups = groupSessions(sessions, groupBy);
 
   return (
-    <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-      {sessions.map((s) => {
-        const active = current === s.id;
-        return (
-          <li key={s.id}>
-            <Link
-              href={`${pathname}?session=${s.id}`}
-              scroll={false}
-              title={`${s.project} · ${s.title}`}
-              className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
-                active
-                  ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
-              }`}
-            >
-              <span className="min-w-0 flex-1 truncate">{s.title}</span>
-              {/* green = active within the cache window (one app-wide signal);
-                  on the right so every title stays left-aligned */}
-              <span
-                className={`size-1.5 shrink-0 rounded-full ${
-                  s.active ? "bg-green-500" : "bg-transparent"
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
+      <div className="flex items-center justify-between px-2.5">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+          Recent Sessions
+        </span>
+        <details ref={menuRef} className="relative">
+          <summary
+            title="group sessions"
+            className="flex cursor-pointer list-none items-center rounded p-0.5 text-zinc-600 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:text-zinc-300"
+          >
+            <Sliders active={groupBy !== "none"} />
+          </summary>
+          <div className="absolute right-0 top-full z-20 mt-1 flex w-32 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+            <span className="px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+              Group by
+            </span>
+            {GROUP_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => choose(o.value)}
+                className={`flex items-center justify-between rounded px-2 py-1 text-left text-xs transition-colors hover:bg-zinc-900 ${
+                  groupBy === o.value ? "text-zinc-100" : "text-zinc-400"
                 }`}
-              />
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+              >
+                {o.label}
+                {groupBy === o.value && <span className="text-blue-400">✓</span>}
+              </button>
+            ))}
+          </div>
+        </details>
+      </div>
+
+      {loaded && !sessions.length ? (
+        <p className="px-2.5 text-xs text-zinc-600">no recent sessions</p>
+      ) : (
+        <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+          {groups.map((g) => (
+            <div key={g.label || "all"} className="flex flex-col gap-0.5">
+              {g.label && (
+                <span className="px-2.5 pb-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600/80">
+                  {g.label}
+                </span>
+              )}
+              {g.sessions.map((s) => {
+                const active = current === s.id;
+                return (
+                  <Link
+                    key={s.id}
+                    href={`${pathname}?session=${s.id}`}
+                    scroll={false}
+                    title={`${s.project} · ${s.title}`}
+                    className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                      active
+                        ? "bg-zinc-800 text-zinc-100"
+                        : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{s.title}</span>
+                    {/* green = active within the cache window; right-aligned so
+                        every title stays flush-left */}
+                    <span
+                      className={`size-1.5 shrink-0 rounded-full ${
+                        s.active ? "bg-green-500" : "bg-transparent"
+                      }`}
+                    />
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

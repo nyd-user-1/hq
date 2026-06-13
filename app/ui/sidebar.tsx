@@ -85,15 +85,11 @@ export default function Sidebar() {
         )}
       </nav>
 
-      {/* Recent Sessions (Claude-style) — takes the remaining height and scrolls */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1">
-        <span className="px-2.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-          Recent Sessions
-        </span>
-        <Suspense fallback={null}>
-          <SidebarRecents />
-        </Suspense>
-      </div>
+      {/* Recent Sessions (Claude-style) — owns its header + group-by control,
+          takes the remaining height and scrolls */}
+      <Suspense fallback={null}>
+        <SidebarRecents />
+      </Suspense>
     </div>
   );
 }
