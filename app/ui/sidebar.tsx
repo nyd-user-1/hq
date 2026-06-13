@@ -2,20 +2,14 @@
 
 import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { SEARCH_ITEM } from "@/app/ui/sidebar-nav";
+import NewSessionItem from "@/app/ui/new-session-item";
 import SidebarRecents from "@/app/ui/sidebar-recents";
 
-// Left rail. Brand → "/" (closes the panel, terminal-only focus). The panel
-// groups (Activity/Metrics/Console) moved into the terminal's "panels"
-// dropdown, so the sidebar is now just Search + Recent Sessions (Claude-style).
-// Client so Search's active state updates without remounting the layout-mounted
-// terminal.
+// Left rail. Brand → "/" (closes the panel, terminal-only focus). "New Session"
+// is the primary action (Search moved to the terminal boundary's search icon).
+// The panel groups (Activity/Metrics/Console) live in the terminal's "panels"
+// dropdown, so the sidebar is just New Session + Recent Sessions (Claude-style).
 export default function Sidebar() {
-  const pathname = usePathname() ?? "/";
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + "/");
-
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
       <Link href="/" scroll={false} className="block shrink-0">
@@ -23,17 +17,9 @@ export default function Sidebar() {
       </Link>
 
       <div className="flex shrink-0 flex-col gap-1">
-        <Link
-          href={SEARCH_ITEM.href}
-          scroll={false}
-          className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-            isActive(SEARCH_ITEM.href)
-              ? "bg-blue-600 text-white"
-              : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
-          }`}
-        >
-          {SEARCH_ITEM.title}
-        </Link>
+        <Suspense fallback={null}>
+          <NewSessionItem />
+        </Suspense>
       </div>
 
       <Suspense fallback={null}>

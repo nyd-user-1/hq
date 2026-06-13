@@ -5,7 +5,7 @@ import SidebarColumn from "@/app/ui/sidebar-column";
 import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import Terminal from "@/app/ui/terminal";
-import NewSessionButton from "@/app/ui/new-session-button";
+import SearchTrigger from "@/app/ui/search-trigger";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
@@ -37,11 +37,7 @@ export default function Shell({
             <Boundary
               label="terminal.tsx"
               lead={<SidebarToggle />}
-              trail={
-                <Suspense fallback={null}>
-                  <NewSessionButton />
-                </Suspense>
-              }
+              trail={<SearchTrigger />}
             >
               <Suspense
                 fallback={
