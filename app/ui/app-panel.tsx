@@ -32,16 +32,21 @@ export default function AppPanel({
 
   return createPortal(
     <div
-      className={`h-full shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
+      // clip-path (not overflow-hidden) clips the sides/bottom for the width
+      // slide while leaving a 12px opening at the TOP — so the boundary chip can
+      // poke up onto the line and the box top sits FLUSH with the sidebar/
+      // terminal boxes. Same trick SidebarColumn uses; overflow-hidden + pt-3
+      // was what dropped this column 12px below the other two.
+      className={`h-full shrink-0 [clip-path:inset(-12px_0px_0px_0px)] transition-all duration-300 ease-in-out ${
         open ? `w-full ${w} sm:ml-4` : "w-0"
       }`}
     >
       {open && (
         <div className="relative flex h-full w-full flex-col">
-          {/* chips resting ON the first boundary's border (the terminal-toggle
-              pattern): content starts pt-3 → border at 12px; ~20px chips at
-              top 2px sit centered on the line, opposite the path chip */}
-          <div className="absolute right-3 top-[2px] z-10 flex gap-1.5">
+          {/* controls resting ON the boundary line, opposite the path chip —
+              at -top-2.5 (−10px) like the path chip, poking up through the
+              clip-path's 12px top opening */}
+          <div className="absolute right-3 -top-2.5 z-10 flex gap-1.5">
             <button
               onClick={() => setExpanded((v) => !v)}
               aria-label={expanded ? "Collapse to a third" : "Expand to half"}
@@ -89,8 +94,10 @@ export default function AppPanel({
               </svg>
             </button>
           </div>
-          {/* pt-3 so the first boundary chip (sits 10px above its box) isn't clipped */}
-          <div className="scrollbar-none flex h-full min-h-0 flex-col overflow-y-auto pt-3">
+          {/* -mt-3 lifts the scroll box so its boundary box sits flush at the
+              column top (level with sidebar/terminal); pt-3 keeps the chip clear
+              of overflow-y's own top edge; +12px height holds the bottom flush. */}
+          <div className="scrollbar-none -mt-3 flex h-[calc(100%_+_0.75rem)] min-h-0 shrink-0 flex-col overflow-y-auto pt-3">
             {children}
           </div>
         </div>
