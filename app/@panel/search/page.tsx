@@ -17,9 +17,16 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// Demonstrative starter queries (swappable): an error to recover, an
-// integration, a concept, and the word that surfaces every parked decision.
-const EXAMPLES = ["INVALID_ORIGIN", "stripe", "design system", "deferred"];
+// Demonstrative starter queries (swappable): integrations, infra, a concept,
+// and the words that surface parked decisions / DB work across all projects.
+const EXAMPLES = [
+  "stripe",
+  "neon auth",
+  "design system",
+  "vercel",
+  "deferred",
+  "schema migration",
+];
 
 // Wrap every hit of the first query token in a <mark> so the snippet shows
 // WHY it matched.
