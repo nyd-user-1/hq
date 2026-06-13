@@ -11,32 +11,38 @@ export function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-// Occurrence score over already-NORMALIZED text. A contiguous phrase (all tokens
-// in order) dominates; AND-of-tokens (every token present, any position) is the
-// graceful fallback so a near-miss still surfaces below exact phrases. Returns 0
-// unless the phrase OR every token is present. `tokens` are normalized query
-// tokens (lowercase, alphanumeric); the phrase is their single-spaced join,
-// which equals normalize(query) by construction.
-export function scoreNorm(norm: string, tokens: string[]): number {
-  if (tokens.length === 0) return 0;
+export type Match = { score: number; phrase: boolean };
 
-  // contiguous phrase occurrences
+// Match already-NORMALIZED text against normalized query tokens. Returns BOTH a
+// score and whether it was a contiguous-phrase hit — because phrase is a hard
+// TIER, not a weight: the search layer keeps only phrase hits whenever any
+// exist, and falls back to AND-of-tokens (every token present, any position)
+// only when the phrase appears nowhere. Tiering this way (vs. a big numeric
+// bonus) is what stops a long transcript full of common words like "it"/"you"
+// from outranking a real phrase match. `score` is occurrence count within the
+// tier: phrase hits → phrase occurrences; term hits → total token occurrences.
+// 0 unless the phrase OR every token is present. The phrase is tokens joined by
+// a single space, which equals normalize(query) by construction.
+export function scoreNorm(norm: string, tokens: string[]): Match {
+  if (tokens.length === 0) return { score: 0, phrase: false };
+
   const phrase = tokens.join(" ");
   let phraseHits = 0;
   for (let i = norm.indexOf(phrase); i !== -1; i = norm.indexOf(phrase, i + phrase.length))
     phraseHits++;
 
-  // per-token occurrences; bail to 0 the moment a token is absent (AND semantics)
+  // per-token occurrences; bail the moment a token is absent (AND semantics)
   let termHits = 0;
   for (const t of tokens) {
     let n = 0;
     for (let i = norm.indexOf(t); i !== -1; i = norm.indexOf(t, i + t.length)) n++;
-    if (n === 0) return 0;
+    if (n === 0) return { score: 0, phrase: false };
     termHits += n;
   }
 
-  // phrase present → rank far above scattered-term matches; else AND-of-tokens
-  return phraseHits > 0 ? phraseHits * 1000 + termHits : termHits;
+  return phraseHits > 0
+    ? { score: phraseHits, phrase: true }
+    : { score: termHits, phrase: false };
 }
 
 // ~160 chars of context around the first hit of `tok`, on the ORIGINAL-case

@@ -30,6 +30,7 @@ export type SearchHit = {
   snippet: string;
   at: number; // last-touched ms
   score: number;
+  phrase: boolean; // true = contiguous-phrase hit (the narrowing tier)
 };
 
 // Normalized query tokens: lowercase, split on any non-alphanumeric run, so
@@ -60,6 +61,7 @@ function searchTranscripts(toks: string[]): { hits: SearchHit[]; building: boole
       snippet: h.snippet,
       at: m.lastActive,
       score: h.score,
+      phrase: h.phrase,
     });
   }
   return { hits, building };
@@ -85,15 +87,16 @@ function searchMemory(toks: string[]): SearchHit[] {
     } catch {
       continue;
     }
-    const score = scoreNorm(normalize(content), toks);
-    if (score === 0) continue;
+    const mt = scoreNorm(normalize(content), toks);
+    if (mt.score === 0) continue;
     hits.push({
       kind: "memory",
       ref: name,
       title: name.slice(0, -3),
       snippet: snippetAround(content, toks[0]),
       at: mtime,
-      score,
+      score: mt.score,
+      phrase: mt.phrase,
     });
   }
   return hits;
@@ -117,7 +120,13 @@ export function search(
       : { hits: [] as SearchHit[], building: false };
   const m = scope !== "transcripts" ? searchMemory(toks) : [];
 
-  const hits = [...t.hits, ...m]
+  // Phrase is a hard tier: if the contiguous phrase matched anywhere, show ONLY
+  // phrase hits — searching a full phrase is a NARROWING act (find the needle),
+  // so scattered-term cards are noise. AND-of-tokens results survive only when
+  // the phrase appears nowhere (e.g. two words never adjacent).
+  const all = [...t.hits, ...m];
+  const anyPhrase = all.some((h) => h.phrase);
+  const hits = (anyPhrase ? all.filter((h) => h.phrase) : all)
     .sort((a, b) => b.score - a.score || b.at - a.at)
     .slice(0, limit);
   return { hits, building: t.building };

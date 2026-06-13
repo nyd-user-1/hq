@@ -168,7 +168,7 @@ export function warmIndex(): void {
   else if (newestSessionMtime() > idx.builtMaxMtime + 1) triggerBuild();
 }
 
-export type TranscriptHit = { id: string; score: number; snippet: string };
+export type TranscriptHit = { id: string; score: number; phrase: boolean; snippet: string };
 
 // Synchronous: full-text search EVERY session's text via the loaded index,
 // returning a score (occurrence count, all tokens required) and a readable
@@ -188,9 +188,9 @@ export function searchTranscriptIndex(tokens: string[]): {
   }
   const hits: TranscriptHit[] = [];
   for (const e of idx.entries) {
-    const score = scoreNorm(e.norm, tokens);
-    if (score === 0) continue;
-    hits.push({ id: e.id, score, snippet: snippetAround(e.text, tokens[0]) });
+    const m = scoreNorm(e.norm, tokens);
+    if (m.score === 0) continue;
+    hits.push({ id: e.id, score: m.score, phrase: m.phrase, snippet: snippetAround(e.text, tokens[0]) });
   }
   return { hits, building };
 }
