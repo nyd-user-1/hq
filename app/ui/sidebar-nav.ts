@@ -11,7 +11,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 // The "panels" dropdown. `href` = the first tab (where the panel opens);
 // `routes` = every tab under it, for active-state + the open-panel test.
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
-  { title: "Activity", href: "/calls", routes: ["/calls", "/sessions", "/todo"] },
+  { title: "Activity", href: "/calls", routes: ["/calls", "/sessions", "/todo", "/sdk"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/savings", "/audit"] },
   { title: "Console", href: "/shipped", routes: ["/shipped", "/skills", "/routines", "/firehose"] },
 ];

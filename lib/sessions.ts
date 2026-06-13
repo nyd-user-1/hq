@@ -93,6 +93,7 @@ export type RecentSession = {
   title: string;
   lastActive: number;
   active: boolean;
+  entrypoint: string; // "cli" = interactive terminal; "sdk-cli" = Agent SDK run
 };
 
 // THE PROJECT RULE: Brendan launches most sessions from ~, so cwd is useless for
@@ -122,7 +123,7 @@ function dirProject(file: string): string {
 // Project + title for one transcript (head read), shared by Recents and the
 // Archive so derivation is identical. mtime in, no stat here.
 export function sessionMeta(file: string, mtime: number): RecentSession {
-  const { cwd, title, ref } = headInfo(file);
+  const { cwd, title, ref, entrypoint } = headInfo(file);
   const project =
     (cwd ? codeSlug(cwd) : null) ??
     ref ??
@@ -133,6 +134,7 @@ export function sessionMeta(file: string, mtime: number): RecentSession {
     title: title || `${project} session`,
     lastActive: mtime,
     active: Date.now() - mtime < ACTIVE_MS,
+    entrypoint: entrypoint || "cli",
   };
 }
 
@@ -142,6 +144,7 @@ function headInfo(file: string): {
   cwd: string | null;
   title: string;
   ref: string | null;
+  entrypoint: string | null;
 } {
   let text: string;
   try {
@@ -153,14 +156,15 @@ function headInfo(file: string): {
     fs.closeSync(fd);
     text = buf.toString("utf8");
   } catch {
-    return { cwd: null, title: "", ref: null };
+    return { cwd: null, title: "", ref: null, entrypoint: null };
   }
 
   let cwd: string | null = null;
   let title = "";
   let ref: string | null = null;
+  let entrypoint: string | null = null;
   for (const line of text.split("\n")) {
-    if (cwd && title && ref) break; // have everything
+    if (cwd && title && ref && entrypoint) break; // have everything
     if (!line) continue;
     let e;
     try {
@@ -169,6 +173,7 @@ function headInfo(file: string): {
       continue;
     }
     if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
+    if (!entrypoint && typeof e.entrypoint === "string") entrypoint = e.entrypoint;
     if (e.type !== "user" || e.isSidechain || e.isMeta) continue;
     const content = e.message?.content;
     const raw =
@@ -191,10 +196,12 @@ function headInfo(file: string): {
       if (m) ref = m[1].toLowerCase();
     }
   }
-  return { cwd, title, ref };
+  return { cwd, title, ref, entrypoint };
 }
 
-export function getRecentSessions(limit = 24): RecentSession[] {
+// Every transcript across all project dirs touched in the last 7 days, newest
+// first — the shared scan behind both session readers below.
+function recentFiles(): { file: string; mtime: number }[] {
   const now = Date.now();
   let dirs: fs.Dirent[];
   try {
@@ -225,8 +232,32 @@ export function getRecentSessions(limit = 24): RecentSession[] {
     }
   }
   files.sort((a, b) => b.mtime - a.mtime);
+  return files;
+}
 
-  return files.slice(0, limit).map(({ file, mtime }) => sessionMeta(file, mtime));
+// Newest sessions of one kind. Head-read in mtime order, stopping once `limit`
+// matches are collected (so we don't head-read the whole machine). `kind`:
+// "interactive" = real terminals (entrypoint "cli"), the Recents list; "sdk" =
+// Agent SDK runs (entrypoint "sdk-cli"), kept out of Recents and shown in the
+// Activity → SDK panel instead.
+function sessionsOfKind(kind: "interactive" | "sdk", limit: number): RecentSession[] {
+  const out: RecentSession[] = [];
+  for (const { file, mtime } of recentFiles()) {
+    const m = sessionMeta(file, mtime);
+    const isSdk = m.entrypoint === "sdk-cli";
+    if (kind === "sdk" ? !isSdk : isSdk) continue;
+    out.push(m);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export function getRecentSessions(limit = 24): RecentSession[] {
+  return sessionsOfKind("interactive", limit);
+}
+
+export function getSdkSessions(limit = 40): RecentSession[] {
+  return sessionsOfKind("sdk", limit);
 }
 
 // The ~/code project folders — offered in the "+" new-session view so a session
