@@ -84,6 +84,9 @@ export default async function Sessions({
                   <span className="text-sm font-medium text-zinc-200">
                     {s.project}
                   </span>
+                  <span className="font-mono text-[11px] text-zinc-600">
+                    {s.id.slice(0, 8)}
+                  </span>
                   {selected && (
                     <span className="font-mono text-[10px] uppercase tracking-wide text-green-400">
                       in terminal
