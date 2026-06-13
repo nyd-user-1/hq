@@ -5,9 +5,11 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
-// first, titled by each session's first prompt. Clicking one pins the center
-// terminal to it (?session=<id>). A Group-by control (None/Date/Project) buckets
-// the list — all client-side, the payload already carries lastActive + project.
+// first, labelled by the short session id so each row lines up 1:1 with the id
+// in the terminal header (the first prompt + project move to the hover tooltip).
+// Clicking one pins the center terminal to it (?session=<id>). A Group-by control
+// (None/Date/Project) buckets the list — client-side; the payload carries
+// lastActive + project.
 type Recent = {
   id: string;
   project: string;
@@ -197,7 +199,9 @@ export default function SidebarRecents() {
                         : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
                     }`}
                   >
-                    <span className="min-w-0 flex-1 truncate">{s.title}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs">
+                      {s.id.slice(0, 8)}
+                    </span>
                     {/* green = active within the cache window; right-aligned so
                         every title stays flush-left */}
                     <span
