@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SEARCH_ITEM, ARCHIVE_ITEM } from "@/app/ui/sidebar-nav";
+import { SEARCH_ITEM } from "@/app/ui/sidebar-nav";
 import SidebarRecents from "@/app/ui/sidebar-recents";
 
 // Left rail. Brand → "/" (closes the panel, terminal-only focus). The panel
@@ -23,20 +23,17 @@ export default function Sidebar() {
       </Link>
 
       <div className="flex shrink-0 flex-col gap-1">
-        {[SEARCH_ITEM, ARCHIVE_ITEM].map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            scroll={false}
-            className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-              isActive(item.href)
-                ? "bg-blue-600 text-white"
-                : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
-            }`}
-          >
-            {item.title}
-          </Link>
-        ))}
+        <Link
+          href={SEARCH_ITEM.href}
+          scroll={false}
+          className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
+            isActive(SEARCH_ITEM.href)
+              ? "bg-blue-600 text-white"
+              : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          }`}
+        >
+          {SEARCH_ITEM.title}
+        </Link>
       </div>
 
       <Suspense fallback={null}>

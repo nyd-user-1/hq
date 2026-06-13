@@ -2,6 +2,7 @@ import Boundary from "@/app/ui/boundary";
 import Link from "next/link";
 import Markdown from "@/app/ui/md";
 import SearchInput from "@/app/ui/search-input";
+import RefreshWhile from "@/app/ui/refresh-while";
 import { ago } from "@/lib/ago";
 import {
   search,
@@ -75,7 +76,7 @@ export default async function Search({
   }
 
   // ── query + results ─────────────────────────────────────────────────────
-  const hits = search(q, scope);
+  const { hits, building } = search(q, scope);
   const tok = queryTokens(q)[0] ?? "";
 
   const scopeChip = (label: string, value: SearchScope) => (
@@ -140,13 +141,17 @@ export default async function Search({
           </li>
         ))}
         {q && hits.length === 0 && (
-          <li className="text-xs text-zinc-600">no matches</li>
+          <li className="text-xs text-zinc-600">
+            {building ? "building the search index (first time, ~10s)…" : "no matches"}
+          </li>
         )}
       </ul>
       <p className="text-xs text-zinc-600">
-        transcript results pin that session in the terminal · memory results
-        open the note · transcripts limited to the last 7 days
+        every session ever + memory · transcript → opens in the terminal ·
+        memory → opens the note
+        {building && <span className="text-amber-400"> · indexing…</span>}
       </p>
+      <RefreshWhile active={building} />
     </Boundary>
   );
 }

@@ -4,8 +4,9 @@
 // handle sub-navigation, so no sidebar sub-items).
 export type NavItem = { title: string; href: string };
 
+// Search is now the all-time, full-text surface (transcripts + memory): the
+// Archive merged into it (lib/archive.ts powers the transcript half).
 export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
-export const ARCHIVE_ITEM: NavItem = { title: "Archive", href: "/archive" };
 
 // The "panels" dropdown. `href` = the first tab (where the panel opens);
 // `routes` = every tab under it, for active-state + the open-panel test.
@@ -18,6 +19,5 @@ export const PANELS: { title: string; href: string; routes: string[] }[] = [
 // Routes that open the right panel (terminal stays mounted underneath).
 export const PANEL_ROUTES = [
   SEARCH_ITEM.href,
-  ARCHIVE_ITEM.href,
   ...PANELS.flatMap((p) => p.routes),
 ];

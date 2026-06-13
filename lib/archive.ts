@@ -3,6 +3,12 @@ import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { sessionMeta, type RecentSession } from "./sessions";
+import { scoreText, snippetAround } from "./text-search";
+
+// Index format version — bump to force a clean full rebuild when the stored
+// shape changes (incremental reuse keys on file mtime, not on extract logic,
+// so a logic change like "stop lowercasing" must invalidate via version).
+export const INDEX_VERSION = 2;
 
 // The Session Archive: every Claude Code session ever (not the 7-day Recents
 // window), browseable and full-text searchable. ~106 transcripts / ~2GB here.
@@ -86,12 +92,15 @@ const BUILD_SCRIPT = path.join(process.cwd(), "scripts", "build-search-index.mjs
 type Loaded = {
   fileMtime: number;
   builtMaxMtime: number;
-  entries: { id: string; text: string }[];
+  // `text` is original-case (for readable snippets); `lower` is derived once at
+  // load (for cheap matching) so we never lowercase 16MB per search.
+  entries: { id: string; text: string; lower: string }[];
 };
 let loaded: Loaded | null = null;
 let building = false;
 
-// Read the persisted index (cached until the file's mtime changes).
+// Read the persisted index (cached until the file's mtime changes). A
+// version mismatch is treated as "not built" → triggers a clean rebuild.
 function loadIndex(): Loaded | null {
   let st: fs.Stats;
   try {
@@ -102,10 +111,17 @@ function loadIndex(): Loaded | null {
   if (loaded && loaded.fileMtime === st.mtimeMs) return loaded;
   try {
     const j = JSON.parse(fs.readFileSync(INDEX_FILE, "utf8"));
+    if ((j.version ?? 1) !== INDEX_VERSION) return null; // stale shape → rebuild
     loaded = {
       fileMtime: st.mtimeMs,
       builtMaxMtime: j.builtMaxMtime ?? 0,
-      entries: j.entries ?? [],
+      entries: (j.entries ?? []).map(
+        (e: { id: string; text: string }): Loaded["entries"][number] => ({
+          id: e.id,
+          text: e.text,
+          lower: e.text.toLowerCase(),
+        })
+      ),
     };
     return loaded;
   } catch {
@@ -151,29 +167,29 @@ export function warmIndex(): void {
   else if (newestSessionMtime() > idx.builtMaxMtime + 1) triggerBuild();
 }
 
-// Synchronous: searches the loaded index. `building` true → no index yet (first
-// run) or a refresh is in flight; the UI shows an "indexing" state and retries.
-export function searchArchive(query: string): {
-  hits: Map<string, number>;
+export type TranscriptHit = { id: string; score: number; snippet: string };
+
+// Synchronous: full-text search EVERY session's text via the loaded index,
+// returning a score (occurrence count, all tokens required) and a readable
+// snippet per match. `building` true → no index yet (first run) or a refresh is
+// in flight; the caller shows an "indexing" state and retries. The existing
+// index still serves results during a refresh — only a never-built index is
+// truly empty.
+export function searchTranscriptIndex(tokens: string[]): {
+  hits: TranscriptHit[];
   building: boolean;
 } {
-  const q = query.trim().toLowerCase();
-  const hits = new Map<string, number>();
-  if (!q) return { hits, building: false };
-
+  if (tokens.length === 0) return { hits: [], building: false };
   const idx = loadIndex();
   if (!idx) {
     triggerBuild();
-    return { hits, building: true };
+    return { hits: [], building: true };
   }
+  const hits: TranscriptHit[] = [];
   for (const e of idx.entries) {
-    let n = 0;
-    let i = e.text.indexOf(q);
-    while (i !== -1) {
-      n++;
-      i = e.text.indexOf(q, i + q.length);
-    }
-    if (n > 0) hits.set(e.id, n);
+    const score = scoreText(e.lower, tokens);
+    if (score === 0) continue;
+    hits.push({ id: e.id, score, snippet: snippetAround(e.text, tokens[0]) });
   }
   return { hits, building };
 }
