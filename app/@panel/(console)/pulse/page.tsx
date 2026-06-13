@@ -16,7 +16,7 @@ export default function VaultPulse() {
         </span>
       </div>
       {pulse.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
           {pulse.map((p) => (
             <li
               key={`${p.project}/${p.rel}`}

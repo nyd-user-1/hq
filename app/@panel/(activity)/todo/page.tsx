@@ -9,7 +9,7 @@ export default function ToDo() {
   return (
     <Boundary label="@panel/todo/page.tsx">
       {hq && hq.roadmap.length > 0 ? (
-        <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm text-zinc-300">
+        <ol className="scrollbar-none flex min-h-0 flex-1 list-decimal flex-col gap-2 overflow-y-auto pl-5 text-sm text-zinc-300">
           {hq.roadmap.map((item) => (
             <li key={item}>{item}</li>
           ))}

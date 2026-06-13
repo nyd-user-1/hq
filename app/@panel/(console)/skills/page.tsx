@@ -11,7 +11,7 @@ export default function Skills() {
   const runs = recentCommands(8);
   return (
     <Boundary label="@panel/skills/page.tsx">
-      <div className="flex flex-col gap-4">
+      <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
         <SkillLauncher />
 
         <div className="flex flex-col gap-2 border-t border-zinc-800 pt-3">

@@ -17,7 +17,9 @@ export default function Routines() {
 
   return (
     <Boundary label="@panel/routines/page.tsx">
-      <RoutinePanel groups={groups} />
+      <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <RoutinePanel groups={groups} />
+      </div>
       <p className="font-mono text-[11px] text-zinc-600">
         reads !hq/*launchpad/004 Routines.md live
       </p>
