@@ -14,6 +14,7 @@ export const PANELS: { title: string; href: string; routes: string[] }[] = [
   { title: "Activity", href: "/calls", routes: ["/calls", "/sessions", "/todo"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/savings", "/audit"] },
   { title: "Console", href: "/shipped", routes: ["/shipped", "/skills", "/routines"] },
+  { title: "Firehose", href: "/firehose", routes: ["/firehose"] },
 ];
 
 // Routes that open the right panel (terminal stays mounted underneath).
