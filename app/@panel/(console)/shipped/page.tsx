@@ -1,6 +1,7 @@
 import Boundary from "@/app/ui/boundary";
 import Link from "next/link";
 import CopyText from "@/app/ui/copy-text";
+import BackLink from "@/app/ui/back-link";
 import { getShipped, getCommit, findCommit } from "@/lib/shipped";
 import { ago } from "@/lib/ago";
 
@@ -45,13 +46,12 @@ export default async function Shipped({
     return (
       <Boundary topOnly label="@panel/shipped/page.tsx">
         <div className="flex items-baseline gap-3">
-          <Link
+          <BackLink
             href="/shipped"
-            scroll={false}
-            className="shrink-0 font-mono text-xs text-blue-400 hover:text-blue-300"
+            className="shrink-0 cursor-pointer font-mono text-xs text-blue-400 hover:text-blue-300"
           >
             ← shipped
-          </Link>
+          </BackLink>
           {c ? (
             <CopyText
               text={c.sha}
