@@ -202,6 +202,7 @@ export default function Terminal() {
   const [contextTokens, setContextTokens] = useState(0);
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [wrapCopied, setWrapCopied] = useState(false);
+  const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const stoppedRef = useRef(false); // true when the user killed the run via stop
   const sendTargetRef = useRef<string | null>(null); // session the in-flight send went to
   const [escArmed, setEscArmed] = useState(false); // first Esc pressed, waiting for the second
@@ -508,9 +509,22 @@ export default function Terminal() {
             {staged ? "new session" : project || "session"}
           </span>
         </span>
-        <span className="font-mono text-[11px] text-zinc-600">
-          {resolvedId ? resolvedId.slice(0, 8) : "—"}
-        </span>
+        {resolvedId ? (
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(resolvedId);
+              setIdCopied(true);
+              setTimeout(() => setIdCopied(false), 1200);
+            }}
+            className={`cursor-pointer font-mono text-[11px] transition-colors ${
+              idCopied ? "text-emerald-400" : "text-zinc-600 hover:text-zinc-400"
+            }`}
+          >
+            {resolvedId.slice(0, 8)}
+          </button>
+        ) : (
+          <span className="font-mono text-[11px] text-zinc-600">—</span>
+        )}
         {/* The /clear chain: this session's tied line of continuations.
             Click a row to show that session in the terminal. */}
         {lineage?.chain && (
