@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { sessionMeta, type RecentSession } from "./sessions";
-import { scoreText, snippetAround } from "./text-search";
+import { scoreNorm, snippetAround, normalize } from "./text-search";
 
 // Index format version — bump to force a clean full rebuild when the stored
 // shape changes (incremental reuse keys on file mtime, not on extract logic,
@@ -92,9 +92,10 @@ const BUILD_SCRIPT = path.join(process.cwd(), "scripts", "build-search-index.mjs
 type Loaded = {
   fileMtime: number;
   builtMaxMtime: number;
-  // `text` is original-case (for readable snippets); `lower` is derived once at
-  // load (for cheap matching) so we never lowercase 16MB per search.
-  entries: { id: string; text: string; lower: string }[];
+  // `text` is original-case (for readable snippets); `norm` is derived once at
+  // load (lowercased, punctuation collapsed) so phrase matching never has to
+  // normalize 16MB per search.
+  entries: { id: string; text: string; norm: string }[];
 };
 let loaded: Loaded | null = null;
 let building = false;
@@ -119,7 +120,7 @@ function loadIndex(): Loaded | null {
         (e: { id: string; text: string }): Loaded["entries"][number] => ({
           id: e.id,
           text: e.text,
-          lower: e.text.toLowerCase(),
+          norm: normalize(e.text),
         })
       ),
     };
@@ -187,7 +188,7 @@ export function searchTranscriptIndex(tokens: string[]): {
   }
   const hits: TranscriptHit[] = [];
   for (const e of idx.entries) {
-    const score = scoreText(e.lower, tokens);
+    const score = scoreNorm(e.norm, tokens);
     if (score === 0) continue;
     hits.push({ id: e.id, score, snippet: snippetAround(e.text, tokens[0]) });
   }

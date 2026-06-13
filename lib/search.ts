@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { scoreText, snippetAround } from "./text-search";
+import { scoreNorm, snippetAround, normalize } from "./text-search";
 import {
   searchTranscriptIndex,
   getArchiveSessions,
@@ -32,8 +32,11 @@ export type SearchHit = {
   score: number;
 };
 
+// Normalized query tokens: lowercase, split on any non-alphanumeric run, so
+// punctuation in the query ("wow..you did it.") never glues words together or
+// gets matched literally. The single-spaced join of these IS the search phrase.
 export function queryTokens(query: string): string[] {
-  return query.toLowerCase().split(/\s+/).filter(Boolean);
+  return normalize(query).split(" ").filter(Boolean);
 }
 
 // Transcripts: hits come from the all-time index (id + score + snippet); titles
@@ -82,7 +85,7 @@ function searchMemory(toks: string[]): SearchHit[] {
     } catch {
       continue;
     }
-    const score = scoreText(content.toLowerCase(), toks);
+    const score = scoreNorm(normalize(content), toks);
     if (score === 0) continue;
     hits.push({
       kind: "memory",

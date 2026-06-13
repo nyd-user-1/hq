@@ -28,22 +28,47 @@ const EXAMPLES = [
   "schema migration",
 ];
 
-// Wrap every hit of the first query token in a <mark> so the snippet shows
-// WHY it matched.
-function highlight(text: string, tok: string): React.ReactNode {
-  if (!tok) return text;
-  const lower = text.toLowerCase();
+// Mark WHY a snippet matched. Prefer the contiguous phrase — the query tokens
+// in order with any punctuation/whitespace between them — so "wow..you did it"
+// lights up as one span. If the phrase isn't contiguous here (the AND-of-tokens
+// fallback case), mark each token instead. Tokens are normalized (lowercase,
+// alphanumeric) so the joined pattern needs no escaping.
+function highlight(text: string, query: string): React.ReactNode {
+  const toks = queryTokens(query);
+  if (toks.length === 0) return text;
+
+  let ranges: [number, number][] = [];
+  const phraseRe = new RegExp(toks.join("[^a-z0-9]+"), "ig");
+  for (let m = phraseRe.exec(text); m; m = phraseRe.exec(text)) {
+    ranges.push([m.index, m.index + m[0].length]);
+    if (m.index === phraseRe.lastIndex) phraseRe.lastIndex++; // guard zero-width
+  }
+  if (ranges.length === 0) {
+    const lower = text.toLowerCase();
+    for (const t of toks)
+      for (let p = lower.indexOf(t); p !== -1; p = lower.indexOf(t, p + t.length))
+        ranges.push([p, p + t.length]);
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged: [number, number][] = [];
+    for (const r of ranges) {
+      const last = merged[merged.length - 1];
+      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+      else merged.push([...r]);
+    }
+    ranges = merged;
+  }
+
   const out: React.ReactNode[] = [];
   let i = 0;
   let k = 0;
-  for (let j = lower.indexOf(tok); j !== -1; j = lower.indexOf(tok, i)) {
-    if (j > i) out.push(text.slice(i, j));
+  for (const [s, e] of ranges) {
+    if (s > i) out.push(text.slice(i, s));
     out.push(
       <mark key={k++} className="rounded-sm bg-blue-500/30 px-0.5 text-zinc-100">
-        {text.slice(j, j + tok.length)}
+        {text.slice(s, e)}
       </mark>
     );
-    i = j + tok.length;
+    i = e;
   }
   out.push(text.slice(i));
   return out;
@@ -146,7 +171,6 @@ export default async function Search({
 
   // ── query + results ─────────────────────────────────────────────────────
   const { hits, building } = search(q, scope);
-  const tok = queryTokens(q)[0] ?? "";
   const counts = q ? { sessions: 0, memory: 0 } : corpusCounts();
 
   const scopeChip = (label: string, value: SearchScope) => (
@@ -254,7 +278,7 @@ export default async function Search({
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                {highlight(h.snippet, tok)}
+                {highlight(h.snippet, q)}
               </p>
             </Link>
           </li>
