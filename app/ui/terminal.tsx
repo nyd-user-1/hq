@@ -131,6 +131,12 @@ async function compressImage(file: Blob, name: string): Promise<Attachment> {
   };
 }
 
+// True only for an OS file drag (not an internal/text drag). Lets a pane claim
+// screenshots while leaving any future internal drag-and-drop untouched.
+function isFileDrag(dt: DataTransfer | null): boolean {
+  return !!dt && Array.from(dt.types).includes("Files");
+}
+
 // Labeled click-to-copy chip — the "deliberately copy, not send" affordance
 // (wrap-up strip precedent): the action happens in YOUR terminal, not HQ's.
 function CopyChip({ label, text }: { label: string; text: string }) {
@@ -276,6 +282,7 @@ export default function Terminal({
   const [queue, setQueue] = useState<string[]>([]); // batched asks — sent as ONE message
   const [attachments, setAttachments] = useState<Attachment[]>([]); // staged screenshots
   const [dragOver, setDragOver] = useState(false); // drop-zone highlight
+  const dragDepth = useRef(0); // enter/leave depth — kills the child-element flicker
   const fileInputRef = useRef<HTMLInputElement>(null); // hidden picker behind the 📎 button
   const [error, setError] = useState<string | null>(null);
   const [contextTokens, setContextTokens] = useState(0);
@@ -458,6 +465,23 @@ export default function Terminal({
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // Browser default on a dropped file = navigate the tab to it, nuking HQ. Guard
+  // the whole window so a stray drop OUTSIDE a terminal pane (sidebar, gaps) is a
+  // no-op, not a navigation. Per-instance + idempotent: two terminals install two
+  // identical preventDefault listeners, which is harmless. Files only — internal
+  // drags pass through untouched.
+  useEffect(() => {
+    const stop = (e: DragEvent) => {
+      if (isFileDrag(e.dataTransfer)) e.preventDefault();
+    };
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
+    return () => {
+      window.removeEventListener("dragover", stop);
+      window.removeEventListener("drop", stop);
+    };
+  }, []);
+
   // Park the current draft in the queue; everything queued goes out as ONE
   // message — one context read instead of several.
   function queueDraft() {
@@ -593,7 +617,45 @@ export default function Terminal({
   const cacheWarm = cacheLeft !== null && cacheLeft > 0;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div
+      className="relative flex h-full min-h-0 flex-col gap-3"
+      // The whole pane is the catch basin: drop a screenshot anywhere in THIS
+      // terminal and it attaches to THIS send box (Terminal 1 and Terminal 2 are
+      // separate instances → separate basins, no cross-talk). Mirrors the native
+      // CLI's "drop anywhere on the window."
+      onDragEnter={(e) => {
+        if (staged || !isFileDrag(e.dataTransfer)) return;
+        e.preventDefault();
+        dragDepth.current += 1;
+        setDragOver(true);
+      }}
+      onDragOver={(e) => {
+        if (staged || !isFileDrag(e.dataTransfer)) return;
+        e.preventDefault(); // required for onDrop to fire
+      }}
+      onDragLeave={(e) => {
+        if (staged || !isFileDrag(e.dataTransfer)) return;
+        dragDepth.current -= 1;
+        if (dragDepth.current <= 0) {
+          dragDepth.current = 0;
+          setDragOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        if (staged || !isFileDrag(e.dataTransfer)) return;
+        e.preventDefault();
+        dragDepth.current = 0;
+        setDragOver(false);
+        addFiles(Array.from(e.dataTransfer.files));
+      }}
+    >
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-sky-500 bg-zinc-950/70">
+          <span className="rounded-md bg-sky-500/15 px-3 py-1.5 font-mono text-xs text-sky-300">
+            Drop screenshot to attach
+          </span>
+        </div>
+      )}
       {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
       <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="flex items-center gap-1.5 text-xs">
@@ -1091,26 +1153,9 @@ export default function Terminal({
             ))}
           </div>
         )}
-        {/* one container: textarea + controls inside, ↵ sends / ⇧↵ newline.
-            Doubles as a drop zone; paste/drop/📎 all funnel through addFiles. */}
-        <div
-          onDragOver={(e) => {
-            if (staged) return;
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            if (!staged) addFiles(Array.from(e.dataTransfer.files));
-          }}
-          className={`flex items-end gap-2 rounded-md border bg-zinc-950/60 p-2 transition-colors ${
-            dragOver
-              ? "border-sky-500"
-              : "border-zinc-700 focus-within:border-zinc-500"
-          }`}
-        >
+        {/* textarea + controls; ↵ sends / ⇧↵ newline. Drops are caught at the
+            pane root (the whole basin); paste + 📎 still funnel through addFiles. */}
+        <div className="flex items-end gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
