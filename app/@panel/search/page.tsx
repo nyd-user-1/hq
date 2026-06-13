@@ -118,20 +118,20 @@ export default async function Search({
               className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
             >
               <div className="flex items-center gap-2.5">
+                <span className="min-w-0 truncate text-sm font-medium text-zinc-200">
+                  {h.title}
+                </span>
+                <span className="shrink-0 font-mono text-xs text-zinc-500">
+                  {ago(h.at)}
+                </span>
                 <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
+                  className={`ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
                     h.kind === "memory"
                       ? "bg-violet-500/15 text-violet-300"
                       : "bg-emerald-500/15 text-emerald-300"
                   }`}
                 >
                   {h.kind}
-                </span>
-                <span className="truncate text-sm font-medium text-zinc-200">
-                  {h.title}
-                </span>
-                <span className="ml-auto shrink-0 font-mono text-xs text-zinc-500">
-                  {ago(h.at)}
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
