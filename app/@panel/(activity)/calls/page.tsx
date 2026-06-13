@@ -13,7 +13,7 @@ function fmt(n: number): string {
 export default function Calls() {
   const calls = getCalls();
   return (
-    <Boundary label="@panel/calls/page.tsx">
+    <Boundary topOnly label="@panel/calls/page.tsx">
       <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
         {calls.map((c, i) => (
           <li

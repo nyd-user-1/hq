@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default function ToDo() {
   const hq = getProjects().find((p) => p.slug === "hq");
   return (
-    <Boundary label="@panel/todo/page.tsx">
+    <Boundary topOnly label="@panel/todo/page.tsx">
       {hq && hq.roadmap.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-decimal flex-col gap-2 overflow-y-auto pl-5 text-sm text-zinc-300">
           {hq.roadmap.map((item) => (
