@@ -1,4 +1,5 @@
 import React from "react";
+import CopyCode from "@/app/ui/copy-code";
 
 // Lightweight markdown for the terminal — no library. Handles the cases Claude's
 // replies actually use: **bold**, *italic*, `code` (accent-colored, the "purple"
@@ -23,14 +24,7 @@ function inline(text: string): React.ReactNode[] {
         </strong>
       );
     else if (m[4] !== undefined)
-      out.push(
-        <code
-          key={i}
-          className="rounded bg-zinc-800 px-1 py-0.5 text-[0.95em] text-violet-300"
-        >
-          {m[4]}
-        </code>
-      );
+      out.push(<CopyCode key={i}>{m[4]}</CopyCode>);
     else if (m[6] !== undefined)
       out.push(
         <em key={i} className="italic text-zinc-400">
