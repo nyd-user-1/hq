@@ -563,30 +563,32 @@ export default function Terminal() {
                 cache cold
               </span>
             ))}
-          {/* Hidden until 75% — on a 1M window the bar sits near-empty most of
-              a session, so it's noise until context actually matters. */}
-          {ctxPct >= 75 && (
+          {contextTokens > 0 && (
             <span
               className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-500"
               title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} (your 1M tier) before auto-compact territory · the tick at ${fmtTokens(PRICING_CLIFF)} is where long-context pricing kicks in (~2× input)`}
             >
-              <span className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800">
-                <span
-                  className={`absolute inset-y-0 left-0 ${
-                    ctxPct >= 80
-                      ? "bg-red-500"
-                      : ctxPct >= 70
-                        ? "bg-amber-500"
-                        : "bg-zinc-600"
-                  }`}
-                  style={{ width: `${Math.min(100, ctxPct)}%` }}
-                />
-                {/* the long-context pricing cliff — a marker, not the wall */}
-                <span
-                  className="absolute inset-y-0 w-px bg-amber-400/60"
-                  style={{ left: `${cliffPct}%` }}
-                />
-              </span>
+              {/* The bar is hidden until 75% — on a 1M window it sits near-empty
+                  most of a session, so it's noise. The ctx NUMBER always shows. */}
+              {ctxPct >= 75 && (
+                <span className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800">
+                  <span
+                    className={`absolute inset-y-0 left-0 ${
+                      ctxPct >= 80
+                        ? "bg-red-500"
+                        : ctxPct >= 70
+                          ? "bg-amber-500"
+                          : "bg-zinc-600"
+                    }`}
+                    style={{ width: `${Math.min(100, ctxPct)}%` }}
+                  />
+                  {/* the long-context pricing cliff — a marker, not the wall */}
+                  <span
+                    className="absolute inset-y-0 w-px bg-amber-400/60"
+                    style={{ left: `${cliffPct}%` }}
+                  />
+                </span>
+              )}
               <span>
                 ctx {fmtTokens(contextTokens)}
                 {pastCliff && (
