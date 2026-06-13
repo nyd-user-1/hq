@@ -85,26 +85,29 @@ export default async function Shipped({
         </span>
       </div>
       {ships.length > 0 ? (
-        <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+        <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {ships.map((s) => (
             <li key={`${s.repo}:${s.sha}`}>
               <Link
                 href={`/shipped?repo=${s.repo}&commit=${s.sha}`}
                 scroll={false}
-                className="-mx-1 flex items-baseline gap-2 rounded px-1 py-1 text-sm transition-colors hover:bg-zinc-900/60"
+                className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
               >
-                <span className="shrink-0 font-mono text-[11px] text-blue-400">
-                  {s.sha}
-                </span>
-                <span className="w-14 shrink-0 truncate font-mono text-[10px] uppercase tracking-wide text-zinc-500">
-                  {s.repo}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-zinc-300">
-                  {s.subject}
-                </span>
-                <span className="shrink-0 font-mono text-[11px] text-zinc-600">
-                  {ago(s.at)}
-                </span>
+                <div className="flex items-center gap-2.5">
+                  <span className="min-w-0 truncate text-sm font-medium text-zinc-200">
+                    {s.subject}
+                  </span>
+                  <span className="shrink-0 font-mono text-xs text-zinc-500">
+                    {ago(s.at)}
+                  </span>
+                  <span className="ml-auto max-w-[88px] shrink-0 truncate rounded bg-blue-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-blue-300">
+                    {s.repo}
+                  </span>
+                </div>
+                <p className="truncate text-xs">
+                  <span className="font-mono text-blue-400">{s.sha}</span>
+                  {s.body && <span className="text-zinc-500"> · {s.body}</span>}
+                </p>
               </Link>
             </li>
           ))}

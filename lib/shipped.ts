@@ -14,6 +14,7 @@ export type Ship = {
   repo: string;
   sha: string; // short hash
   subject: string;
+  body: string; // commit body, flattened to one line (the card snippet)
   at: number; // committer time, ms
 };
 
@@ -33,25 +34,36 @@ export function getShipped(limit = 40, perRepo = 15): Ship[] {
     if (!fs.existsSync(path.join(dir, ".git"))) continue; // dir or file (worktree)
     let log: string;
     try {
+      // -z = NUL-separated records, so a multi-line commit body (%b) stays in
+      // its own record instead of breaking line-based parsing.
       log = execFileSync(
         "git",
-        ["-C", dir, "log", `-n${perRepo}`, "--pretty=format:%H%x09%ct%x09%s"],
+        [
+          "-C",
+          dir,
+          "log",
+          "-z",
+          `-n${perRepo}`,
+          "--pretty=format:%H%x09%ct%x09%s%x09%b",
+        ],
         { encoding: "utf8", timeout: 4000, stdio: ["ignore", "pipe", "ignore"] }
       );
     } catch {
       continue; // not a repo / no commits / git unavailable
     }
-    for (const line of log.split("\n")) {
-      if (!line) continue;
-      const t1 = line.indexOf("\t");
-      const t2 = line.indexOf("\t", t1 + 1);
-      if (t1 === -1 || t2 === -1) continue;
-      const ct = Number(line.slice(t1 + 1, t2));
+    for (const rec of log.split("\0")) {
+      if (!rec) continue;
+      const t1 = rec.indexOf("\t");
+      const t2 = rec.indexOf("\t", t1 + 1);
+      const t3 = rec.indexOf("\t", t2 + 1);
+      if (t1 === -1 || t2 === -1 || t3 === -1) continue;
+      const ct = Number(rec.slice(t1 + 1, t2));
       if (!Number.isFinite(ct)) continue;
       out.push({
         repo,
-        sha: line.slice(0, t1).slice(0, 7),
-        subject: line.slice(t2 + 1),
+        sha: rec.slice(0, t1).slice(0, 7),
+        subject: rec.slice(t2 + 1, t3),
+        body: rec.slice(t3 + 1).replace(/\s+/g, " ").trim().slice(0, 140),
         at: ct * 1000,
       });
     }
