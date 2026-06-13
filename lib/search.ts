@@ -125,6 +125,25 @@ export function memoryFilePath(name: string): string {
   return path.join(MEMORY_DIR, path.basename(name));
 }
 
+// Corpus scale, for the empty-state "N sessions · M memory notes" line.
+export function corpusCounts(): { sessions: number; memory: number } {
+  let memory = 0;
+  try {
+    memory = fs
+      .readdirSync(MEMORY_DIR)
+      .filter((n) => n.endsWith(".md") && n !== "MEMORY.md").length;
+  } catch {
+    // no memory dir
+  }
+  let sessions = 0;
+  try {
+    sessions = getArchiveSessions().length;
+  } catch {
+    // no transcripts
+  }
+  return { sessions, memory };
+}
+
 // Full content of one memory file, for the result-click "open" view.
 // Basename-only so a crafted ?open= can't walk out of the memory dir.
 export function getMemoryFile(name: string): string | null {

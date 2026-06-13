@@ -10,11 +10,16 @@ import {
   search,
   getMemoryFile,
   memoryFilePath,
+  corpusCounts,
   queryTokens,
   type SearchScope,
 } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
+
+// Demonstrative starter queries (swappable): an error to recover, an
+// integration, a concept, and the word that surfaces every parked decision.
+const EXAMPLES = ["INVALID_ORIGIN", "stripe", "design system", "deferred"];
 
 // Wrap every hit of the first query token in a <mark> so the snippet shows
 // WHY it matched.
@@ -135,6 +140,7 @@ export default async function Search({
   // ── query + results ─────────────────────────────────────────────────────
   const { hits, building } = search(q, scope);
   const tok = queryTokens(q)[0] ?? "";
+  const counts = q ? { sessions: 0, memory: 0 } : corpusCounts();
 
   const scopeChip = (label: string, value: SearchScope) => (
     <Link
@@ -162,7 +168,56 @@ export default async function Search({
         </div>
       </div>
 
-      <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+      {!q ? (
+        <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pt-1">
+          <p className="text-sm text-zinc-400">
+            Search every Claude Code session you&apos;ve ever run — and the notes
+            Claude keeps about your work.
+          </p>
+
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-baseline gap-2.5">
+              <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-emerald-300">
+                transcript
+              </span>
+              <span className="text-xs text-zinc-500">
+                every message of every session — all projects, all time
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2.5">
+              <span className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-violet-300">
+                memory
+              </span>
+              <span className="text-xs text-zinc-500">
+                Claude&apos;s notes about you and each project
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+              try
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {EXAMPLES.map((ex) => (
+                <Link
+                  key={ex}
+                  href={`/search?q=${encodeURIComponent(ex)}&scope=${scope}`}
+                  scroll={false}
+                  className="rounded-md border border-zinc-800 px-2.5 py-1 font-mono text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
+                >
+                  {ex}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-auto font-mono text-[11px] text-zinc-600">
+            {counts.sessions} sessions · {counts.memory} memory notes
+          </p>
+        </div>
+      ) : (
+        <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
         {hits.map((h) => (
           <li key={`${h.kind}:${h.ref}`}>
             <Link
@@ -202,7 +257,8 @@ export default async function Search({
             {building ? "building the search index (first time, ~10s)…" : "no matches"}
           </li>
         )}
-      </ul>
+        </ul>
+      )}
       <p className="text-xs text-zinc-600">
         every session ever + memory · click a result to read it here · paths +
         resume commands copy on click
