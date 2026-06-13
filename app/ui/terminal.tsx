@@ -517,7 +517,7 @@ export default function Terminal() {
               setTimeout(() => setIdCopied(false), 1200);
             }}
             className={`cursor-pointer font-mono text-[11px] transition-colors ${
-              idCopied ? "text-emerald-400" : "text-zinc-600 hover:text-zinc-400"
+              idCopied ? "text-emerald-200" : "text-green-400 hover:text-green-300"
             }`}
           >
             {resolvedId.slice(0, 8)}
