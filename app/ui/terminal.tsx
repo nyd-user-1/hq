@@ -533,9 +533,9 @@ export default function Terminal() {
           <details className="relative">
             <summary
               title="sessions tied together by /clear continuations"
-              className="cursor-pointer list-none rounded-md border border-zinc-800 px-1.5 py-px font-mono text-[10px] text-zinc-500 transition-colors marker:content-none hover:border-zinc-600 hover:text-zinc-300"
+              className="cursor-pointer list-none rounded-md border border-zinc-800 px-1.5 py-px font-mono text-[10px] text-zinc-500 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:border-zinc-600 hover:text-zinc-300"
             >
-              tree · {lineage.chain.length} ▾
+              sessions · {lineage.chain.length} ▾
             </summary>
             <div className="absolute left-0 top-full z-20 mt-1 flex w-72 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
               {lineage.chain.map((c, i) => (
