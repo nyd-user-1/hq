@@ -93,8 +93,37 @@ export type RecentSession = {
   active: boolean;
 };
 
-// Reads the HEAD of a transcript (not the tail) for cwd + the opening prompt.
-function headInfo(file: string): { cwd: string | null; title: string } {
+// THE PROJECT RULE: Brendan launches most sessions from ~, so cwd is useless for
+// the project — but he opens (or early-on references) the project by path:
+// "we're working in brendanstanton/code/hq", "/code/tariffs", "~/code/sports".
+// This pulls the first such code/<slug> out of the USER text. cleanText strips
+// <system-reminder> blocks first, so the injected memory index's many code/
+// paths don't false-match. Reference the project as code/<slug> early and
+// Recents sorts it accurately.
+const PROJECT_REF = /(?:^|[\s/~"'(])code\/([a-z0-9][a-z0-9_-]*)/i;
+
+// First path segment after .../code/ — the project slug when a session WAS
+// launched inside its project dir (the authoritative signal when present).
+function codeSlug(p: string): string | null {
+  const m = p.match(/\/code\/([^/]+)/);
+  return m ? m[1] : null;
+}
+
+// Last-resort project from the transcript's projects-dir name (cwd "/"→"-"),
+// e.g. "-Users-brendanstanton-code-44b" → "44b"; plain home dir → "~ (home)".
+function dirProject(file: string): string {
+  const d = path.basename(path.dirname(file));
+  const i = d.indexOf("-code-");
+  return i >= 0 ? d.slice(i + 6) : "~ (home)";
+}
+
+// Reads the HEAD of a transcript (not the tail) for cwd, the opening prompt
+// (title), and the first code/<slug> project reference.
+function headInfo(file: string): {
+  cwd: string | null;
+  title: string;
+  ref: string | null;
+} {
   let text: string;
   try {
     const fd = fs.openSync(file, "r");
@@ -105,12 +134,14 @@ function headInfo(file: string): { cwd: string | null; title: string } {
     fs.closeSync(fd);
     text = buf.toString("utf8");
   } catch {
-    return { cwd: null, title: "" };
+    return { cwd: null, title: "", ref: null };
   }
 
   let cwd: string | null = null;
   let title = "";
+  let ref: string | null = null;
   for (const line of text.split("\n")) {
+    if (cwd && title && ref) break; // have everything
     if (!line) continue;
     let e;
     try {
@@ -119,11 +150,6 @@ function headInfo(file: string): { cwd: string | null; title: string } {
       continue;
     }
     if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
-    if (title) {
-      if (cwd) break; // have both — stop
-      continue;
-    }
-    // First non-command, non-meta user prompt = the title.
     if (e.type !== "user" || e.isSidechain || e.isMeta) continue;
     const content = e.message?.content;
     const raw =
@@ -138,11 +164,15 @@ function headInfo(file: string): { cwd: string | null; title: string } {
     // Skip slash-command / local-command records — not real prompts.
     if (!raw || /<command-(name|message)>|<local-command-stdout>/.test(raw))
       continue;
-    const cleaned = cleanText(raw);
+    const cleaned = cleanText(raw); // strips <system-reminder> + tags
     if (cleaned.length < 3) continue;
-    title = cleaned.slice(0, 90);
+    if (!title) title = cleaned.slice(0, 90);
+    if (!ref) {
+      const m = cleaned.match(PROJECT_REF);
+      if (m) ref = m[1].toLowerCase();
+    }
   }
-  return { cwd, title };
+  return { cwd, title, ref };
 }
 
 export function getRecentSessions(limit = 24): RecentSession[] {
@@ -178,13 +208,13 @@ export function getRecentSessions(limit = 24): RecentSession[] {
   files.sort((a, b) => b.mtime - a.mtime);
 
   return files.slice(0, limit).map(({ file, mtime }) => {
-    const { cwd, title } = headInfo(file);
+    const { cwd, title, ref } = headInfo(file);
+    // Best signal first: a code/<slug> cwd (launched inside the project) → the
+    // early code/<slug> reference in the text → home / dir-name fallback.
     const project =
-      cwd === os.homedir()
-        ? "~ (home)"
-        : cwd
-          ? path.basename(cwd)
-          : path.basename(path.dirname(file));
+      (cwd ? codeSlug(cwd) : null) ??
+      ref ??
+      (cwd && cwd !== os.homedir() ? path.basename(cwd) : dirProject(file));
     return {
       id: path.basename(file, ".jsonl"),
       project,
