@@ -13,6 +13,7 @@ import {
   corpusCounts,
   queryTokens,
   type SearchScope,
+  type SortDir,
 } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,41 @@ function highlight(text: string, query: string): React.ReactNode {
   return out;
 }
 
+// Sort-direction glyph (no icon lib in HQ): bars + an arrow that points down for
+// newest-first (default) and up for oldest-first.
+function SortIcon({ dir }: { dir: SortDir }) {
+  const arrow =
+    dir === "new" ? (
+      <>
+        <path d="M6 5v13" />
+        <path d="m3 15 3 3 3-3" />
+      </>
+    ) : (
+      <>
+        <path d="M6 19V6" />
+        <path d="m3 9 3-3 3 3" />
+      </>
+    );
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 6h9" />
+      <path d="M12 11h6" />
+      <path d="M12 16h3" />
+      {arrow}
+    </svg>
+  );
+}
+
 // Search over everything HQ can see: transcripts + memory. Result click —
 // transcript: pin that session in the terminal (/sessions?session=<id>);
 // memory: open the .md right here (?open=<file>).
@@ -83,14 +119,16 @@ export default async function Search({
   searchParams: Promise<{
     q?: string;
     scope?: string;
+    sort?: string;
     open?: string;
     openSession?: string;
   }>;
 }) {
-  const { q = "", scope: rawScope, open, openSession } = await searchParams;
+  const { q = "", scope: rawScope, sort: rawSort, open, openSession } = await searchParams;
   const scope: SearchScope =
     rawScope === "transcripts" || rawScope === "memory" ? rawScope : "all";
-  const back = `/search?q=${encodeURIComponent(q)}&scope=${scope}`;
+  const sortDir: SortDir = rawSort === "old" ? "old" : "new";
+  const back = `/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${sortDir}`;
 
   // ── opened memory file ──────────────────────────────────────────────────
   if (open) {
@@ -170,13 +208,13 @@ export default async function Search({
   }
 
   // ── query + results ─────────────────────────────────────────────────────
-  const { hits, building } = search(q, scope);
+  const { hits, building } = search(q, scope, sortDir);
   const counts = q ? { sessions: 0, memory: 0 } : corpusCounts();
 
   const scopeChip = (label: string, value: SearchScope) => (
     <Link
       key={value}
-      href={`/search?q=${encodeURIComponent(q)}&scope=${value}`}
+      href={`/search?q=${encodeURIComponent(q)}&scope=${value}&sort=${sortDir}`}
       scroll={false}
       className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
         scope === value
@@ -191,11 +229,26 @@ export default async function Search({
   return (
     <Boundary label="@panel/search/page.tsx">
       <div className="flex flex-col gap-2">
-        <SearchInput initial={q} scope={scope} />
-        <div className="flex gap-2">
+        <SearchInput initial={q} scope={scope} sort={sortDir} />
+        <div className="flex items-center gap-2">
           {scopeChip("All", "all")}
           {scopeChip("Transcripts", "transcripts")}
           {scopeChip("Memory", "memory")}
+          <Link
+            href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
+              sortDir === "new" ? "old" : "new"
+            }`}
+            scroll={false}
+            aria-label="Toggle sort order"
+            title={
+              sortDir === "new"
+                ? "Newest first — click for oldest"
+                : "Oldest first — click for newest"
+            }
+            className="ml-auto flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
+          >
+            <SortIcon dir={sortDir} />
+          </Link>
         </div>
       </div>
 
@@ -233,7 +286,7 @@ export default async function Search({
               {EXAMPLES.map((ex) => (
                 <Link
                   key={ex}
-                  href={`/search?q=${encodeURIComponent(ex)}&scope=${scope}`}
+                  href={`/search?q=${encodeURIComponent(ex)}&scope=${scope}&sort=${sortDir}`}
                   scroll={false}
                   className="rounded-md border border-zinc-800 px-2.5 py-1 font-mono text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
                 >

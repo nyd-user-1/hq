@@ -21,6 +21,7 @@ const MEMORY_DIR = path.join(
 );
 
 export type SearchScope = "all" | "transcripts" | "memory";
+export type SortDir = "new" | "old"; // result order: newest-first (default) / oldest-first
 
 export type SearchHit = {
   kind: "transcript" | "memory";
@@ -105,6 +106,7 @@ function searchMemory(toks: string[]): SearchHit[] {
 export function search(
   query: string,
   scope: SearchScope = "all",
+  sort: SortDir = "new",
   limit = 40
 ): { hits: SearchHit[]; building: boolean } {
   // Keep the all-time index fresh (build if missing / a session changed). Cheap
@@ -126,8 +128,12 @@ export function search(
   // the phrase appears nowhere (e.g. two words never adjacent).
   const all = [...t.hits, ...m];
   const anyPhrase = all.some((h) => h.phrase);
+  // Default newest-first; the UI toggle flips to oldest-first (so the ORIGINAL
+  // occurrence of a phrase rises to the top). Recency is primary; score breaks
+  // ties (effectively never, since `at` is ms).
+  const dir = sort === "old" ? 1 : -1;
   const hits = (anyPhrase ? all.filter((h) => h.phrase) : all)
-    .sort((a, b) => b.score - a.score || b.at - a.at)
+    .sort((a, b) => dir * (a.at - b.at) || b.score - a.score)
     .slice(0, limit);
   return { hits, building: t.building };
 }

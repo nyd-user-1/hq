@@ -9,18 +9,21 @@ import { useRef, useState } from "react";
 export default function SearchInput({
   initial,
   scope,
+  sort,
 }: {
   initial: string;
   scope: string;
+  sort: string;
 }) {
   const router = useRouter();
   const [value, setValue] = useState(initial);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const go = (q: string) =>
-    router.replace(`/search?q=${encodeURIComponent(q)}&scope=${scope}`, {
-      scroll: false,
-    });
+    router.replace(
+      `/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${sort}`,
+      { scroll: false }
+    );
 
   return (
     <input
