@@ -7,6 +7,27 @@ import { ago } from "@/lib/ago";
 
 export const dynamic = "force-dynamic";
 
+// Copy glyph (HQ has no icon lib): the standard two-rectangle clipboard mark.
+// Inherits currentColor, so CopyText's emerald flash applies on copy.
+function CopyIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
 // Color a `git show` line by its diff role.
 function DiffLine({ line }: { line: string }) {
   let cls = "text-zinc-400";
@@ -45,7 +66,7 @@ export default async function Shipped({
     const c = repo ? getCommit(repo, commit) : findCommit(commit);
     return (
       <Boundary topOnly label="@panel/shipped/page.tsx">
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-center gap-3">
           <BackLink
             href="/shipped"
             className="shrink-0 cursor-pointer font-mono text-xs text-blue-400 hover:text-blue-300"
@@ -53,12 +74,21 @@ export default async function Shipped({
             ← shipped
           </BackLink>
           {c ? (
-            <CopyText
-              text={c.sha}
-              className="min-w-0 truncate font-mono text-xs text-zinc-500 hover:text-zinc-300"
-            >
-              {c.repo} · {c.sha}
-            </CopyText>
+            <>
+              <CopyText
+                text={c.sha}
+                className="min-w-0 truncate font-mono text-xs text-zinc-500 hover:text-zinc-300"
+              >
+                {c.repo} · {c.sha}
+              </CopyText>
+              <CopyText
+                text={c.text}
+                title="Copy full commit diff"
+                className="ml-auto shrink-0 text-zinc-500 hover:text-zinc-300"
+              >
+                <CopyIcon />
+              </CopyText>
+            </>
           ) : (
             <span className="font-mono text-xs text-zinc-600">
               commit not found

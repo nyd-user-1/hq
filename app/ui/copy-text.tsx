@@ -9,15 +9,21 @@ export default function CopyText({
   text,
   children,
   className = "",
+  title,
 }: {
   text: string;
   children: React.ReactNode;
   className?: string;
+  // Optional tooltip — off by default (text/path usages stay tooltip-free); set
+  // it for icon-only buttons where the action isn't self-evident.
+  title?: string;
 }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       type="button"
+      title={title}
+      aria-label={title}
       onClick={() => {
         navigator.clipboard.writeText(text);
         setCopied(true);
