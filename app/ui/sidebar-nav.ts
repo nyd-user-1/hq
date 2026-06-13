@@ -1,43 +1,21 @@
-// Sidebar nav — plain data, no node:fs (safe to import into the client Sidebar).
-// Each item drives the RIGHT app-panel via its URL; the center terminal never
-// moves. The brand links to "/" which closes the panel (terminal-only focus).
+// Nav data — plain, no node:fs (safe in the client Sidebar / Terminal). Search
+// lives in the sidebar; the panel groups moved into the terminal's "panels"
+// dropdown, each opening a tabbed panel at its first tab (the panel's own tabs
+// handle sub-navigation, so no sidebar sub-items).
 export type NavItem = { title: string; href: string };
-export type NavGroup = { label: string; items: NavItem[] };
 
-export const SIDEBAR_NAV: NavGroup[] = [
-  {
-    label: "", // unlabeled — Search stands alone at the top
-    items: [{ title: "Search", href: "/search" }],
-  },
-  {
-    label: "Activity",
-    items: [
-      { title: "Calls", href: "/calls" },
-      { title: "Sessions", href: "/sessions" },
-      { title: "To Do", href: "/todo" },
-    ],
-  },
-  {
-    label: "Metrics",
-    items: [
-      { title: "Usage & Burn", href: "/metrics" },
-      { title: "Savings", href: "/savings" },
-      { title: "Memory Audit", href: "/audit" },
-    ],
-  },
-  {
-    label: "Console",
-    items: [
-      { title: "Vault Pulse", href: "/pulse" },
-      { title: "Skills", href: "/skills" },
-      { title: "Routines", href: "/routines" },
-    ],
-  },
-  {
-    label: "Work",
-    items: [{ title: "Buckets", href: "/buckets" }],
-  },
+export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
+
+// The "panels" dropdown. `href` = the first tab (where the panel opens);
+// `routes` = every tab under it, for active-state + the open-panel test.
+export const PANELS: { title: string; href: string; routes: string[] }[] = [
+  { title: "Activity", href: "/calls", routes: ["/calls", "/sessions", "/todo"] },
+  { title: "Metrics", href: "/metrics", routes: ["/metrics", "/savings", "/audit"] },
+  { title: "Console", href: "/pulse", routes: ["/pulse", "/skills", "/routines"] },
 ];
 
 // Routes that open the right panel (terminal stays mounted underneath).
-export const PANEL_ROUTES = SIDEBAR_NAV.flatMap((g) => g.items.map((i) => i.href));
+export const PANEL_ROUTES = [
+  SEARCH_ITEM.href,
+  ...PANELS.flatMap((p) => p.routes),
+];

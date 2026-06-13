@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
+import { PANELS } from "@/app/ui/sidebar-nav";
 import type { TimelineItem } from "@/lib/transcript";
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
@@ -215,6 +216,7 @@ export default function Terminal() {
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // pending refetch retry
   const stagedAtRef = useRef(0); // when the "+" staging view was entered
+  const panelsRef = useRef<HTMLDetailsElement>(null); // the "panels" dropdown
   const working = status !== null;
 
   useEffect(() => {
@@ -544,26 +546,41 @@ export default function Terminal() {
             </div>
           </details>
         )}
-        {/* Panels: open the activity panel (Calls · Sessions · To Do); pressing
-            again while it's open closes it back to terminal-only. */}
-        <button
-          onClick={() =>
-            router.push(
-              ["/calls", "/sessions", "/todo"].includes(pathname ?? "")
-                ? "/"
-                : "/calls",
-              { scroll: false }
-            )
-          }
-          title="open the activity panel — Calls · Sessions · To Do"
-          className={`cursor-pointer rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors ${
-            ["/calls", "/sessions", "/todo"].includes(pathname ?? "")
-              ? "border-zinc-600 text-zinc-300"
-              : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-          }`}
-        >
-          panels
-        </button>
+        {/* Panels dropdown (mirrors the tree dropdown before it): each entry
+            opens a tabbed panel — Activity · Metrics · Console — and the panel's
+            own tabs handle sub-navigation, so no sub-items here. */}
+        <details ref={panelsRef} className="relative">
+          <summary
+            title="open a panel"
+            className={`flex cursor-pointer list-none items-center rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors marker:content-none [&::-webkit-details-marker]:hidden ${
+              PANELS.some((p) => p.routes.includes(pathname ?? ""))
+                ? "border-zinc-600 text-zinc-300"
+                : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+            }`}
+          >
+            panels ▾
+          </summary>
+          <div className="absolute left-0 top-full z-20 mt-1 flex w-36 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+            {PANELS.map((p) => {
+              const active = p.routes.includes(pathname ?? "");
+              return (
+                <Link
+                  key={p.href}
+                  href={p.href}
+                  scroll={false}
+                  onClick={() => {
+                    if (panelsRef.current) panelsRef.current.open = false;
+                  }}
+                  className={`rounded px-2 py-1 font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
+                    active ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  {p.title}
+                </Link>
+              );
+            })}
+          </div>
+        </details>
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
           {cacheLeft !== null &&

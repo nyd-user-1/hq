@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // sit at the top.
 export default function Metrics() {
   return (
-    <Boundary label="@panel/metrics/page.tsx">
+    <Boundary label="@panel/(metrics)/metrics/page.tsx">
       <TokenMeter />
       <div className="border-t border-zinc-800 pt-4">
         <ForecastMeter />
