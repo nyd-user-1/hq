@@ -140,6 +140,7 @@ export default function Terminal() {
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
   const scrollRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // pending refetch retry
   const working = status !== null;
 
   useEffect(() => {
@@ -147,7 +148,7 @@ export default function Terminal() {
     console.log(`[terminal] mounted — count=${mountCount}`);
   }, []);
 
-  const loadTurns = useCallback(async () => {
+  const loadTurns = useCallback(async function load() {
     const q = pinned ? `?session=${encodeURIComponent(pinned)}` : "";
     try {
       const d = await (await fetch(`/api/terminal/turns${q}`)).json();
@@ -164,7 +165,14 @@ export default function Terminal() {
       setLastWrite(d.lastWrite || null);
       setNow(Date.now());
     } catch {
-      // transient — the stream will re-ping
+      // Transient (dev recompile mid-fetch). Retry shortly — the stream won't
+      // re-ping until the NEXT transcript write, which can be minutes away
+      // (the post-/clear stale-terminal bug).
+      if (!retryRef.current)
+        retryRef.current = setTimeout(() => {
+          retryRef.current = null;
+          load();
+        }, 2000);
     }
   }, [pinned]);
 
@@ -180,8 +188,19 @@ export default function Terminal() {
   useEffect(() => {
     const q = pinned ? `?session=${encodeURIComponent(pinned)}` : "";
     const es = new EventSource(`/api/terminal/stream${q}`);
+    // Re-sync on every (re)connect, not just on change: a dropped stream (dev
+    // recompile, laptop sleep) misses events, and the route's baseline resets
+    // on reconnect — so a /clear during the gap never fires `change` and the
+    // terminal shows the dead session until something else writes (image #52).
+    es.addEventListener("ready", () => loadTurns());
     es.addEventListener("change", () => loadTurns());
-    return () => es.close();
+    return () => {
+      es.close();
+      if (retryRef.current) {
+        clearTimeout(retryRef.current);
+        retryRef.current = null;
+      }
+    };
   }, [pinned, loadTurns]);
 
   // While a turn is in flight, tick every 1s — bumps `now` (smooth elapsed) and
