@@ -14,9 +14,6 @@ export default function Sidebar() {
     <div className="scrollbar-none flex h-full flex-col gap-5 overflow-y-auto">
       <Link href="/" scroll={false} className="block">
         <h1 className="text-base font-semibold tracking-tight">Agentic OS</h1>
-        <p className="text-[11px] text-zinc-500">
-          one vault · every project · localhost
-        </p>
       </Link>
 
       {SIDEBAR_NAV.map((group) => (
