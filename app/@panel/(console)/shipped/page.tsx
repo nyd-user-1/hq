@@ -1,7 +1,7 @@
 import Boundary from "@/app/ui/boundary";
 import Link from "next/link";
 import CopyText from "@/app/ui/copy-text";
-import { getShipped, getCommit } from "@/lib/shipped";
+import { getShipped, getCommit, findCommit } from "@/lib/shipped";
 import { ago } from "@/lib/ago";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,9 @@ export default async function Shipped({
 
   // ── opened commit ────────────────────────────────────────────────────────
   if (commit) {
-    const c = getCommit(repo ?? "", commit);
+    // From the feed we know the repo; from a chat-window sha link we don't —
+    // then search every repo for it.
+    const c = repo ? getCommit(repo, commit) : findCommit(commit);
     return (
       <Boundary topOnly label="@panel/shipped/page.tsx">
         <div className="flex items-baseline gap-3">
@@ -116,8 +118,8 @@ export default async function Shipped({
         <p className="text-sm text-zinc-600">no git repos under ~/code</p>
       )}
       <p className="text-xs text-zinc-600">
-        the {ships.length} newest commits across your ~/code repos · click one to
-        read its diff here
+        every ~/code repo · newest first (each repo&apos;s latest always shown) ·
+        click a commit to read its diff here
       </p>
     </Boundary>
   );

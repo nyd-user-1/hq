@@ -27,6 +27,7 @@ export function getShipped(limit = 40, perRepo = 15): Ship[] {
   }
 
   const out: Ship[] = [];
+  const newestByRepo = new Map<string, Ship>(); // first seen per repo = its newest
   for (const d of dirs) {
     if (!d.isDirectory()) continue;
     const repo = d.name;
@@ -59,18 +60,28 @@ export function getShipped(limit = 40, perRepo = 15): Ship[] {
       if (t1 === -1 || t2 === -1 || t3 === -1) continue;
       const ct = Number(rec.slice(t1 + 1, t2));
       if (!Number.isFinite(ct)) continue;
-      out.push({
+      const ship: Ship = {
         repo,
         sha: rec.slice(0, t1).slice(0, 7),
         subject: rec.slice(t2 + 1, t3),
         body: rec.slice(t3 + 1).replace(/\s+/g, " ").trim().slice(0, 240),
         at: ct * 1000,
-      });
+      };
+      out.push(ship);
+      if (!newestByRepo.has(repo)) newestByRepo.set(repo, ship);
     }
   }
 
   out.sort((a, b) => b.at - a.at);
-  return out.slice(0, limit);
+  const feed = out.slice(0, limit);
+  // Coverage: every repo's newest commit appears, even if it's old enough to
+  // fall outside the top `limit` — so no project is ever invisible.
+  const covered = new Set(feed.map((s) => s.repo));
+  for (const [repo, ship] of newestByRepo) {
+    if (!covered.has(repo)) feed.push(ship);
+  }
+  feed.sort((a, b) => b.at - a.at);
+  return feed;
 }
 
 const SHA_RE = /^[0-9a-f]{7,40}$/i;
@@ -111,4 +122,25 @@ export function getCommit(
   if (lines.length > 800)
     text = lines.slice(0, 800).join("\n") + "\n… (truncated)";
   return { repo: base, sha, text };
+}
+
+// Resolve a sha with NO repo (the chat-window links carry only the hash) by
+// trying each ~/code repo until one has the commit. Shas are ~unique, so the
+// first hit is the right one.
+export function findCommit(
+  sha: string
+): { repo: string; sha: string; text: string } | null {
+  if (!SHA_RE.test(sha)) return null;
+  let dirs: fs.Dirent[];
+  try {
+    dirs = fs.readdirSync(CODE_ROOT, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    const c = getCommit(d.name, sha);
+    if (c) return c;
+  }
+  return null;
 }

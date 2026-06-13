@@ -1,5 +1,10 @@
 import React from "react";
+import Link from "next/link";
 import CopyCode from "@/app/ui/copy-code";
+
+// An inline `code` token that looks like a commit hash → link it to its diff
+// (the Shipped reader resolves which repo it's in). Everything else → copy chip.
+const SHA = /^[0-9a-f]{7,40}$/i;
 
 // Lightweight markdown for the terminal — no library. Handles the cases Claude's
 // replies actually use: **bold**, *italic*, `code` (accent-colored, the "purple"
@@ -24,7 +29,20 @@ function inline(text: string): React.ReactNode[] {
         </strong>
       );
     else if (m[4] !== undefined)
-      out.push(<CopyCode key={i}>{m[4]}</CopyCode>);
+      out.push(
+        SHA.test(m[4]) ? (
+          <Link
+            key={i}
+            href={`/shipped?commit=${m[4]}`}
+            scroll={false}
+            className="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[0.95em] text-blue-400 transition-colors hover:bg-zinc-700 hover:text-blue-300"
+          >
+            {m[4]}
+          </Link>
+        ) : (
+          <CopyCode key={i}>{m[4]}</CopyCode>
+        )
+      );
     else if (m[6] !== undefined)
       out.push(
         <em key={i} className="italic text-zinc-400">
