@@ -5,8 +5,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
-// first, labelled by the short session id so each row lines up 1:1 with the id
-// in the terminal header (the first prompt + project move to the hover tooltip).
+// first, labelled by the short session id (+ a dim project suffix) so each row
+// lines up 1:1 with the id in the terminal header (first prompt → hover tooltip).
 // Clicking one pins the center terminal to it (?session=<id>). A Group-by control
 // (None/Date/Project) buckets the list — client-side; the payload carries
 // lastActive + project.
@@ -199,8 +199,13 @@ export default function SidebarRecents() {
                         : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
                     }`}
                   >
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                      {s.id.slice(0, 8)}
+                    <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                      <span className="shrink-0 font-mono text-xs">
+                        {s.id.slice(0, 8)}
+                      </span>
+                      <span className="min-w-0 truncate text-xs text-zinc-600">
+                        {s.project}
+                      </span>
                     </span>
                     {/* green = active within the cache window; right-aligned so
                         every title stays flush-left */}
