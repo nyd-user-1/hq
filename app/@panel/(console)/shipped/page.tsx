@@ -94,19 +94,19 @@ export default async function Shipped({
                 className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
               >
                 <div className="flex items-center gap-2.5">
-                  <span className="min-w-0 truncate text-sm font-medium text-zinc-200">
-                    {s.subject}
+                  <span className="shrink-0 font-mono text-sm text-blue-400">
+                    {s.sha}
                   </span>
-                  <span className="shrink-0 font-mono text-xs text-zinc-500">
-                    {ago(s.at)}
-                  </span>
-                  <span className="ml-auto max-w-[88px] shrink-0 truncate rounded bg-blue-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-blue-300">
+                  <span className="min-w-0 max-w-[140px] truncate font-mono text-xs text-zinc-500">
                     {s.repo}
                   </span>
+                  <span className="ml-auto shrink-0 rounded bg-blue-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-blue-300">
+                    commit
+                  </span>
                 </div>
-                <p className="truncate text-xs">
-                  <span className="font-mono text-blue-400">{s.sha}</span>
-                  {s.body && <span className="text-zinc-500"> · {s.body}</span>}
+                <p className="line-clamp-3 text-xs text-zinc-400">
+                  {s.subject}
+                  {s.body ? ` — ${s.body}` : ""}
                 </p>
               </Link>
             </li>
@@ -116,8 +116,8 @@ export default async function Shipped({
         <p className="text-sm text-zinc-600">no git repos under ~/code</p>
       )}
       <p className="text-xs text-zinc-600">
-        git log across every ~/code repo · newest first · click a commit to read
-        its diff here
+        the {ships.length} newest commits across your ~/code repos · click one to
+        read its diff here
       </p>
     </Boundary>
   );

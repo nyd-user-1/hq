@@ -63,7 +63,7 @@ export function getShipped(limit = 40, perRepo = 15): Ship[] {
         repo,
         sha: rec.slice(0, t1).slice(0, 7),
         subject: rec.slice(t2 + 1, t3),
-        body: rec.slice(t3 + 1).replace(/\s+/g, " ").trim().slice(0, 140),
+        body: rec.slice(t3 + 1).replace(/\s+/g, " ").trim().slice(0, 240),
         at: ct * 1000,
       });
     }
