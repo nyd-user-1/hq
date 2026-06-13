@@ -13,7 +13,7 @@ The whole idea: **HQ reads the files Claude Code already writes to disk.** Every
 ## Run / build / ship
 
 - **Dev:** `npm run dev` → pinned to **:3002**.
-- **Build:** ALWAYS `env -u NODE_ENV npm run build`. The Claude shell exports `NODE_ENV=development`, which breaks `next build` (`/_global-error` useContext null). Build before pushing (not `tsc`).
+- **Build:** `npm run build` before pushing (not `tsc`). If it fails with a `/_global-error` "useContext is null" error or a "non-standard NODE_ENV" warning, the shell has `NODE_ENV=development` set — rebuild with `env -u NODE_ENV npm run build` to strip it. That var is NOT always present (it was empty on 2026-06-13), so the `env -u` prefix is a conditional fix, not a mandatory ritual — `echo $NODE_ENV` to check.
 - **Rhythm:** build → commit → push after each change. Remote is `github.com/nyd-user-1/hq` (`main`). Brendan reviews on the live dev server — **don't take verification screenshots while he's watching** (token cost); describe what to look for and he eyeballs.
 
 ## Architecture
