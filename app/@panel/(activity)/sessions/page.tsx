@@ -1,6 +1,7 @@
 import Boundary from "@/app/ui/boundary";
 import Link from "next/link";
 import { getSessions } from "@/lib/sessions";
+import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,8 @@ export default async function Sessions({
         {shown.map((s) => {
           const selected = s.id === selectedId;
           const warm = Date.now() - s.lastActive < 5 * 60 * 1000; // prompt-cache TTL
-          const ctxPct = (s.contextTokens / 200_000) * 100;
+          const ctxPct = (s.contextTokens / CONTEXT_LIMIT) * 100;
+          const pastCliff = s.contextTokens >= PRICING_CLIFF;
           return (
             <li key={s.id}>
               <Link
@@ -105,15 +107,21 @@ export default async function Sessions({
                     <>
                       {" · "}
                       <span
+                        title={
+                          pastCliff
+                            ? `past ${fmt(PRICING_CLIFF)} — billing at the long-context premium (~2× input)`
+                            : undefined
+                        }
                         className={
                           ctxPct >= 80
                             ? "text-red-400"
-                            : ctxPct >= 70
+                            : pastCliff
                               ? "text-amber-400"
                               : ""
                         }
                       >
                         ctx {fmt(s.contextTokens)}
+                        {pastCliff && " premium"}
                       </span>
                     </>
                   )}

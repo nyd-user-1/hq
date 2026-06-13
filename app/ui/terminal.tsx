@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
+import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
@@ -53,6 +54,7 @@ const MOODS = [
   "Brewing", "Cooking", "Pondering", "Churning", "Conjuring", "Tinkering",
 ];
 function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 }
 function fmtElapsed(s: number): string {
@@ -68,8 +70,8 @@ function fmtAgo(ms: number): string {
 // The Anthropic prompt cache holds ~5 minutes; reply inside the window and the
 // whole history is read at ~10% price. The header counts the window down.
 const CACHE_TTL_MS = 5 * 60 * 1000;
-// Context gauge ceiling — the window auto-compact is protecting.
-const CONTEXT_LIMIT = 200_000;
+// CONTEXT_LIMIT (1M window) + PRICING_CLIFF (200k premium line) live in
+// lib/limits — imported above so the client bundle never pulls in node:fs.
 // What the "copy wrap-up prompt" button puts on the clipboard — the cheap
 // alternative to letting auto-compact eat the session.
 const WRAP_UP_PROMPT = `We're close to the context limit — let's wrap up instead of auto-compacting. 1) Write a handoff note to the vault thread: current state, decisions made, open questions, exact next steps. 2) Save or update memory for anything durable. 3) Commit and push. Then I'll /clear and resume fresh from the note.`;
@@ -470,6 +472,8 @@ export default function Terminal() {
       ? CACHE_TTL_MS - (now - lastWrite)
       : null;
   const ctxPct = (contextTokens / CONTEXT_LIMIT) * 100;
+  const cliffPct = (PRICING_CLIFF / CONTEXT_LIMIT) * 100; // 200k tick on the bar
+  const pastCliff = contextTokens >= PRICING_CLIFF;
   const cacheWarm = cacheLeft !== null && cacheLeft > 0;
 
   return (
@@ -562,11 +566,11 @@ export default function Terminal() {
           {contextTokens > 0 && (
             <span
               className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-500"
-              title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} before auto-compact territory`}
+              title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} (your 1M tier) before auto-compact territory · the tick at ${fmtTokens(PRICING_CLIFF)} is where long-context pricing kicks in (~2× input)`}
             >
-              <span className="h-1 w-14 overflow-hidden rounded-full bg-zinc-800">
+              <span className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800">
                 <span
-                  className={`block h-full ${
+                  className={`absolute inset-y-0 left-0 ${
                     ctxPct >= 80
                       ? "bg-red-500"
                       : ctxPct >= 70
@@ -575,8 +579,23 @@ export default function Terminal() {
                   }`}
                   style={{ width: `${Math.min(100, ctxPct)}%` }}
                 />
+                {/* the long-context pricing cliff — a marker, not the wall */}
+                <span
+                  className="absolute inset-y-0 w-px bg-amber-400/60"
+                  style={{ left: `${cliffPct}%` }}
+                />
               </span>
-              ctx {fmtTokens(contextTokens)}
+              <span>
+                ctx {fmtTokens(contextTokens)}
+                {pastCliff && (
+                  <span
+                    className="ml-1 text-amber-400"
+                    title={`past ${fmtTokens(PRICING_CLIFF)} — each turn now bills at the long-context premium (~2× input)`}
+                  >
+                    premium
+                  </span>
+                )}
+              </span>
             </span>
           )}
         </span>
