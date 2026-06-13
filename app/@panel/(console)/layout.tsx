@@ -4,7 +4,7 @@ import TabNav from "@/app/ui/tab-nav";
 
 export const dynamic = "force-dynamic";
 
-// Console panel: Shipped · Skills · Routines.
+// Console panel: Shipped · Skills · Routines · Firehose.
 export default function ConsoleLayout({
   children,
 }: {
@@ -17,6 +17,7 @@ export default function ConsoleLayout({
           { title: "Shipped", href: "/shipped", segment: "shipped" },
           { title: "Skills", href: "/skills", segment: "skills" },
           { title: "Routines", href: "/routines", segment: "routines" },
+          { title: "Firehose", href: "/firehose", segment: "firehose" },
         ]}
       />
       <FlashOnNav>{children}</FlashOnNav>

@@ -110,7 +110,7 @@ export default async function FirehosePanel({
   const { id, project, items, full } = firehoseFor(session ?? null);
 
   return (
-    <Boundary topOnly label="@panel/firehose/page.tsx">
+    <Boundary topOnly label="@panel/(console)/firehose/page.tsx">
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-xs text-zinc-300">firehose</span>
         {id ? (
