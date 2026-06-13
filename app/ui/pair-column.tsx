@@ -37,20 +37,29 @@ function PairPane() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <Boundary
-        label="terminal.tsx · 2"
-        trail={
-          <Link
-            href={closeHref}
-            scroll={false}
-            title="close terminal 2"
-            aria-label="close terminal 2"
-            className="rounded border border-zinc-800 px-1 font-mono text-[10px] leading-none text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+      <Boundary label="terminal.tsx · 2">
+        {/* close — matches the app panel's ✕: a clean button on the boundary
+            line, top-right (not a cramped chip beside the path label) */}
+        <Link
+          href={closeHref}
+          scroll={false}
+          title="close terminal 2"
+          aria-label="close terminal 2"
+          className="absolute -top-2.5 right-3 z-10 flex shrink-0 items-center bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           >
-            ✕
-          </Link>
-        }
-      >
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </Link>
         <Terminal paramKey="pair" />
       </Boundary>
     </div>
