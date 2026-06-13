@@ -60,7 +60,7 @@ export default function Sidebar() {
             </Fragment>
           ) : (
             <details key={group.label} open className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium text-zinc-300 transition-colors marker:content-none hover:bg-zinc-800">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium text-zinc-300 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:bg-zinc-800">
                 <span>{group.label}</span>
                 <Chevron />
               </summary>

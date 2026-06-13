@@ -64,13 +64,14 @@ export default function SidebarRecents() {
                   : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
               }`}
             >
-              {/* green = active within the cache window (one app-wide signal) */}
+              <span className="min-w-0 flex-1 truncate">{s.title}</span>
+              {/* green = active within the cache window (one app-wide signal);
+                  on the right so every title stays left-aligned */}
               <span
                 className={`size-1.5 shrink-0 rounded-full ${
                   s.active ? "bg-green-500" : "bg-transparent"
                 }`}
               />
-              <span className="truncate">{s.title}</span>
             </Link>
           </li>
         );
