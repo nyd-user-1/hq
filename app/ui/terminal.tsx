@@ -83,6 +83,53 @@ const WRAP_UP_PROMPT = `We're close to the context limit — let's wrap up inste
 // terminal is not remounting). Resets only on a full reload.
 let mountCount = 0;
 
+// A pasted/dropped screenshot, compressed in the browser BEFORE it leaves the
+// page. Capping the long edge + re-encoding as JPEG keeps the POST small, the
+// temp file small, and the vision token cost near its floor — an image is
+// re-sent on every turn until compaction, so squeezing it here is token
+// efficiency (objective #4), not just bandwidth.
+type Attachment = {
+  id: string;
+  name: string;
+  mime: string; // always image/jpeg after compression
+  data: string; // base64, no data-url prefix
+  w: number;
+  h: number;
+  bytes: number; // approx decoded size, for the chip label
+};
+
+const ATTACH_MAX_EDGE = 1568; // Anthropic's vision sweet spot — bigger buys nothing
+const ATTACH_QUALITY = 0.85;
+const ATTACH_LIMIT = 8;
+
+async function compressImage(file: Blob, name: string): Promise<Attachment> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(
+    1,
+    ATTACH_MAX_EDGE / Math.max(bitmap.width, bitmap.height)
+  );
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("no 2d canvas context");
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close?.();
+  const dataUrl = canvas.toDataURL("image/jpeg", ATTACH_QUALITY);
+  const data = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  return {
+    id: crypto.randomUUID(),
+    name: name || "screenshot.jpg",
+    mime: "image/jpeg",
+    data,
+    w,
+    h,
+    bytes: Math.round(data.length * 0.75),
+  };
+}
+
 // Labeled click-to-copy chip — the "deliberately copy, not send" affordance
 // (wrap-up strip precedent): the action happens in YOUR terminal, not HQ's.
 function CopyChip({ label, text }: { label: string; text: string }) {
@@ -200,6 +247,9 @@ export default function Terminal() {
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const [queue, setQueue] = useState<string[]>([]); // batched asks — sent as ONE message
+  const [attachments, setAttachments] = useState<Attachment[]>([]); // staged screenshots
+  const [dragOver, setDragOver] = useState(false); // drop-zone highlight
+  const fileInputRef = useRef<HTMLInputElement>(null); // hidden picker behind the 📎 button
   const [error, setError] = useState<string | null>(null);
   const [contextTokens, setContextTokens] = useState(0);
   const [lastWrite, setLastWrite] = useState<number | null>(null);
@@ -394,27 +444,59 @@ export default function Terminal() {
   // send time, so "newest" can't silently re-aim it between typing and sending
   // (the 001.8 roulette). The guard lives in the plumbing, not the UI: the API
   // refuses anonymous sends, this never sends one.
+  // Compress pasted/dropped/picked images and stage them. Capped at ATTACH_LIMIT
+  // so a stray multi-file drop can't balloon the send.
+  async function addFiles(files: File[]) {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    try {
+      const next = await Promise.all(imgs.map((f) => compressImage(f, f.name)));
+      setAttachments((a) => [...a, ...next].slice(0, ATTACH_LIMIT));
+    } catch {
+      setError("couldn't read that image");
+    }
+  }
+
   async function doSend() {
     if (staged) return; // staging view — no session exists to send to
     const target = pinned ?? resolvedId;
     const prompt = [...queue, draft.trim()].filter(Boolean).join("\n\n");
-    if (!target || !prompt || sending) return;
+    const imgs = attachments; // snapshot — survives the clear below
+    if (!target || sending || (!prompt && imgs.length === 0)) return;
     sendTargetRef.current = target;
     setQueue([]);
+    setAttachments([]);
     stoppedRef.current = false;
     setSending(true);
     busyRef.current = true;
     setError(null);
+    const optimistic = [
+      prompt,
+      imgs.length
+        ? `📎 ${imgs.length} image${imgs.length > 1 ? "s" : ""} attached`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     setItems((t) => [
       ...t,
-      { kind: "turn", role: "user", text: prompt, at: new Date().toISOString() },
+      {
+        kind: "turn",
+        role: "user",
+        text: optimistic,
+        at: new Date().toISOString(),
+      },
     ]);
     setDraft("");
     try {
       const res = await fetch("/api/terminal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, sessionId: target }),
+        body: JSON.stringify({
+          prompt,
+          sessionId: target,
+          images: imgs.map(({ data, mime }) => ({ data, mime })),
+        }),
       });
       if (!res.ok) {
         // an interrupt already left its marker in the timeline — no error line
@@ -955,11 +1037,68 @@ export default function Terminal() {
             ))}
           </div>
         )}
-        {/* one container: textarea + controls inside, ↵ sends / ⇧↵ newline */}
-        <div className="flex items-end gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((a) => (
+              <div key={a.id} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:${a.mime};base64,${a.data}`}
+                  alt={a.name}
+                  className="h-14 w-14 rounded-md border border-zinc-700 object-cover"
+                />
+                <button
+                  onClick={() =>
+                    setAttachments((list) => list.filter((x) => x.id !== a.id))
+                  }
+                  title="remove"
+                  aria-label="Remove image"
+                  className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-[10px] text-zinc-400 transition-colors hover:text-zinc-100"
+                >
+                  ✕
+                </button>
+                <span className="absolute inset-x-0 bottom-0 rounded-b-md bg-black/60 px-1 text-center text-[9px] text-zinc-300">
+                  {Math.max(1, Math.round(a.bytes / 1024))}kb
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* one container: textarea + controls inside, ↵ sends / ⇧↵ newline.
+            Doubles as a drop zone; paste/drop/📎 all funnel through addFiles. */}
+        <div
+          onDragOver={(e) => {
+            if (staged) return;
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            if (!staged) addFiles(Array.from(e.dataTransfer.files));
+          }}
+          className={`flex items-end gap-2 rounded-md border bg-zinc-950/60 p-2 transition-colors ${
+            dragOver
+              ? "border-sky-500"
+              : "border-zinc-700 focus-within:border-zinc-500"
+          }`}
+        >
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.items)
+                .filter(
+                  (it) => it.kind === "file" && it.type.startsWith("image/")
+                )
+                .map((it) => it.getAsFile())
+                .filter((f): f is File => !!f);
+              if (files.length) {
+                e.preventDefault();
+                addFiles(files);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -971,10 +1110,30 @@ export default function Terminal() {
             placeholder={
               staged
                 ? "no session yet — start one in your terminal first"
-                : `message ${project || "session"} — ↵ send · ⇧↵ newline`
+                : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
             className="min-h-0 flex-1 resize-none bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              addFiles(Array.from(e.target.files ?? []));
+              e.currentTarget.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={staged || sending}
+            title="attach a screenshot — pasting or dropping an image works too"
+            aria-label="Attach image"
+            className="shrink-0 rounded-md border border-zinc-800 px-2 py-1 font-mono text-[11px] text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            📎
+          </button>
           <button
             onClick={queueDraft}
             disabled={staged || sending || !draft.trim()}
@@ -994,7 +1153,12 @@ export default function Terminal() {
           ) : (
             <button
               onClick={doSend}
-              disabled={staged || (!draft.trim() && queue.length === 0)}
+              disabled={
+                staged ||
+                (!draft.trim() &&
+                  queue.length === 0 &&
+                  attachments.length === 0)
+              }
               className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {queue.length > 0
