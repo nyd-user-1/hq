@@ -39,6 +39,7 @@ type ResumeOptions = {
 type LineageNode = {
   id: string;
   project: string;
+  title: string;
   bornAt: number;
   lastActive: number;
 };
@@ -548,15 +549,14 @@ export default function Terminal() {
                   }`}
                 >
                   <span className="shrink-0 text-zinc-600">{i + 1}</span>
-                  <span className="shrink-0">{c.project}</span>
-                  <span className="shrink-0 text-zinc-600">
-                    {c.id.slice(0, 8)}
+                  <span className="min-w-0 flex-1 truncate">
+                    {c.title || c.id.slice(0, 8)}
                   </span>
-                  <span className="ml-auto shrink-0 text-[10px] text-zinc-600">
+                  <span className="shrink-0 text-[10px] text-zinc-600">
                     {c.id === resolvedId
                       ? "in terminal"
                       : i > 0
-                        ? `cleared into at ${new Date(c.bornAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                        ? `cleared in ${new Date(c.bornAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
                         : `started ${new Date(c.bornAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
                   </span>
                 </Link>

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { cleanText } from "@/lib/sessions";
 
 // Session lineage: which sessions continue which. A /clear ends one session
 // file and births a new one whose first real record IS the /clear command —
@@ -17,13 +18,19 @@ const ADJACENCY_MS = 60 * 60 * 1000;
 export type LineageNode = {
   id: string;
   project: string;
+  title: string; // first real prompt — what the row is named by (falls back to the id)
   bornAt: number; // first timestamped entry (for a clear-born session: the /clear moment)
   lastActive: number; // file mtime
 };
 
 type Meta = LineageNode & { cwd: string | null; clearBorn: boolean };
 
-type Head = { cwd: string | null; firstTs: number; clearBorn: boolean };
+type Head = {
+  cwd: string | null;
+  firstTs: number;
+  clearBorn: boolean;
+  title: string;
+};
 
 // A transcript's head never changes once written — cache per path for the
 // process lifetime (the turns route polls at 1s while a turn is in flight).
@@ -35,17 +42,21 @@ function readHead(file: string): Head {
   let text: string;
   try {
     const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(16 * 1024);
+    // 96 KB: the first user record carries the injected memory/CLAUDE.md block
+    // and overflows a small buffer, which would truncate the line and lose the
+    // title (matches headInfo in lib/sessions.ts).
+    const buf = Buffer.alloc(96 * 1024);
     const n = fs.readSync(fd, buf, 0, buf.length, 0);
     fs.closeSync(fd);
     text = buf.toString("utf8", 0, n);
   } catch {
-    return { cwd: null, firstTs: 0, clearBorn: false };
+    return { cwd: null, firstTs: 0, clearBorn: false, title: "" };
   }
   let cwd: string | null = null;
   let firstTs = 0;
   let decided = false;
   let clearBorn = false;
+  let title = "";
   for (const line of text.split("\n")) {
     if (!line) continue;
     let e;
@@ -59,7 +70,7 @@ function readHead(file: string): Head {
       const t = Date.parse(e.timestamp);
       if (!Number.isNaN(t)) firstTs = t;
     }
-    if (!decided && (e.type === "user" || e.type === "assistant")) {
+    if (e.type === "user" || e.type === "assistant") {
       const c = e.message?.content;
       const raw =
         typeof c === "string"
@@ -70,14 +81,29 @@ function readHead(file: string): Head {
                 .join("\n")
             : "";
       // The caveat record precedes the command record — skip it, don't decide.
-      if (raw.includes("<local-command-caveat>")) continue;
-      decided = true;
-      clearBorn =
-        e.type === "user" && raw.includes("<command-name>/clear</command-name>");
+      if (!decided && !raw.includes("<local-command-caveat>")) {
+        decided = true;
+        clearBorn =
+          e.type === "user" &&
+          raw.includes("<command-name>/clear</command-name>");
+      }
+      // Title = first real user prompt (skip /clear + other command records),
+      // so a clear-born session is named by what was typed after the clear.
+      if (
+        !title &&
+        e.type === "user" &&
+        !e.isSidechain &&
+        !e.isMeta &&
+        raw &&
+        !/<command-(name|message)>|<local-command-stdout>/.test(raw)
+      ) {
+        const cleaned = cleanText(raw);
+        if (cleaned.length >= 3) title = cleaned.slice(0, 90);
+      }
     }
-    if (cwd && firstTs && decided) break;
+    if (cwd && firstTs && decided && title) break;
   }
-  const head = { cwd, firstTs, clearBorn };
+  const head = { cwd, firstTs, clearBorn, title };
   if (decided) headCache.set(file, head); // a brand-new file may still be mid-write
   return head;
 }
@@ -110,11 +136,12 @@ function scan(): Meta[] {
         continue;
       }
       if (now - mtime > WEEK_MS) continue;
-      const { cwd, firstTs, clearBorn } = readHead(full);
+      const { cwd, firstTs, clearBorn, title } = readHead(full);
       out.push({
         id: f.slice(0, -6),
         project:
           cwd === os.homedir() ? "~" : cwd ? path.basename(cwd) : dir.name,
+        title,
         bornAt: firstTs,
         lastActive: mtime,
         cwd,
@@ -167,9 +194,10 @@ export function lineageFor(id: string): Lineage {
     return best;
   };
 
-  const strip = ({ id, project, bornAt, lastActive }: Meta): LineageNode => ({
+  const strip = ({ id, project, title, bornAt, lastActive }: Meta): LineageNode => ({
     id,
     project,
+    title,
     bornAt,
     lastActive,
   });
