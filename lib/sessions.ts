@@ -24,7 +24,7 @@ export type SessionInfo = {
   snippet: string;
 };
 
-function cleanText(text: string): string {
+export function cleanText(text: string): string {
   return text
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
     .replace(/<[^>]+>/g, "")
@@ -117,6 +117,23 @@ function dirProject(file: string): string {
   return i >= 0 ? d.slice(i + 6) : "~ (home)";
 }
 
+// Project + title for one transcript (head read), shared by Recents and the
+// Archive so derivation is identical. mtime in, no stat here.
+export function sessionMeta(file: string, mtime: number): RecentSession {
+  const { cwd, title, ref } = headInfo(file);
+  const project =
+    (cwd ? codeSlug(cwd) : null) ??
+    ref ??
+    (cwd && cwd !== os.homedir() ? path.basename(cwd) : dirProject(file));
+  return {
+    id: path.basename(file, ".jsonl"),
+    project,
+    title: title || `${project} session`,
+    lastActive: mtime,
+    active: Date.now() - mtime < ACTIVE_MS,
+  };
+}
+
 // Reads the HEAD of a transcript (not the tail) for cwd, the opening prompt
 // (title), and the first code/<slug> project reference.
 function headInfo(file: string): {
@@ -207,22 +224,7 @@ export function getRecentSessions(limit = 24): RecentSession[] {
   }
   files.sort((a, b) => b.mtime - a.mtime);
 
-  return files.slice(0, limit).map(({ file, mtime }) => {
-    const { cwd, title, ref } = headInfo(file);
-    // Best signal first: a code/<slug> cwd (launched inside the project) → the
-    // early code/<slug> reference in the text → home / dir-name fallback.
-    const project =
-      (cwd ? codeSlug(cwd) : null) ??
-      ref ??
-      (cwd && cwd !== os.homedir() ? path.basename(cwd) : dirProject(file));
-    return {
-      id: path.basename(file, ".jsonl"),
-      project,
-      title: title || `${project} session`,
-      lastActive: mtime,
-      active: now - mtime < ACTIVE_MS,
-    };
-  });
+  return files.slice(0, limit).map(({ file, mtime }) => sessionMeta(file, mtime));
 }
 
 // The ~/code project folders — offered in the "+" new-session view so a session

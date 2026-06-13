@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SEARCH_ITEM } from "@/app/ui/sidebar-nav";
+import { SEARCH_ITEM, ARCHIVE_ITEM } from "@/app/ui/sidebar-nav";
 import SidebarRecents from "@/app/ui/sidebar-recents";
 
 // Left rail. Brand → "/" (closes the panel, terminal-only focus). The panel
@@ -13,9 +13,8 @@ import SidebarRecents from "@/app/ui/sidebar-recents";
 // terminal.
 export default function Sidebar() {
   const pathname = usePathname() ?? "/";
-  const searchActive =
-    pathname === SEARCH_ITEM.href ||
-    pathname.startsWith(SEARCH_ITEM.href + "/");
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(href + "/");
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
@@ -23,17 +22,22 @@ export default function Sidebar() {
         <h1 className="text-base font-semibold tracking-tight">Agentic OS</h1>
       </Link>
 
-      <Link
-        href={SEARCH_ITEM.href}
-        scroll={false}
-        className={`shrink-0 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-          searchActive
-            ? "bg-blue-600 text-white"
-            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
-        }`}
-      >
-        {SEARCH_ITEM.title}
-      </Link>
+      <div className="flex shrink-0 flex-col gap-1">
+        {[SEARCH_ITEM, ARCHIVE_ITEM].map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            scroll={false}
+            className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
+              isActive(item.href)
+                ? "bg-blue-600 text-white"
+                : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+            }`}
+          >
+            {item.title}
+          </Link>
+        ))}
+      </div>
 
       <Suspense fallback={null}>
         <SidebarRecents />
