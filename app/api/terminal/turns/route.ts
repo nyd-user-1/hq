@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { timelineFor, workingStatus } from "@/lib/transcript";
 import { getSessions } from "@/lib/sessions";
 import { latestHandoff } from "@/lib/vault";
-import { lineageFor } from "@/lib/lineage";
+import { lineageFor, sessionBornAt } from "@/lib/lineage";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,12 @@ export const dynamic = "force-dynamic";
 // tool steps, interleaved) for a session (or the newest when no id), plus
 // whether it's mid-turn right now and what it's doing. Keeps node:fs server-side.
 export async function GET(req: Request) {
-  const id = new URL(req.url).searchParams.get("session");
+  const url = new URL(req.url);
+  const id = url.searchParams.get("session");
+  // The staged "+" view: no session of its own — it follows the newest (for
+  // newborn detection) and always gets the recent-sessions list, but never
+  // the handoff kickoff (that belongs to /clear-born continuations).
+  const staged = url.searchParams.get("staged") === "1";
   const { id: resolved, items, project, contextTokens, lastWrite } =
     timelineFor(id, 24);
   const status = workingStatus(resolved);
@@ -22,14 +27,14 @@ export async function GET(req: Request) {
   const lineage = resolved ? lineageFor(resolved) : null;
   let resume = null;
   let predecessorCtx = 0; // the continued session's context size, for the fresh-pane line
-  if (fresh) {
+  if (fresh || staged) {
     const recent = getSessions(8);
     predecessorCtx =
       recent.find((s) => s.id === lineage?.predecessor?.id)?.contextTokens ?? 0;
     resume = {
-      handoff: latestHandoff(),
+      handoff: staged ? null : latestHandoff(),
       sessions: recent
-        .filter((s) => s.id !== resolved)
+        .filter((s) => staged || s.id !== resolved)
         .slice(0, 3)
         .map(({ id, project, lastActive, snippet, contextTokens }) => ({
           id,
@@ -50,5 +55,6 @@ export async function GET(req: Request) {
     resume,
     lineage,
     predecessorCtx,
+    bornAt: resolved ? sessionBornAt(resolved) : 0,
   });
 }

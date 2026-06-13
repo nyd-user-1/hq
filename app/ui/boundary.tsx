@@ -3,14 +3,17 @@ import BoundaryChip from "@/app/ui/boundary-chip";
 // The demo's trick: every layout/page draws its own dashed box with its
 // file path sitting on the border, so the route anatomy is visible on screen.
 // The chip is click-to-copy. `lead` renders as its own separate chip just
-// before the path chip (e.g. the sidebar toggle on the terminal boundary).
+// before the path chip (e.g. the sidebar toggle on the terminal boundary);
+// `trail` renders just after it (e.g. the new-session "+").
 export default function Boundary({
   label,
   lead,
+  trail,
   children,
 }: {
   label: string;
   lead?: React.ReactNode;
+  trail?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -18,6 +21,7 @@ export default function Boundary({
       <span className="absolute -top-2.5 left-4 flex max-w-[calc(100%-2rem)] items-center gap-2">
         {lead}
         <BoundaryChip label={label} />
+        {trail}
       </span>
       {children}
     </div>

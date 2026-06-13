@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
 import type { TimelineItem } from "@/lib/transcript";
@@ -133,8 +133,61 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+// Recent-session rows shared by the fresh pane and the "+" staging view:
+// click = show in the terminal, chip = copy the full-context reopen command.
+function RecentSessions({
+  sessions,
+  now,
+}: {
+  sessions: NonNullable<ResumeOptions>["sessions"];
+  now: number;
+}) {
+  if (sessions.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-[11px] text-zinc-600">
+        recent sessions — click to open here · reopen = full context in your
+        terminal
+      </p>
+      {sessions.map((s) => (
+        <div key={s.id} className="flex items-center gap-2">
+          <Link
+            href={`/sessions?session=${s.id}`}
+            scroll={false}
+            title="open this session in the terminal"
+            className="group/resume flex min-w-0 flex-1 items-baseline gap-2 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
+          >
+            <span className="shrink-0 text-zinc-300 group-hover/resume:text-zinc-100">
+              {s.project}
+            </span>
+            <span className="shrink-0 text-[11px] text-zinc-600">
+              {s.id.slice(0, 8)} · {fmtAgo(now - s.lastActive)}
+              {s.contextTokens > 0 && ` · ctx ${fmtTokens(s.contextTokens)}`}
+            </span>
+            {s.snippet && (
+              <span className="min-w-0 truncate text-[11px] text-zinc-500">
+                {s.snippet}
+              </span>
+            )}
+          </Link>
+          <CopyChip
+            label="reopen full session"
+            text={`claude --resume ${s.id}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Terminal() {
-  const pinned = useSearchParams().get("session"); // null = newest session
+  const router = useRouter();
+  const pathname = usePathname();
+  const sessionParam = useSearchParams().get("session");
+  // ?session=new = the "+" staging view: no session of its own. The stream
+  // runs unpinned so the pane can flip to the newborn the moment it appears.
+  const staged = sessionParam === "new";
+  const pinned = staged ? null : sessionParam; // null = newest session
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [project, setProject] = useState("");
   const [resolvedId, setResolvedId] = useState<string | null>(null);
@@ -159,6 +212,7 @@ export default function Terminal() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // pending refetch retry
+  const stagedAtRef = useRef(0); // when the "+" staging view was entered
   const working = status !== null;
 
   useEffect(() => {
@@ -167,9 +221,23 @@ export default function Terminal() {
   }, []);
 
   const loadTurns = useCallback(async function load() {
-    const q = pinned ? `?session=${encodeURIComponent(pinned)}` : "";
+    const q = staged
+      ? "?staged=1"
+      : pinned
+        ? `?session=${encodeURIComponent(pinned)}`
+        : "";
     try {
       const d = await (await fetch(`/api/terminal/turns${q}`)).json();
+      if (staged) {
+        // Staging view: don't display the newest session — just keep the
+        // recent-sessions list fresh and watch for a newborn (a session born
+        // after staging). The moment one appears, flip to it.
+        setResume(d.resume ?? null);
+        setNow(Date.now());
+        if (d.id && (d.bornAt ?? 0) > stagedAtRef.current)
+          router.replace(`${pathname}?session=${d.id}`, { scroll: false });
+        return;
+      }
       // Mid-send, the optimistic items own the view — but always refresh status
       // so the live "working" line shows even while a send is in flight.
       if (!busyRef.current) {
@@ -194,7 +262,23 @@ export default function Terminal() {
           load();
         }, 2000);
     }
-  }, [pinned]);
+  }, [pinned, staged, router, pathname]);
+
+  // Entering the staging view: clear the display (nothing is being shown) and
+  // stamp the moment — only sessions born after it count as the newborn.
+  useEffect(() => {
+    if (!staged) return;
+    stagedAtRef.current = Date.now();
+    setItems([]);
+    setProject("");
+    setResolvedId(null);
+    setLineage(null);
+    setStatus(null);
+    setContextTokens(0);
+    setLastWrite(null);
+    setResume(null);
+    setPredecessorCtx(0);
+  }, [staged]);
 
   // Backfill on mount and whenever the pinned session changes.
   useEffect(() => {
@@ -302,6 +386,7 @@ export default function Terminal() {
   // (the 001.8 roulette). The guard lives in the plumbing, not the UI: the API
   // refuses anonymous sends, this never sends one.
   async function doSend() {
+    if (staged) return; // staging view — no session exists to send to
     const target = pinned ?? resolvedId;
     const prompt = [...queue, draft.trim()].filter(Boolean).join("\n\n");
     if (!target || !prompt || sending) return;
@@ -411,7 +496,9 @@ export default function Terminal() {
                   : "bg-green-500/30"
             }`}
           />
-          <span className="font-mono text-zinc-300">{project || "session"}</span>
+          <span className="font-mono text-zinc-300">
+            {staged ? "new session" : project || "session"}
+          </span>
         </span>
         <span className="font-mono text-[11px] text-zinc-600">
           {resolvedId ? resolvedId.slice(0, 8) : "—"}
@@ -520,10 +607,32 @@ export default function Terminal() {
         ref={scrollRef}
         className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
       >
-        {loading && items.length === 0 && (
+        {/* The "+" staging view: nothing exists yet — say how a session is
+            born, offer the recent list, and auto-flip when one appears. No
+            handoff kickoff here: that belongs to /clear-born continuations. */}
+        {staged && (
+          <div className="flex flex-col gap-3 font-mono text-xs">
+            <div className="flex flex-col gap-1">
+              <p className="text-zinc-400">new session — nothing exists yet</p>
+              <p className="text-zinc-600">
+                a session is born the moment you type in a Claude terminal.
+                open one where you want to work and run:
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <CopyChip label="copy · claude" text="claude" />
+              <span className="text-[11px] text-zinc-600">
+                fresh context — this pane flips to the new session the moment
+                it appears
+              </span>
+            </div>
+            {resume && <RecentSessions sessions={resume.sessions} now={now} />}
+          </div>
+        )}
+        {!staged && loading && items.length === 0 && (
           <p className="text-sm text-zinc-600">loading session…</p>
         )}
-        {!loading && items.length === 0 && (
+        {!staged && !loading && items.length === 0 && (
           <p className="text-sm text-zinc-600">no session transcript found</p>
         )}
         {items.map((it, i) =>
@@ -671,7 +780,10 @@ export default function Terminal() {
                 left off:
               </p>
             </div>
-            {resume?.handoff && (
+            {resume?.handoff &&
+              items.some(
+                (it) => it.kind === "command" && it.command === "/clear"
+              ) && (
               <div className="flex items-center gap-2">
                 <CopyChip
                   label={`copy handoff kickoff · ${resume.handoff.name}`}
@@ -685,42 +797,7 @@ export default function Terminal() {
                 </span>
               </div>
             )}
-            {(resume?.sessions.length ?? 0) > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-[11px] text-zinc-600">
-                  recent sessions — click to open here · copy to resume in
-                  your terminal
-                </p>
-                {resume!.sessions.map((s) => (
-                  <div key={s.id} className="flex items-center gap-2">
-                    <Link
-                      href={`/sessions?session=${s.id}`}
-                      scroll={false}
-                      title="open this session in the terminal"
-                      className="group/resume flex min-w-0 flex-1 items-baseline gap-2 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
-                    >
-                      <span className="shrink-0 text-zinc-300 group-hover/resume:text-zinc-100">
-                        {s.project}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-zinc-600">
-                        {s.id.slice(0, 8)} · {fmtAgo(now - s.lastActive)}
-                        {s.contextTokens > 0 &&
-                          ` · ctx ${fmtTokens(s.contextTokens)}`}
-                      </span>
-                      {s.snippet && (
-                        <span className="min-w-0 truncate text-[11px] text-zinc-500">
-                          {s.snippet}
-                        </span>
-                      )}
-                    </Link>
-                    <CopyChip
-                      label="reopen full session"
-                      text={`claude --resume ${s.id}`}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            {resume && <RecentSessions sessions={resume.sessions} now={now} />}
           </div>
         )}
         {status ? (
@@ -794,12 +871,17 @@ export default function Terminal() {
               }
             }}
             rows={2}
-            placeholder={`message ${project || "session"} — ↵ send · ⇧↵ newline`}
+            disabled={staged}
+            placeholder={
+              staged
+                ? "no session yet — start one in your terminal first"
+                : `message ${project || "session"} — ↵ send · ⇧↵ newline`
+            }
             className="min-h-0 flex-1 resize-none bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <button
             onClick={queueDraft}
-            disabled={sending || !draft.trim()}
+            disabled={staged || sending || !draft.trim()}
             title="park this ask — everything queued sends as one message (one context read, not several)"
             className="shrink-0 rounded-md border border-zinc-800 px-2 py-1 font-mono text-[11px] text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -816,7 +898,7 @@ export default function Terminal() {
           ) : (
             <button
               onClick={doSend}
-              disabled={!draft.trim() && queue.length === 0}
+              disabled={staged || (!draft.trim() && queue.length === 0)}
               className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {queue.length > 0

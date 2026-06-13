@@ -125,6 +125,13 @@ function scan(): Meta[] {
   return out;
 }
 
+// When a session was born (its first timestamped entry). 0 if unknown.
+// Powers the staged "+" view's auto-flip: only a session born AFTER staging
+// counts as the newborn to jump to.
+export function sessionBornAt(id: string): number {
+  return scan().find((m) => m.id === id)?.bornAt ?? 0;
+}
+
 export type Lineage = {
   chain: LineageNode[] | null; // the full tied chain, oldest → newest (null unless ≥ 2)
   predecessor: LineageNode | null; // the session this one continues
