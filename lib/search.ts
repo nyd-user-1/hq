@@ -138,6 +138,55 @@ export function search(
   return { hits, building: t.building };
 }
 
+// One-line description of a memory note: its frontmatter `description:`, else
+// the first non-frontmatter line. For the empty-state recents snippet.
+function memoryDescription(content: string): string {
+  const d = content.match(/^description:\s*(.+)$/m);
+  if (d) return d[1].replace(/^["']|["']$/g, "").trim();
+  const body = content.replace(/^---[\s\S]*?---\n/, "");
+  return (body.split("\n").find((l) => l.trim()) || "").slice(0, 160);
+}
+
+// The empty-state browse: most-recent transcripts + memory notes as cards (no
+// query). Same shape as search hits so the page renders them identically;
+// honors the scope chips and the newest/oldest sort toggle.
+export function recent(
+  scope: SearchScope = "all",
+  sort: SortDir = "new",
+  limit = 40
+): SearchHit[] {
+  const out: SearchHit[] = [];
+  if (scope !== "memory") {
+    for (const s of getArchiveSessions()) {
+      const title = s.project && s.project !== "~" ? s.project : s.title || s.id.slice(0, 8);
+      out.push({ kind: "transcript", ref: s.id, title, snippet: s.title || "", at: s.lastActive, score: 0, phrase: false });
+    }
+  }
+  if (scope !== "transcripts") {
+    let names: string[] = [];
+    try { names = fs.readdirSync(MEMORY_DIR); } catch { names = []; }
+    for (const name of names) {
+      if (!name.endsWith(".md") || name === "MEMORY.md") continue;
+      const full = path.join(MEMORY_DIR, name);
+      try {
+        out.push({
+          kind: "memory",
+          ref: name,
+          title: name.slice(0, -3),
+          snippet: memoryDescription(fs.readFileSync(full, "utf8")),
+          at: fs.statSync(full).mtimeMs,
+          score: 0,
+          phrase: false,
+        });
+      } catch {
+        // file vanished mid-read
+      }
+    }
+  }
+  const dir = sort === "old" ? 1 : -1;
+  return out.sort((a, b) => dir * (a.at - b.at)).slice(0, limit);
+}
+
 // Absolute path of a memory file — for the reader's click-to-copy path header.
 export function memoryFilePath(name: string): string {
   return path.join(MEMORY_DIR, path.basename(name));

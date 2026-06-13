@@ -8,26 +8,15 @@ import { ago } from "@/lib/ago";
 import { turnsFor } from "@/lib/transcript";
 import {
   search,
+  recent,
   getMemoryFile,
   memoryFilePath,
-  corpusCounts,
   queryTokens,
   type SearchScope,
   type SortDir,
 } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
-
-// Demonstrative starter queries (swappable): integrations, infra, a concept,
-// and the words that surface parked decisions / DB work across all projects.
-const EXAMPLES = [
-  "stripe",
-  "neon auth",
-  "design system",
-  "vercel",
-  "deferred",
-  "schema migration",
-];
 
 // Mark WHY a snippet matched. Prefer the contiguous phrase — the query tokens
 // in order with any punctuation/whitespace between them — so "wow..you did it"
@@ -208,8 +197,11 @@ export default async function Search({
   }
 
   // ── query + results ─────────────────────────────────────────────────────
-  const { hits, building } = search(q, scope, sortDir);
-  const counts = q ? { sessions: 0, memory: 0 } : corpusCounts();
+  // No query → browse the most-recent transcripts + memory as cards (honors the
+  // scope chips + sort toggle). With a query → ranked search hits.
+  const { hits, building } = q
+    ? search(q, scope, sortDir)
+    : { hits: recent(scope, sortDir), building: false };
 
   const scopeChip = (label: string, value: SearchScope) => (
     <Link
@@ -252,56 +244,13 @@ export default async function Search({
         </div>
       </div>
 
-      {!q ? (
-        <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto pt-1">
-          <p className="text-sm text-zinc-400">
-            Search every Claude Code session you&apos;ve ever run — and the notes
-            Claude keeps about your work.
-          </p>
+      {!q && (
+        <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+          recent · newest first
+        </p>
+      )}
 
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-baseline gap-2.5">
-              <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-emerald-300">
-                transcript
-              </span>
-              <span className="text-xs text-zinc-500">
-                every message of every session — all projects, all time
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2.5">
-              <span className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-violet-300">
-                memory
-              </span>
-              <span className="text-xs text-zinc-500">
-                Claude&apos;s notes about you and each project
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-              try
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {EXAMPLES.map((ex) => (
-                <Link
-                  key={ex}
-                  href={`/search?q=${encodeURIComponent(ex)}&scope=${scope}&sort=${sortDir}`}
-                  scroll={false}
-                  className="rounded-md border border-zinc-800 px-2.5 py-1 font-mono text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
-                >
-                  {ex}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <p className="mt-auto font-mono text-[11px] text-zinc-600">
-            {counts.sessions} sessions · {counts.memory} memory notes
-          </p>
-        </div>
-      ) : (
-        <ul className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+      <ul className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
         {hits.map((h) => (
           <li key={`${h.kind}:${h.ref}`}>
             <Link
@@ -330,19 +279,24 @@ export default async function Search({
                   {h.kind}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">
-                {highlight(h.snippet, q)}
-              </p>
+              {h.snippet && (
+                <p className="break-words text-xs text-zinc-400">
+                  {highlight(h.snippet, q)}
+                </p>
+              )}
             </Link>
           </li>
         ))}
-        {q && hits.length === 0 && (
+        {hits.length === 0 && (
           <li className="text-xs text-zinc-600">
-            {building ? "building the search index (first time, ~10s)…" : "no matches"}
+            {building
+              ? "building the search index (first time, ~10s)…"
+              : q
+                ? "no matches"
+                : "nothing here yet"}
           </li>
         )}
-        </ul>
-      )}
+      </ul>
       <p className="text-xs text-zinc-600">
         every session ever + memory · click a result to read it here · paths +
         resume commands copy on click

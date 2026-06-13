@@ -53,7 +53,7 @@ function FireRow({ it }: { it: FireItem }) {
         <div className="font-mono text-[11px]">
           <div className="text-cyan-400">› {it.name}{it.id ? <span className="text-zinc-600"> ({it.id})</span> : null}</div>
           {it.lines.map((l, i) => (
-            <div key={i} className={`whitespace-pre pl-3 ${toneClass[l.tone ?? "dim"]}`}>{l.text || " "}</div>
+            <div key={i} className={`whitespace-pre-wrap break-words pl-3 ${toneClass[l.tone ?? "dim"]}`}>{l.text || " "}</div>
           ))}
           {it.more > 0 && <div className="pl-3 text-zinc-600">… {it.more} more</div>}
         </div>
@@ -66,7 +66,7 @@ function FireRow({ it }: { it: FireItem }) {
             {it.note ? <span className="text-zinc-600"> ({it.note})</span> : null}
           </div>
           {it.rows.map((r, i) => (
-            <div key={i} className={`whitespace-pre ${toneClass[r.tone ?? "ctx"]}`}>
+            <div key={i} className={`whitespace-pre-wrap break-words ${toneClass[r.tone ?? "ctx"]}`}>
               {r.n != null ? String(r.n).padStart(4) : "    "} {gutter(r.tone)} {r.text || " "}
             </div>
           ))}
@@ -78,7 +78,7 @@ function FireRow({ it }: { it: FireItem }) {
         <div className="font-mono text-[11px]">
           <div className="text-cyan-400/80">⎘ {it.head}</div>
           {it.rows.map((r, i) => (
-            <div key={i} className={`whitespace-pre pl-3 ${toneClass[r.tone ?? "dim"]}`}>{r.text || " "}</div>
+            <div key={i} className={`whitespace-pre-wrap break-words pl-3 ${toneClass[r.tone ?? "dim"]}`}>{r.text || " "}</div>
           ))}
           {it.more > 0 && <div className="pl-3 text-zinc-600">… {it.more} more</div>}
         </div>
@@ -126,7 +126,7 @@ export default async function FirehosePanel({
         </span>
       </div>
 
-      <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pt-1">
+      <div className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto pt-1">
         {items.length === 0 ? (
           <p className="text-xs text-zinc-600">nothing in this session&apos;s transcript yet</p>
         ) : (
