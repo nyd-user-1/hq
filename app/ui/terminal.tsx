@@ -516,8 +516,10 @@ export default function Terminal() {
               setIdCopied(true);
               setTimeout(() => setIdCopied(false), 1200);
             }}
-            className={`cursor-pointer font-mono text-[11px] transition-colors ${
-              idCopied ? "text-emerald-200" : "text-green-400 hover:text-green-300"
+            className={`cursor-pointer rounded px-1 py-0.5 font-mono text-[11px] transition-colors ${
+              idCopied
+                ? "bg-emerald-500/15 text-emerald-300"
+                : "text-green-400 hover:text-green-300"
             }`}
           >
             {resolvedId.slice(0, 8)}
