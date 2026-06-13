@@ -86,6 +86,18 @@ export function baseCost(u: Usage): number {
   );
 }
 
+// What it costs to CARRY `tokens` of context for one more turn — they ride
+// along as a cached read every turn. Powers Efficiency Mode's "a compaction
+// that trimmed these saves ~$X/turn" math. `premium` doubles it past the cliff.
+export function contextCarryCost(
+  tokens: number,
+  model?: string,
+  premium = false
+): number {
+  const r = rateFor(model);
+  return (tokens * r.cacheRead * (premium ? PREMIUM_MULT : 1)) / 1_000_000;
+}
+
 export function fmtUSD(n: number): string {
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
   if (n >= 0.01) return `$${n.toFixed(2)}`;

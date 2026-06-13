@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
+import Efficiency from "@/app/ui/efficiency";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import { PANELS } from "@/app/ui/sidebar-nav";
 import type { TimelineItem } from "@/lib/transcript";
@@ -659,6 +660,7 @@ export default function Terminal() {
           )}
         </span>
       </div>
+      <Efficiency sessionId={resolvedId} />
       {ctxPct >= 70 && (
         <div className="-mt-1 mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px]">
           <span className={ctxPct >= 80 ? "text-red-400" : "text-amber-400"}>
