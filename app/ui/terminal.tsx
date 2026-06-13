@@ -232,10 +232,36 @@ function RecentSessions({
   );
 }
 
-export default function Terminal() {
+export default function Terminal({
+  paramKey = "session",
+}: {
+  // Which URL param this terminal reads/writes for its session. Terminal 1 (the
+  // shell's always-mounted heart) uses "session"; Terminal 2 (the pair pane)
+  // uses "pair", so the two never collide. API query params stay "session"
+  // (that's the endpoint's name) — only the browser URL key changes.
+  paramKey?: "session" | "pair";
+} = {}) {
   const router = useRouter();
   const pathname = usePathname();
-  const sessionParam = useSearchParams().get("session");
+  const params = useSearchParams();
+  const sessionParam = params.get(paramKey);
+  // the OTHER terminal's param — preserved whenever this one re-points, so
+  // opening a session in one pane never closes the other.
+  const sibling = params.get(paramKey === "session" ? "pair" : "session");
+  // session id → href that re-points THIS terminal. Terminal 1 keeps its
+  // existing /sessions route; Terminal 2 sets ?pair on the current path while
+  // preserving Terminal 1's ?session.
+  const hrefFor = (id: string) => {
+    const sp = new URLSearchParams();
+    if (paramKey === "session") {
+      sp.set("session", id);
+      if (sibling) sp.set("pair", sibling); // keep terminal 2 open
+      return `/sessions?${sp.toString()}`; // unchanged T1 route
+    }
+    if (sibling) sp.set("session", sibling); // keep terminal 1
+    sp.set("pair", id);
+    return `${pathname ?? "/"}?${sp.toString()}`;
+  };
   // ?session=new = the "+" staging view: no session of its own. The stream
   // runs unpinned so the pane can flip to the newborn the moment it appears.
   const staged = sessionParam === "new";
@@ -625,7 +651,7 @@ export default function Terminal() {
               {lineage.chain.map((c, i) => (
                 <Link
                   key={c.id}
-                  href={`/sessions?session=${c.id}`}
+                  href={hrefFor(c.id)}
                   scroll={false}
                   className={`flex items-baseline gap-2 rounded px-2 py-1 font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
                     c.id === resolvedId ? "text-zinc-200" : "text-zinc-500"
@@ -913,7 +939,7 @@ export default function Terminal() {
           <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-600">
             <span className="h-px w-6 shrink-0 bg-zinc-800" />
             <Link
-              href={`/sessions?session=${lineage.successor.id}`}
+              href={hrefFor(lineage.successor.id)}
               scroll={false}
               className="shrink-0 transition-colors hover:text-zinc-300"
               title="open the session that continues this one"
@@ -934,7 +960,7 @@ export default function Terminal() {
             {lineage?.predecessor && (
               <p className="text-zinc-400">
                 <Link
-                  href={`/sessions?session=${lineage.predecessor.id}`}
+                  href={hrefFor(lineage.predecessor.id)}
                   scroll={false}
                   className="text-zinc-300 underline decoration-zinc-700 underline-offset-2 transition-colors hover:text-zinc-100"
                   title="open the cleared session read-only"

@@ -66,6 +66,24 @@ function groupSessions(
     .sort((a, b) => b.sessions[0].lastActive - a.sessions[0].lastActive);
 }
 
+// WIREFRAME: split-view glyph for the "open beside Terminal 1" affordance.
+function SplitIcon() {
+  return (
+    <svg
+      className="size-3.5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="12" y1="4" x2="12" y2="20" />
+    </svg>
+  );
+}
+
 function Sliders({ active }: { active: boolean }) {
   return (
     <svg
@@ -92,7 +110,9 @@ function Sliders({ active }: { active: boolean }) {
 
 export default function SidebarRecents() {
   const pathname = usePathname() ?? "/";
-  const current = useSearchParams().get("session");
+  const params = useSearchParams();
+  const current = params.get("session"); // terminal 1's session
+  const pairParam = params.get("pair"); // terminal 2's session (if open)
   const [sessions, setSessions] = useState<Recent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
@@ -187,34 +207,57 @@ export default function SidebarRecents() {
               )}
               {g.sessions.map((s) => {
                 const active = current === s.id;
+                // Open this session in Terminal 2, preserving Terminal 1 (?session).
+                const pairHref = current
+                  ? `${pathname}?session=${current}&pair=${s.id}`
+                  : `${pathname}?pair=${s.id}`;
+                // Open in Terminal 1, preserving Terminal 2 if it's already open.
+                const openHref = pairParam
+                  ? `${pathname}?session=${s.id}&pair=${pairParam}`
+                  : `${pathname}?session=${s.id}`;
                 return (
-                  <Link
+                  <div
                     key={s.id}
-                    href={`${pathname}?session=${s.id}`}
-                    scroll={false}
-                    title={`${s.project} · ${s.title}`}
-                    className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
-                      active
-                        ? "bg-zinc-800 text-zinc-100"
-                        : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+                    className={`group flex items-center rounded-md transition-colors ${
+                      active ? "bg-zinc-800" : "hover:bg-zinc-800/60"
                     }`}
                   >
-                    <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                      <span className="shrink-0 font-mono text-xs">
-                        {s.id.slice(0, 8)}
-                      </span>
-                      <span className="min-w-0 truncate text-xs text-zinc-600">
-                        {s.project}
-                      </span>
-                    </span>
-                    {/* green = active within the cache window; right-aligned so
-                        every title stays flush-left */}
-                    <span
-                      className={`size-1.5 shrink-0 rounded-full ${
-                        s.active ? "bg-green-500" : "bg-transparent"
+                    <Link
+                      href={openHref}
+                      scroll={false}
+                      title={`${s.project} · ${s.title}`}
+                      className={`flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-sm transition-colors ${
+                        active
+                          ? "text-zinc-100"
+                          : "text-zinc-400 group-hover:text-zinc-200"
                       }`}
-                    />
-                  </Link>
+                    >
+                      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                        <span className="shrink-0 font-mono text-xs">
+                          {s.id.slice(0, 8)}
+                        </span>
+                        <span className="min-w-0 truncate text-xs text-zinc-600">
+                          {s.project}
+                        </span>
+                      </span>
+                      {/* green = active within the cache window */}
+                      <span
+                        className={`size-1.5 shrink-0 rounded-full ${
+                          s.active ? "bg-green-500" : "bg-transparent"
+                        }`}
+                      />
+                    </Link>
+                    {/* split affordance — appears on hover */}
+                    <Link
+                      href={pairHref}
+                      scroll={false}
+                      title="open beside Terminal 1"
+                      aria-label="open beside Terminal 1"
+                      className="shrink-0 px-2 py-1.5 text-zinc-600 opacity-0 transition hover:text-zinc-200 group-hover:opacity-100"
+                    >
+                      <SplitIcon />
+                    </Link>
+                  </div>
                 );
               })}
             </div>

@@ -7,6 +7,7 @@ import { SidebarProvider } from "@/app/ui/sidebar-state";
 import Terminal from "@/app/ui/terminal";
 import SearchTrigger from "@/app/ui/search-trigger";
 import PanelWrapper from "@/app/ui/panel-wrapper";
+import PairColumn from "@/app/ui/pair-column";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
 // always mounted — the persistent heart), and the right app-panel portal anchor.
@@ -34,19 +35,23 @@ export default function Shell({
           </SidebarColumn>
 
           <div className="flex min-w-0 flex-1 flex-col gap-4">
-            <Boundary
-              label="terminal.tsx"
-              lead={<SidebarToggle />}
-              trail={<SearchTrigger />}
-            >
-              <Suspense
-                fallback={
-                  <p className="text-sm text-zinc-600">loading terminal…</p>
-                }
+            {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
+                remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
+            <PairColumn>
+              <Boundary
+                label="terminal.tsx"
+                lead={<SidebarToggle />}
+                trail={<SearchTrigger />}
               >
-                <Terminal />
-              </Suspense>
-            </Boundary>
+                <Suspense
+                  fallback={
+                    <p className="text-sm text-zinc-600">loading terminal…</p>
+                  }
+                >
+                  <Terminal />
+                </Suspense>
+              </Boundary>
+            </PairColumn>
             {children}
           </div>
 
