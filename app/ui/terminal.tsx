@@ -209,6 +209,7 @@ export default function Terminal() {
   const escTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
+  const [projects, setProjects] = useState<string[]>([]); // ~/code dirs for the "+" launcher
   const [lineage, setLineage] = useState<Lineage>(null); // this session's /clear chain
   const [predecessorCtx, setPredecessorCtx] = useState(0); // continued session's ctx size (fresh pane)
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
@@ -237,6 +238,7 @@ export default function Terminal() {
         // recent-sessions list fresh and watch for a newborn (a session born
         // after staging). The moment one appears, flip to it.
         setResume(d.resume ?? null);
+        setProjects(d.projects ?? []);
         setNow(Date.now());
         if (d.id && (d.bornAt ?? 0) > stagedAtRef.current)
           router.replace(`${pathname}?session=${d.id}`, { scroll: false });
@@ -675,15 +677,31 @@ export default function Terminal() {
             <div className="flex flex-col gap-1">
               <p className="text-zinc-400">new session — nothing exists yet</p>
               <p className="text-zinc-600">
-                a session is born the moment you type in a Claude terminal.
-                open one where you want to work and run:
+                a session is born when you type in a Claude terminal. pick a
+                project — it copies{" "}
+                <span className="text-zinc-400">
+                  {"cd ~/code/<name> && claude"}
+                </span>{" "}
+                to paste. starting IN the project sets the working dir, so
+                Recents sorts it on its own.
               </p>
             </div>
+            {projects.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {projects.map((p) => (
+                  <CopyChip
+                    key={p}
+                    label={p}
+                    text={`cd ~/code/"${p}" && claude`}
+                  />
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <CopyChip label="copy · claude" text="claude" />
               <span className="text-[11px] text-zinc-600">
-                fresh context — this pane flips to the new session the moment
-                it appears
+                or just here (current dir) — fresh context; this pane flips to
+                the new session the moment it appears
               </span>
             </div>
             {resume && <RecentSessions sessions={resume.sessions} now={now} />}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { timelineFor, workingStatus } from "@/lib/transcript";
-import { getSessions } from "@/lib/sessions";
+import { getSessions, listCodeProjects } from "@/lib/sessions";
 import { latestHandoff } from "@/lib/vault";
 import { lineageFor, sessionBornAt } from "@/lib/lineage";
 
@@ -55,6 +55,8 @@ export async function GET(req: Request) {
     resume,
     lineage,
     predecessorCtx,
+    // The "+" staging view offers these as `cd ~/code/<p> && claude` chips.
+    projects: staged ? listCodeProjects() : undefined,
     bornAt: resolved ? sessionBornAt(resolved) : 0,
   });
 }

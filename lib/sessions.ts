@@ -225,6 +225,22 @@ export function getRecentSessions(limit = 24): RecentSession[] {
   });
 }
 
+// The ~/code project folders — offered in the "+" new-session view so a session
+// can be started IN its project (`cd ~/code/<name> && claude`). That sets the
+// cwd, the authoritative project signal, so Recents sorts it with no text ref.
+export function listCodeProjects(): string[] {
+  const root = path.join(os.homedir(), "code");
+  try {
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && !d.name.startsWith("."))
+      .map((d) => d.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
 export function getSessions(limit = 12): SessionInfo[] {
   getUsage(); // refresh the meter's per-file cache
   const totals = perFileTotals();
