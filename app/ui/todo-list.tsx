@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Markdown from "@/app/ui/md";
 import type { TodoItem } from "@/lib/todo";
 
 // Drag marker — must match TODO_DND_TYPE in terminal.tsx.
 const TODO_DND_TYPE = "application/x-hq-todo";
 
-// lucide "copy" — hover-revealed copy affordance (same idea as the terminal's
-// message copy button).
+// lucide "copy" — hover-revealed copy affordance.
 const CopyGlyph = () => (
   <svg
     width="12"
@@ -24,11 +24,11 @@ const CopyGlyph = () => (
   </svg>
 );
 
-// To Do over the HQ-native store (/api/todo). Each item mirrors the terminal's
-// message + tool-step language: a provenance header (● who · time · session)
-// above a bordered card; the card expands (like a tool step) to reveal a rich
-// body and any sub-items. Per card: title = drag into a terminal, checkbox
-// (right) = toggle, hover copy = copy the item (+ sub-items), click row = expand.
+// To Do over the HQ-native store (/api/todo). A to-do is a title + an optional
+// markdown body (no sub-item records). Mirrors the terminal's message + tool-step
+// language: a provenance header (● who · time · session) above a bordered card
+// that expands to render its body as markdown. Per card: title = drag into a
+// terminal, checkbox (right) = toggle, hover copy = copy, click row = expand.
 export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [items, setItems] = useState<TodoItem[]>(initial);
   const [draft, setDraft] = useState("");
@@ -36,8 +36,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const topLevel = items.filter((t) => !t.parentId);
-  const kids = (id: string) => items.filter((t) => t.parentId === id);
+  const list = items.filter((t) => !t.parentId);
   const doneCount = items.filter((t) => t.done).length;
 
   async function add() {
@@ -93,19 +92,11 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     });
   }
 
-  function copyText(t: TodoItem): string {
-    const children = kids(t.id);
-    if (children.length)
-      return [t.text, ...children.map((c) => `- ${c.text}`)].join("\n");
-    return t.body ? `${t.text}\n\n${t.body}` : t.text;
-  }
   function copy(t: TodoItem) {
-    navigator.clipboard.writeText(copyText(t));
+    navigator.clipboard.writeText(t.body ? `${t.text}\n\n${t.body}` : t.text);
     setCopiedId(t.id);
     setTimeout(() => setCopiedId((c) => (c === t.id ? null : c)), 1200);
   }
-
-  // ── shared pieces ──────────────────────────────────────────────────────────
 
   const provenance = (t: TodoItem) => {
     const isSession = !!t.addedBy && t.addedBy !== "you";
@@ -136,130 +127,6 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     );
   };
 
-  const dragTitle = (t: TodoItem, extra = "") => (
-    <span
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(TODO_DND_TYPE, t.text);
-        e.dataTransfer.setData("text/plain", t.text);
-        e.dataTransfer.effectAllowed = "copy";
-      }}
-      title="drag into a terminal to use as a prompt"
-      className={`min-w-0 flex-1 cursor-grab leading-snug active:cursor-grabbing ${
-        t.done ? "text-zinc-600 line-through" : "text-zinc-200"
-      } ${extra}`}
-    >
-      {t.text}
-    </span>
-  );
-
-  const hoverCopy = (t: TodoItem, group: string) => (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        copy(t);
-      }}
-      title="copy"
-      className={`mt-px shrink-0 p-0 text-zinc-600 opacity-0 transition hover:text-zinc-200 ${group} focus:opacity-100`}
-    >
-      {copiedId === t.id ? (
-        <span className="text-green-400">✓</span>
-      ) : (
-        <CopyGlyph />
-      )}
-    </button>
-  );
-
-  const checkbox = (t: TodoItem) =>
-    t.done ? (
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          toggle(t.id);
-        }}
-        title="mark not done"
-        aria-label="Mark not done"
-        className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-green-600/70 bg-green-600/30 text-[10px] leading-none text-green-400 transition-colors hover:bg-green-600/40"
-      >
-        ✓
-      </button>
-    ) : (
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          toggle(t.id);
-        }}
-        title="mark done"
-        aria-label="Mark done"
-        className="size-4 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
-      />
-    );
-
-  // ── rows ─────────────────────────────────────────────────────────────────
-
-  function topRow(t: TodoItem, i: number) {
-    const children = kids(t.id);
-    const expandable = !!t.body || children.length > 0;
-    const open = expanded.has(t.id);
-    const allKidsDone = children.length > 0 && children.every((c) => c.done);
-    return (
-      <li key={t.id} className="flex flex-col gap-1.5">
-        {provenance(t)}
-        <div className="group/card rounded-md border border-zinc-800 bg-zinc-900/30">
-          <div
-            className={`flex items-start gap-3 px-3.5 py-3 ${
-              expandable ? "cursor-pointer" : ""
-            }`}
-            onClick={expandable ? () => toggleExpand(t.id) : undefined}
-          >
-            <span
-              className={`shrink-0 select-none font-mono text-zinc-600 transition-transform ${
-                open ? "rotate-90" : ""
-              } ${expandable ? "" : "invisible"}`}
-            >
-              ›
-            </span>
-            <span className="shrink-0 font-mono text-xs text-zinc-600">
-              {i + 1}.
-            </span>
-            {dragTitle(t, allKidsDone ? "line-through !text-zinc-600" : "")}
-            {hoverCopy(t, "group-hover/card:opacity-100")}
-            {checkbox(t)}
-          </div>
-          {open && (
-            <div className="border-t border-zinc-800 px-3.5 py-3">
-              {t.body && (
-                <p className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-zinc-400">
-                  {t.body}
-                </p>
-              )}
-              {children.length > 0 && (
-                <ul
-                  className={`flex flex-col gap-2.5 ${t.body ? "mt-3" : ""}`}
-                >
-                  {children.map((c) => subRow(c))}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-      </li>
-    );
-  }
-
-  function subRow(c: TodoItem) {
-    return (
-      <li
-        key={c.id}
-        className="group/sub flex items-start gap-3 border-l border-zinc-800 pl-3"
-      >
-        {dragTitle(c)}
-        {hoverCopy(c, "group-hover/sub:opacity-100")}
-        {checkbox(c)}
-      </li>
-    );
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <input
@@ -283,9 +150,92 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
         )}
       </div>
 
-      {topLevel.length > 0 ? (
+      {list.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-3 overflow-y-auto pt-1 text-sm">
-          {topLevel.map((t, i) => topRow(t, i))}
+          {list.map((t, i) => {
+            const expandable = !!t.body;
+            const open = expanded.has(t.id);
+            return (
+              <li key={t.id} className="flex flex-col gap-1.5">
+                {provenance(t)}
+                <div className="group/card rounded-md border border-zinc-800 bg-zinc-900/30">
+                  <div
+                    className={`flex items-start gap-3 px-3.5 py-3 ${
+                      expandable ? "cursor-pointer" : ""
+                    }`}
+                    onClick={expandable ? () => toggleExpand(t.id) : undefined}
+                  >
+                    <span
+                      className={`shrink-0 select-none font-mono text-zinc-600 transition-transform ${
+                        open ? "rotate-90" : ""
+                      } ${expandable ? "" : "invisible"}`}
+                    >
+                      ›
+                    </span>
+                    <span className="shrink-0 font-mono text-xs text-zinc-600">
+                      {i + 1}.
+                    </span>
+                    <span
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(TODO_DND_TYPE, t.text);
+                        e.dataTransfer.setData("text/plain", t.text);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      title="drag into a terminal to use as a prompt"
+                      className={`min-w-0 flex-1 cursor-grab leading-snug active:cursor-grabbing ${
+                        t.done ? "text-zinc-600 line-through" : "text-zinc-200"
+                      }`}
+                    >
+                      {t.text}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copy(t);
+                      }}
+                      title="copy"
+                      className="mt-px shrink-0 p-0 text-zinc-600 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/card:opacity-100"
+                    >
+                      {copiedId === t.id ? (
+                        <span className="text-green-400">✓</span>
+                      ) : (
+                        <CopyGlyph />
+                      )}
+                    </button>
+                    {t.done ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle(t.id);
+                        }}
+                        title="mark not done"
+                        aria-label="Mark not done"
+                        className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-green-600/70 bg-green-600/30 text-[10px] leading-none text-green-400 transition-colors hover:bg-green-600/40"
+                      >
+                        ✓
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle(t.id);
+                        }}
+                        title="mark done"
+                        aria-label="Mark done"
+                        className="size-4 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
+                      />
+                    )}
+                  </div>
+                  {open && t.body && (
+                    <div className="border-t border-zinc-800 px-3.5 py-3 font-mono text-[11px] leading-relaxed text-zinc-300">
+                      <Markdown text={t.body} />
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ol>
       ) : (
         <p className="text-sm text-zinc-600">no to-do items yet</p>
