@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Inline } from "@/app/ui/md";
 import type { TodoItem } from "@/lib/todo";
 
+// Drag marker — must match TODO_DND_TYPE in terminal.tsx. Dropping a card on a
+// terminal pane fills that pane's message box with the to-do text (use it as a
+// prompt).
+const TODO_DND_TYPE = "application/x-hq-todo";
+
 // Interactive To Do list over the HQ-native store (/api/todo). Add (↵) + toggle
-// live, in HQ — no vault round-trip. Checking an item strikes it through IN
-// PLACE (it doesn't move); "Clear completed tasks" (under the entry) deletes the
-// checked ones. Item text renders as inline markdown (**bold**, ~~strike~~,
-// ==highlight==, `code`, links). SSR seeds `initial`; mutations are optimistic.
+// live, in HQ — no vault round-trip. Checking strikes an item through IN PLACE
+// (it doesn't move); "Clear completed tasks" (under the entry) deletes the
+// checked ones. Each item is draggable into a terminal as a prompt. SSR seeds
+// `initial`; mutations are optimistic.
 export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [items, setItems] = useState<TodoItem[]>(initial);
   const [draft, setDraft] = useState("");
@@ -89,7 +93,17 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       {items.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-1.5 overflow-y-auto text-sm">
           {items.map((t, i) => (
-            <li key={t.id} className="flex items-start gap-2">
+            <li
+              key={t.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(TODO_DND_TYPE, t.text);
+                e.dataTransfer.setData("text/plain", t.text);
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+              title="drag into a terminal to use as a prompt"
+              className="flex cursor-grab items-start gap-2 active:cursor-grabbing"
+            >
               {t.done ? (
                 <button
                   onClick={() => toggle(t.id)}
@@ -113,7 +127,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                 }`}
               >
                 <span className="mr-1.5 text-zinc-600">{i + 1}.</span>
-                <Inline text={t.text} />
+                {t.text}
               </span>
             </li>
           ))}

@@ -8,12 +8,11 @@ const SHA = /^[0-9a-f]{7,40}$/i;
 
 // Lightweight markdown for the terminal — no library. Handles the cases Claude's
 // replies actually use: **bold**, *italic*, `code` (accent-colored, the "purple"
-// the real CLI shows), ~~strike~~, ==highlight== (Obsidian-style), [links](url),
-// # headings, and - / 1. lists. Full GFM (tables, nested lists) would be the
-// reason to reach for react-markdown later.
+// the real CLI shows), [links](url), # headings, and - / 1. lists. Full GFM
+// (tables, nested lists) would be the reason to reach for react-markdown later.
 
 const INLINE =
-  /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\*([^*]+)\*)|(\[([^\]]+)\]\(([^)\s]+)\))|(~~([^~]+)~~)|(==([^=]+)==)/g;
+  /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\*([^*]+)\*)|(\[([^\]]+)\]\(([^)\s]+)\))/g;
 
 function inline(text: string): React.ReactNode[] {
   const out: React.ReactNode[] = [];
@@ -56,32 +55,11 @@ function inline(text: string): React.ReactNode[] {
           {m[8]}
         </a>
       );
-    else if (m[11] !== undefined)
-      out.push(
-        <s key={i} className="text-zinc-500">
-          {m[11]}
-        </s>
-      );
-    else if (m[13] !== undefined)
-      out.push(
-        <mark
-          key={i}
-          className="rounded bg-amber-400/20 px-0.5 text-amber-200"
-        >
-          {m[13]}
-        </mark>
-      );
     last = m.index + m[0].length;
     i++;
   }
   if (last < text.length) out.push(text.slice(last));
   return out;
-}
-
-// Inline-only markdown for a single line (no block <p>/<div> wrapper) — for
-// compact rows like To Do items where a block element would break the layout.
-export function Inline({ text }: { text: string }) {
-  return <>{inline(text)}</>;
 }
 
 export default function Markdown({ text }: { text: string }) {

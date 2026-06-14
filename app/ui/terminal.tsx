@@ -137,6 +137,19 @@ function isFileDrag(dt: DataTransfer | null): boolean {
   return !!dt && Array.from(dt.types).includes("Files");
 }
 
+// A To Do card dragged in from the panel (the marker is set in todo-list.tsx —
+// keep the string in sync). Distinct from a file drag so dropping one fills the
+// message box (use it as a prompt) instead of attaching a file.
+const TODO_DND_TYPE = "application/x-hq-todo";
+function isTodoDrag(dt: DataTransfer | null): boolean {
+  return !!dt && Array.from(dt.types).includes(TODO_DND_TYPE);
+}
+function dragKind(dt: DataTransfer | null): "file" | "todo" | null {
+  if (isFileDrag(dt)) return "file";
+  if (isTodoDrag(dt)) return "todo";
+  return null;
+}
+
 // Labeled click-to-copy chip — the "deliberately copy, not send" affordance
 // (wrap-up strip precedent): the action happens in YOUR terminal, not HQ's.
 function CopyChip({ label, text }: { label: string; text: string }) {
@@ -281,7 +294,7 @@ export default function Terminal({
   const [draft, setDraft] = useState("");
   const [queue, setQueue] = useState<string[]>([]); // batched asks — sent as ONE message
   const [attachments, setAttachments] = useState<Attachment[]>([]); // staged screenshots
-  const [dragOver, setDragOver] = useState(false); // drop-zone highlight
+  const [dragOver, setDragOver] = useState<null | "file" | "todo">(null); // drop-zone hint
   const dragDepth = useRef(0); // enter/leave depth — kills the child-element flicker
   const fileInputRef = useRef<HTMLInputElement>(null); // hidden picker behind the 📎 button
   const [error, setError] = useState<string | null>(null);
@@ -632,39 +645,52 @@ export default function Terminal({
     <div
       className="relative flex h-full min-h-0 flex-col gap-3"
       // The whole pane is the catch basin: drop a screenshot anywhere in THIS
-      // terminal and it attaches to THIS send box (Terminal 1 and Terminal 2 are
-      // separate instances → separate basins, no cross-talk). Mirrors the native
-      // CLI's "drop anywhere on the window."
+      // terminal and it attaches to THIS send box; drop a To Do card and its text
+      // fills the message box as a prompt. Terminal 1 and Terminal 2 are separate
+      // instances → separate basins, no cross-talk. Mirrors the native CLI's
+      // "drop anywhere on the window."
       onDragEnter={(e) => {
-        if (staged || !isFileDrag(e.dataTransfer)) return;
+        const kind = staged ? null : dragKind(e.dataTransfer);
+        if (!kind) return;
         e.preventDefault();
         dragDepth.current += 1;
-        setDragOver(true);
+        setDragOver(kind);
       }}
       onDragOver={(e) => {
-        if (staged || !isFileDrag(e.dataTransfer)) return;
+        if (staged || !dragKind(e.dataTransfer)) return;
         e.preventDefault(); // required for onDrop to fire
       }}
       onDragLeave={(e) => {
-        if (staged || !isFileDrag(e.dataTransfer)) return;
+        if (staged || !dragKind(e.dataTransfer)) return;
         dragDepth.current -= 1;
         if (dragDepth.current <= 0) {
           dragDepth.current = 0;
-          setDragOver(false);
+          setDragOver(null);
         }
       }}
       onDrop={(e) => {
-        if (staged || !isFileDrag(e.dataTransfer)) return;
+        const kind = staged ? null : dragKind(e.dataTransfer);
+        if (!kind) return;
         e.preventDefault();
         dragDepth.current = 0;
-        setDragOver(false);
-        addFiles(Array.from(e.dataTransfer.files));
+        setDragOver(null);
+        if (kind === "file") {
+          addFiles(Array.from(e.dataTransfer.files));
+        } else {
+          const text =
+            e.dataTransfer.getData(TODO_DND_TYPE) ||
+            e.dataTransfer.getData("text/plain");
+          if (text)
+            setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text));
+        }
       }}
     >
       {dragOver && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-sky-500 bg-zinc-950/70">
           <span className="rounded-md bg-sky-500/15 px-3 py-1.5 font-mono text-xs text-sky-300">
-            Drop screenshot to attach
+            {dragOver === "todo"
+              ? "Drop to add to your message"
+              : "Drop screenshot to attach"}
           </span>
         </div>
       )}
