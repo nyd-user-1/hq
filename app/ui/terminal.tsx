@@ -566,7 +566,11 @@ export default function Terminal({
       await fetch("/api/todo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: t, addedBy: "you" }),
+        body: JSON.stringify({
+          text: t,
+          addedBy: "you",
+          fromSession: resolvedId ?? undefined,
+        }),
       });
     } catch {
       setError("couldn't add to-do");

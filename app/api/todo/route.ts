@@ -18,11 +18,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { text, body, addedBy, category } = await req.json().catch(() => ({}));
+  const { text, body, addedBy, category, fromSession } = await req
+    .json()
+    .catch(() => ({}));
   if (typeof text !== "string" || !text.trim()) {
     return new NextResponse("text required", { status: 400 });
   }
-  return NextResponse.json({ item: addTodo(text, { body, addedBy, category }) });
+  return NextResponse.json({
+    item: addTodo(text, { body, addedBy, category, fromSession }),
+  });
 }
 
 export async function PATCH(req: Request) {

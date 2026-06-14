@@ -20,6 +20,7 @@ export type TodoItem = {
   claimedBy?: string; // session id of the terminal working it (two-agent coordination)
   body?: string; // rich description shown when the row is expanded (e.g. a /todo paste)
   addedBy?: string; // provenance: a session id (Claude via /todo) or "you" (added in HQ)
+  fromSession?: string; // the session a "+ todo" was captured from (shown in the body)
   category?: string; // efficiency | ui | functionality | data | docs (for the filter)
 };
 
@@ -57,6 +58,7 @@ export function addTodo(
     addedBy?: string;
     parentId?: string;
     category?: string;
+    fromSession?: string;
   }
 ): TodoItem {
   const store = read();
@@ -82,6 +84,7 @@ export function addTodo(
   if (extra?.addedBy) item.addedBy = extra.addedBy;
   if (extra?.parentId) item.parentId = extra.parentId;
   if (extra?.category) item.category = extra.category;
+  if (extra?.fromSession) item.fromSession = extra.fromSession;
   store.items.unshift(item); // new to-dos go to the front of the list
   write(store);
   return item;

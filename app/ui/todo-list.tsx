@@ -232,7 +232,10 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       {list.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-3 overflow-y-auto pt-1 text-sm">
           {list.map((t, i) => {
-            const expandable = !!t.body;
+            const sess =
+              t.fromSession ||
+              (t.addedBy && t.addedBy !== "you" ? t.addedBy : null);
+            const expandable = !!t.body || !!sess;
             const open = expanded.has(t.id);
             return (
               <li
@@ -297,20 +300,12 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                         setDropTarget(null);
                       }}
                       title={t.text}
-                      className={`min-w-0 flex-1 cursor-grab truncate text-xs active:cursor-grabbing ${
+                      className={`min-w-0 cursor-grab truncate text-xs active:cursor-grabbing ${
                         t.done ? "text-zinc-600 line-through" : "text-zinc-200"
                       }`}
                     >
                       {t.text}
                     </span>
-                    {t.addedBy && t.addedBy !== "you" && (
-                      <span
-                        title={`added by session ${t.addedBy}`}
-                        className="shrink-0 font-mono text-[10px] text-zinc-600"
-                      >
-                        {t.addedBy.slice(0, 8)}
-                      </span>
-                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -333,7 +328,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                         }}
                         title="mark not done"
                         aria-label="Mark not done"
-                        className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-green-600/70 bg-green-600/30 text-[10px] leading-none text-green-400 transition-colors hover:bg-green-600/40"
+                        className="ml-auto flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-green-600/70 bg-green-600/30 text-[10px] leading-none text-green-400 transition-colors hover:bg-green-600/40"
                       >
                         ✓
                       </button>
@@ -345,13 +340,18 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                         }}
                         title="mark done"
                         aria-label="Mark done"
-                        className="size-4 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
+                        className="ml-auto size-4 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
                       />
                     )}
                   </div>
-                  {open && t.body && (
+                  {open && (t.body || sess) && (
                     <div className="border-t border-zinc-800 px-3.5 py-3 font-mono text-[11px] leading-relaxed text-zinc-300">
-                      <Markdown text={t.body} />
+                      {t.body && <Markdown text={t.body} />}
+                      {sess && (
+                        <p className={`text-zinc-600 ${t.body ? "mt-2" : ""}`}>
+                          from session {sess.slice(0, 8)}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
