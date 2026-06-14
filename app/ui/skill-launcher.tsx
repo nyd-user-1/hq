@@ -60,9 +60,9 @@ export default function SkillLauncher({ skills }: { skills: Skill[] }) {
     setFreeform("");
   }
 
-  // One clean, clickable row — slash command · description · right-meta. Mirrors
-  // the audit panel's rows, but the whole row runs the skill.
-  const row = (cmd: string, desc: string, meta: ReactNode, argHint?: string) => {
+  // One clean line — /cmd · description (truncates) · right-meta. Mirrors the
+  // audit panel's row rhythm; the whole row runs the skill on click.
+  const row = (cmd: string, desc: string, meta: ReactNode) => {
     const isRunning = running === `/${cmd}`;
     return (
       <button
@@ -70,25 +70,15 @@ export default function SkillLauncher({ skills }: { skills: Skill[] }) {
         onClick={() => run(`/${cmd}`, `/${cmd}`)}
         disabled={running !== null}
         title={desc || `/${cmd}`}
-        className="group flex w-full flex-col gap-0.5 border-b border-zinc-800/60 py-1.5 text-left transition-colors hover:bg-zinc-800/30 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-1.5 text-left transition-colors hover:bg-zinc-800/30 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <span className="flex items-baseline gap-2 font-mono text-xs">
-          <span className="min-w-0 flex-1 truncate text-zinc-200 group-hover:text-zinc-100">
-            /{cmd}
-            {argHint ? <span className="ml-1.5 text-zinc-600">{argHint}</span> : null}
-          </span>
-          {isRunning ? (
-            <span className="shrink-0 text-orange-300">running…</span>
-          ) : (
-            <span className="shrink-0 text-[10px] text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100">
-              ▶ run
-            </span>
-          )}
-          {meta}
+        <span className="shrink-0 font-mono text-xs text-zinc-200">/{cmd}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
+          {desc}
         </span>
-        {desc ? (
-          <span className="truncate text-[11px] text-zinc-500">{desc}</span>
-        ) : null}
+        <span className="shrink-0 font-mono text-[11px] text-zinc-600">
+          {isRunning ? <span className="text-orange-300">running…</span> : meta}
+        </span>
       </button>
     );
   };
@@ -101,16 +91,7 @@ export default function SkillLauncher({ skills }: { skills: Skill[] }) {
             your skills · ~/.claude/skills
           </h2>
           <div className="flex flex-col">
-            {skills.map((s) =>
-              row(
-                s.name,
-                s.description,
-                <span className="shrink-0 font-mono text-[11px] text-zinc-600">
-                  ~{fmt(s.tokens)} tok
-                </span>,
-                s.argHint
-              )
-            )}
+            {skills.map((s) => row(s.name, s.description, `~${fmt(s.tokens)} tok`))}
           </div>
         </section>
       )}
@@ -120,15 +101,7 @@ export default function SkillLauncher({ skills }: { skills: Skill[] }) {
           built-in
         </h2>
         <div className="flex flex-col">
-          {BUILTIN.map((b) =>
-            row(
-              b.cmd,
-              b.desc,
-              <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-zinc-600">
-                {b.cat}
-              </span>
-            )
-          )}
+          {BUILTIN.map((b) => row(b.cmd, b.desc, b.cat.toUpperCase()))}
         </div>
       </section>
 

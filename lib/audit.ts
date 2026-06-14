@@ -23,6 +23,7 @@ export type AuditFile = {
   label: string;
   tokens: number;
   mtime: number;
+  path: string; // absolute path — the row opens this .md in the panel
 };
 
 export type MemoryEntry = {
@@ -31,6 +32,7 @@ export type MemoryEntry = {
   tokens: number;
   mtime: number;
   stale: boolean; // untouched for 30+ days — prune candidate
+  path: string; // absolute path — the row opens this .md in the panel
 };
 
 const est = (s: string) => Math.round(s.length / 4);
@@ -38,7 +40,21 @@ const est = (s: string) => Math.round(s.length / 4);
 function fileTokens(file: string, label: string): AuditFile | null {
   try {
     const text = fs.readFileSync(file, "utf8");
-    return { label, tokens: est(text), mtime: fs.statSync(file).mtimeMs };
+    return { label, tokens: est(text), mtime: fs.statSync(file).mtimeMs, path: file };
+  } catch {
+    return null;
+  }
+}
+
+// Read one of the audit's .md files for the in-panel reader. Guarded: only files
+// under the home dir and only .md, so an ?open=<path> param can't read arbitrary
+// files off disk.
+export function readAuditDoc(p: string): string | null {
+  try {
+    const resolved = path.resolve(p);
+    if (resolved !== HOME && !resolved.startsWith(HOME + path.sep)) return null;
+    if (!resolved.endsWith(".md")) return null;
+    return fs.readFileSync(resolved, "utf8");
   } catch {
     return null;
   }
@@ -96,6 +112,7 @@ export function getAudit(): {
         tokens: est(text),
         mtime,
         stale: now - mtime > STALE_MS,
+        path: path.join(MEMORY_DIR, name),
       });
     } catch {
       // vanished mid-scan
