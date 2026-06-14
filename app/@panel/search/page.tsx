@@ -221,7 +221,6 @@ export default async function Search({
   return (
     <Boundary label="@panel/search/page.tsx">
       <div className="flex flex-col gap-2">
-        <SearchInput initial={q} scope={scope} sort={sortDir} />
         <div className="flex items-center gap-2">
           {scopeChip("All", "all")}
           {scopeChip("Transcripts", "transcripts")}
@@ -242,6 +241,7 @@ export default async function Search({
             <SortIcon dir={sortDir} />
           </Link>
         </div>
+        <SearchInput initial={q} scope={scope} sort={sortDir} />
       </div>
 
       {!q && (
