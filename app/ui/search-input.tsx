@@ -10,10 +10,14 @@ export default function SearchInput({
   initial,
   scope,
   sort,
+  pins = "",
 }: {
   initial: string;
   scope: string;
   sort: string;
+  // "session=…&pair=…" — carried so typing a query doesn't drop the terminal
+  // pins (which would un-pin the terminal and wipe the search via its re-pin).
+  pins?: string;
 }) {
   const router = useRouter();
   const [value, setValue] = useState(initial);
@@ -21,7 +25,9 @@ export default function SearchInput({
 
   const go = (q: string) =>
     router.replace(
-      `/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${sort}`,
+      `/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${sort}${
+        pins ? `&${pins}` : ""
+      }`,
       { scroll: false }
     );
 

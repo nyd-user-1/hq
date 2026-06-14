@@ -111,13 +111,23 @@ export default async function Search({
     sort?: string;
     open?: string;
     openSession?: string;
+    session?: string;
+    pair?: string;
   }>;
 }) {
-  const { q = "", scope: rawScope, sort: rawSort, open, openSession } = await searchParams;
+  const { q = "", scope: rawScope, sort: rawSort, open, openSession, session, pair } =
+    await searchParams;
   const scope: SearchScope =
     rawScope === "transcripts" || rawScope === "memory" ? rawScope : "all";
   const sortDir: SortDir = rawSort === "old" ? "old" : "new";
-  const back = `/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${sortDir}`;
+  // Carry the terminal pins on every in-panel nav. Dropping ?session/?pair
+  // un-pins the terminal, which then self-re-pins via router.replace and wipes
+  // the search query (q/scope/sort) — the "scope tab snaps back to All" bug.
+  const tail = [session && `session=${session}`, pair && `pair=${pair}`]
+    .filter(Boolean)
+    .join("&");
+  const pinTail = tail ? `&${tail}` : "";
+  const back = `/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${sortDir}${pinTail}`;
 
   // ── opened memory file ──────────────────────────────────────────────────
   if (open) {
@@ -206,7 +216,7 @@ export default async function Search({
   const scopeChip = (label: string, value: SearchScope) => (
     <Link
       key={value}
-      href={`/search?q=${encodeURIComponent(q)}&scope=${value}&sort=${sortDir}`}
+      href={`/search?q=${encodeURIComponent(q)}&scope=${value}&sort=${sortDir}${pinTail}`}
       scroll={false}
       className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
         scope === value
@@ -228,7 +238,7 @@ export default async function Search({
           <Link
             href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
               sortDir === "new" ? "old" : "new"
-            }`}
+            }${pinTail}`}
             scroll={false}
             aria-label="Toggle sort order"
             title={
@@ -241,7 +251,7 @@ export default async function Search({
             <SortIcon dir={sortDir} />
           </Link>
         </div>
-        <SearchInput initial={q} scope={scope} sort={sortDir} />
+        <SearchInput initial={q} scope={scope} sort={sortDir} pins={tail} />
       </div>
 
       {!q && (
