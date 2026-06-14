@@ -212,13 +212,13 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                 {provenance(t)}
                 <div className="group/card rounded-md border border-zinc-800 bg-zinc-900/30">
                   <div
-                    className={`flex items-start gap-3 px-3.5 py-3 ${
+                    className={`flex items-center gap-2.5 px-3 py-1.5 ${
                       expandable ? "cursor-pointer" : ""
                     }`}
                     onClick={expandable ? () => toggleExpand(t.id) : undefined}
                   >
                     <span
-                      className={`mt-0.5 shrink-0 select-none text-[10px] text-zinc-500 transition-transform ${
+                      className={`shrink-0 select-none text-[10px] text-zinc-100 transition-transform ${
                         open ? "rotate-90" : ""
                       } ${expandable ? "" : "invisible"}`}
                     >
@@ -234,8 +234,8 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                         e.dataTransfer.setData("text/plain", t.text);
                         e.dataTransfer.effectAllowed = "copy";
                       }}
-                      title="drag into a terminal to use as a prompt"
-                      className={`min-w-0 flex-1 cursor-grab leading-snug active:cursor-grabbing ${
+                      title={t.text}
+                      className={`min-w-0 flex-1 cursor-grab truncate text-xs active:cursor-grabbing ${
                         t.done ? "text-zinc-600 line-through" : "text-zinc-200"
                       }`}
                     >
@@ -247,7 +247,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                         copy(t);
                       }}
                       title="copy"
-                      className="mt-px shrink-0 p-0 text-zinc-600 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/card:opacity-100"
+                      className="shrink-0 p-0 text-zinc-600 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/card:opacity-100"
                     >
                       {copiedId === t.id ? (
                         <span className="text-green-400">✓</span>
