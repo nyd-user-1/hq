@@ -903,14 +903,6 @@ export default function Terminal({
             })}
           </div>
         </details>
-        {contextTokens > 0 && (
-          <span
-            className="font-mono text-[11px] text-zinc-500"
-            title={`~${ctxLeftPct}% of your 1M window left — ${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} used (mirrors the CLI's ctx %)`}
-          >
-            ctx {ctxLeftPct}%
-          </span>
-        )}
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
           {cacheLeft !== null &&
@@ -930,8 +922,16 @@ export default function Terminal({
                 cache cold
               </span>
             ))}
+          {contextTokens > 0 && (
+            <span
+              className="font-mono text-[11px] text-zinc-500"
+              title={`~${ctxLeftPct}% of your 1M window left — ${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} used (mirrors the CLI's ctx %)`}
+            >
+              ctx {ctxLeftPct}%
+            </span>
+          )}
           {/* ctx bar (hidden until 75% — near-empty most of a 1M session); the
-              ctx number itself lives in the left cluster. */}
+              ctx number itself sits just left of it. */}
           {contextTokens > 0 && ctxPct >= 75 && (
             <span
               className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800"
