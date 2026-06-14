@@ -286,7 +286,11 @@ export default function SidebarRecents() {
     e.preventDefault();
     e.stopPropagation();
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setMenuPos({ top: r.bottom + 4, left: r.left });
+    // Right-align the menu to the kebab and open leftward so its w-52 body stays
+    // inside the sidebar column instead of overflowing (and being clipped) at the
+    // column's right edge.
+    const MENU_W = 208; // w-52
+    setMenuPos({ top: r.bottom + 4, left: Math.max(8, r.right - MENU_W) });
     setMenuFor(id);
   };
   const closeMenu = () => {
