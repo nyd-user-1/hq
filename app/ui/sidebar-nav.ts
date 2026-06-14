@@ -13,7 +13,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
   { title: "Activity", href: "/calls", routes: ["/calls", "/sessions", "/todo", "/sdk"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/savings", "/audit"] },
-  { title: "Console", href: "/shipped", routes: ["/shipped", "/skills", "/routines", "/firehose"] },
+  { title: "Console", href: "/shipped", routes: ["/shipped", "/skills", "/cmd", "/routines", "/firehose"] },
   { title: "Compose", href: "/compose", routes: ["/compose"] },
 ];
 
