@@ -10,6 +10,7 @@ export default function Boundary({
   lead,
   trail,
   topOnly = false,
+  padX,
   children,
 }: {
   label: string;
@@ -20,11 +21,14 @@ export default function Boundary({
   // Used by the inner panel pages, which already sit inside their group layout's
   // full box — the outer box keeps the content off the panel edge.
   topOnly?: boolean;
+  // Override the horizontal padding (default `px-4 sm:px-5`); the sidebar runs
+  // tighter at `px-2.5`. Top/bottom padding is unchanged.
+  padX?: string;
   children: React.ReactNode;
 }) {
   const frame = topOnly
     ? "border-t border-dashed border-zinc-700 pt-7"
-    : "rounded-lg border border-dashed border-zinc-700 p-4 pt-7 sm:p-5 sm:pt-7";
+    : `rounded-lg border border-dashed border-zinc-700 pt-7 pb-4 sm:pb-5 ${padX ?? "px-4 sm:px-5"}`;
   return (
     <div
       className={`boundary-flash relative flex min-h-0 min-w-0 flex-1 flex-col gap-4 ${frame}`}

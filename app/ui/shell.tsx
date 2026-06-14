@@ -29,7 +29,7 @@ export default function Shell({
       <SidebarProvider>
         <div className="flex min-h-0 flex-1">
           <SidebarColumn>
-            <Boundary label="sidebar.tsx">
+            <Boundary label="sidebar.tsx" padX="px-2.5">
               <Sidebar />
             </Boundary>
           </SidebarColumn>
