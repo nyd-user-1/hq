@@ -51,7 +51,7 @@ export default function Components() {
   );
 
   return (
-    <Boundary topOnly label="@panel/(console)/components/page.tsx">
+    <Boundary topOnly label="@panel/(activity)/components/page.tsx">
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
         <p className="text-xs text-zinc-600">
           HQ component registry —{" "}
