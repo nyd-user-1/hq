@@ -24,6 +24,17 @@ const CopyGlyph = () => (
   </svg>
 );
 
+// Categories for the filter + per-item tag. `key` is what's stored; label/chip
+// are presentation. Add more here as new kinds of work surface.
+const CATEGORIES = [
+  { key: "efficiency", label: "Efficiency", chip: "bg-emerald-500/15 text-emerald-300" },
+  { key: "ui", label: "UI/UX", chip: "bg-sky-500/15 text-sky-300" },
+  { key: "functionality", label: "Functionality", chip: "bg-violet-500/15 text-violet-300" },
+  { key: "data", label: "Data", chip: "bg-amber-500/15 text-amber-300" },
+  { key: "docs", label: "Docs", chip: "bg-zinc-500/20 text-zinc-300" },
+] as const;
+const CAT_BY_KEY = Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
+
 // To Do over the HQ-native store (/api/todo). A to-do is a title + an optional
 // markdown body (no sub-item records). Mirrors the terminal's message + tool-step
 // language: a provenance header (● who · time · session) above a bordered card
@@ -35,9 +46,15 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [cat, setCat] = useState<string | null>(null); // active category filter
 
-  const list = items.filter((t) => !t.parentId);
+  const all = items.filter((t) => !t.parentId);
+  const list = cat ? all.filter((t) => t.category === cat) : all;
   const doneCount = items.filter((t) => t.done).length;
+  // Only show filter chips for categories that actually have items.
+  const present = CATEGORIES.filter((c) =>
+    all.some((t) => t.category === c.key)
+  );
 
   async function add() {
     const text = draft.trim();
@@ -115,6 +132,13 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
           {new Date(t.createdAt).toLocaleTimeString()}
           {isSession ? ` · ${t.addedBy!.slice(0, 8)}` : ""}
         </span>
+        {t.category && CAT_BY_KEY[t.category] && (
+          <span
+            className={`ml-2 rounded px-1 normal-case tracking-normal ${CAT_BY_KEY[t.category].chip}`}
+          >
+            {CAT_BY_KEY[t.category].label}
+          </span>
+        )}
         {t.claimedBy && (
           <span
             title={`claimed by session ${t.claimedBy}`}
@@ -149,6 +173,34 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
           </button>
         )}
       </div>
+
+      {present.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setCat(null)}
+            className={`rounded-md px-2 py-0.5 font-mono text-[11px] transition-colors ${
+              cat === null
+                ? "bg-zinc-700 text-zinc-100"
+                : "bg-zinc-800/60 text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            All
+          </button>
+          {present.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => setCat((p) => (p === c.key ? null : c.key))}
+              className={`rounded-md px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                cat === c.key
+                  ? c.chip
+                  : "bg-zinc-800/60 text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {list.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-3 overflow-y-auto pt-1 text-sm">

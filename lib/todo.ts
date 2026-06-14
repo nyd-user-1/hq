@@ -20,6 +20,7 @@ export type TodoItem = {
   claimedBy?: string; // session id of the terminal working it (two-agent coordination)
   body?: string; // rich description shown when the row is expanded (e.g. a /todo paste)
   addedBy?: string; // provenance: a session id (Claude via /todo) or "you" (added in HQ)
+  category?: string; // efficiency | ui | functionality | data | docs (for the filter)
 };
 
 type Store = { version: number; items: TodoItem[] };
@@ -51,7 +52,12 @@ export function getTodos(): TodoItem[] {
 
 export function addTodo(
   text: string,
-  extra?: { body?: string; addedBy?: string; parentId?: string }
+  extra?: {
+    body?: string;
+    addedBy?: string;
+    parentId?: string;
+    category?: string;
+  }
 ): TodoItem {
   const store = read();
   const item: TodoItem = {
@@ -63,6 +69,7 @@ export function addTodo(
   if (extra?.body?.trim()) item.body = extra.body.trim();
   if (extra?.addedBy) item.addedBy = extra.addedBy;
   if (extra?.parentId) item.parentId = extra.parentId;
+  if (extra?.category) item.category = extra.category;
   store.items.push(item);
   write(store);
   return item;
@@ -70,7 +77,9 @@ export function addTodo(
 
 export function updateTodo(
   id: string,
-  patch: Partial<Pick<TodoItem, "text" | "done" | "claimedBy" | "body">>
+  patch: Partial<
+    Pick<TodoItem, "text" | "done" | "claimedBy" | "body" | "category">
+  >
 ): TodoItem | null {
   const store = read();
   const item = store.items.find((i) => i.id === id);
@@ -78,6 +87,7 @@ export function updateTodo(
   if (typeof patch.text === "string") item.text = patch.text.trim();
   if (typeof patch.done === "boolean") item.done = patch.done;
   if (typeof patch.body === "string") item.body = patch.body;
+  if (typeof patch.category === "string") item.category = patch.category;
   if ("claimedBy" in patch) {
     if (patch.claimedBy) item.claimedBy = patch.claimedBy;
     else delete item.claimedBy; // empty/null releases the claim
