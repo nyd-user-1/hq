@@ -351,11 +351,14 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                       {sess && (
                         <p
                           className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-zinc-600 ${
-                            t.body ? "mt-2" : ""
+                            t.body
+                              ? "mt-2.5 border-t border-zinc-800/70 pt-2.5"
+                              : ""
                           }`}
                         >
+                          Task
                           <CopyCode>{t.id}</CopyCode>
-                          from session
+                          via session
                           <CopyCode copyText={sess}>
                             {sess.slice(0, 8)}
                           </CopyCode>
