@@ -538,7 +538,7 @@ export default function Terminal({
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 176)}px`;
+    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
   }, [draft]);
 
   // The send goes to the session ON SCREEN — its id is snapshotted here, at
@@ -1191,7 +1191,7 @@ export default function Terminal({
                 ? "no session yet — start one in your terminal first"
                 : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
-            className="max-h-44 min-h-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+            className="max-h-[200px] min-h-[88px] flex-1 resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <input
             ref={fileInputRef}
@@ -1206,13 +1206,12 @@ export default function Terminal({
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={staged || sending}
             title="attach a screenshot — pasting or dropping an image works too"
             aria-label="Attach"
-            className="shrink-0 rounded-md border border-zinc-800 p-1.5 text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="shrink-0 cursor-pointer rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-100 transition-colors hover:bg-zinc-700"
           >
             <svg
-              className="size-4"
+              className="size-3.5"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -1226,9 +1225,8 @@ export default function Terminal({
           </button>
           <button
             onClick={todoDraft}
-            disabled={staged || sending || !draft.trim()}
             title="add this as a to-do on your HQ list"
-            className="shrink-0 rounded-md border border-zinc-800 px-2 py-1 font-mono text-[11px] text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="shrink-0 cursor-pointer rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-violet-300 transition-colors hover:bg-zinc-700"
           >
             + todo
           </button>
