@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Markdown from "@/app/ui/md";
-import CopyCode from "@/app/ui/copy-code";
+import MetaChipRow from "@/app/ui/meta-chip-row";
 import type { TodoItem } from "@/lib/todo";
 
 // Drag marker — must match TODO_DND_TYPE in terminal.tsx.
@@ -349,20 +349,17 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                     <div className="border-t border-zinc-800 px-3.5 py-3 font-mono text-[11px] leading-relaxed text-zinc-300">
                       {t.body && <Markdown text={t.body} />}
                       {sess && (
-                        <p
-                          className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-zinc-600 ${
-                            t.body
-                              ? "mt-2.5 border-t border-zinc-800/70 pt-2.5"
-                              : ""
-                          }`}
-                        >
-                          Task
-                          <CopyCode>{t.id}</CopyCode>
-                          via session
-                          <CopyCode copyText={sess}>
-                            {sess.slice(0, 8)}
-                          </CopyCode>
-                        </p>
+                        <MetaChipRow
+                          divider={!!t.body}
+                          items={[
+                            { label: "Task", value: t.id },
+                            {
+                              label: "via session",
+                              value: sess.slice(0, 8),
+                              copyText: sess,
+                            },
+                          ]}
+                        />
                       )}
                     </div>
                   )}
