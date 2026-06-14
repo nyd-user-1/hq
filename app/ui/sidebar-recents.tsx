@@ -390,17 +390,20 @@ export default function SidebarRecents() {
                       }`}
                     >
                       <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                        <span className="shrink-0 font-mono text-xs">
-                          {s.id.slice(0, 8)}
-                        </span>
                         {s.customTitle ? (
-                          <span className="min-w-0 truncate text-xs text-zinc-300">
+                          // Renamed → the name IS the label (id moves to the ⋮ menu).
+                          <span className="min-w-0 truncate font-mono text-xs text-zinc-200">
                             {s.customTitle}
                           </span>
                         ) : (
-                          <span className="min-w-0 truncate text-xs text-zinc-600">
-                            {s.project}
-                          </span>
+                          <>
+                            <span className="shrink-0 font-mono text-xs">
+                              {s.id.slice(0, 8)}
+                            </span>
+                            <span className="min-w-0 truncate text-xs text-zinc-600">
+                              {s.project}
+                            </span>
+                          </>
                         )}
                       </span>
                       {s.branch && (
@@ -500,6 +503,17 @@ export default function SidebarRecents() {
           </button>
           <button
             role="menuitem"
+            onClick={() => {
+              toggleHidden(menuSession);
+              closeMenu();
+            }}
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            {menuSession.hidden ? <EyeIcon /> : <EyeOffIcon />}
+            {menuSession.hidden ? "Unhide" : "Hide"}
+          </button>
+          <button
+            role="menuitem"
             disabled
             title="coming soon — needs the project view"
             className="flex cursor-default items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-600"
@@ -511,13 +525,13 @@ export default function SidebarRecents() {
           <button
             role="menuitem"
             onClick={() => {
-              toggleHidden(menuSession);
+              navigator.clipboard.writeText(menuSession.id);
               closeMenu();
             }}
-            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+            title="click to copy the full session id"
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left font-mono text-[10px] text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-300"
           >
-            {menuSession.hidden ? <EyeIcon /> : <EyeOffIcon />}
-            {menuSession.hidden ? "Unhide" : "Hide"}
+            <span className="min-w-0 truncate">{menuSession.id}</span>
           </button>
         </div>
       )}
