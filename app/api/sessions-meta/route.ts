@@ -1,0 +1,23 @@
+import { NextResponse } from "next/server";
+import { getSessionsMeta, setSessionMeta } from "@/lib/sessions-meta";
+
+export const dynamic = "force-dynamic";
+
+// HQ-native per-session view metadata (favorite / hidden / rename). A sidecar at
+// ~/.claude/hq/sessions-meta.json — NOT a write into Claude Code's transcripts.
+// The sidebar Recents list POSTs here to star / hide / rename a session.
+export async function GET() {
+  return NextResponse.json({ meta: getSessionsMeta() });
+}
+
+export async function POST(req: Request) {
+  const { id, favorite, hidden, title } = await req.json().catch(() => ({}));
+  if (typeof id !== "string" || !id) {
+    return new NextResponse("id required", { status: 400 });
+  }
+  const patch: { favorite?: boolean; hidden?: boolean; title?: string } = {};
+  if (typeof favorite === "boolean") patch.favorite = favorite;
+  if (typeof hidden === "boolean") patch.hidden = hidden;
+  if (typeof title === "string") patch.title = title;
+  return NextResponse.json({ meta: setSessionMeta(id, patch) });
+}
