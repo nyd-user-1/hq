@@ -93,7 +93,7 @@ export default function Cmd() {
           <CopyText
             key={c.cmd}
             text={`/${c.cmd}`}
-            className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-2 transition-colors hover:bg-zinc-800/30"
+            className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-3 transition-colors hover:bg-zinc-800/30"
           >
             <span className="shrink-0 font-mono text-xs text-zinc-300">
               /{c.cmd}
