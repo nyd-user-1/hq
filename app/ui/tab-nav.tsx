@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSelectedLayoutSegment } from "next/navigation";
+import { useRouter, useSelectedLayoutSegment } from "next/navigation";
+import { withPins } from "@/app/ui/keep-pins";
 
 export type Tab = {
   title: string;
@@ -11,6 +12,7 @@ export type Tab = {
 };
 
 export default function TabNav({ tabs }: { tabs: Tab[] }) {
+  const router = useRouter();
   const active = useSelectedLayoutSegment();
   return (
     <nav className="mb-2 flex flex-wrap gap-2">
@@ -20,6 +22,15 @@ export default function TabNav({ tabs }: { tabs: Tab[] }) {
           <Link
             key={tab.href}
             href={tab.href}
+            // Carry the terminal pins (?session/?pair) across tab nav, the same
+            // way panel open/close and the search trigger do — otherwise
+            // switching tabs drops ?pair and unmounts Terminal 2.
+            onClick={(e) => {
+              e.preventDefault();
+              router.push(withPins(tab.href, window.location.search), {
+                scroll: false,
+              });
+            }}
             className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
               isActive
                 ? "bg-blue-600 text-white"
