@@ -18,6 +18,7 @@ export type Skill = {
   autoInvoke: boolean; // false when `disable-model-invocation: true`
   tokens: number;
   mtime: number;
+  path: string; // absolute SKILL.md path — the row opens this in-panel
 };
 
 const est = (s: string) => Math.round(s.length / 4);
@@ -57,10 +58,24 @@ export function getSkills(): Skill[] {
         autoInvoke: fm["disable-model-invocation"] !== "true",
         tokens: est(text),
         mtime: fs.statSync(file).mtimeMs,
+        path: file,
       });
     } catch {
       // no SKILL.md / vanished mid-scan — skip
     }
   }
   return skills.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Read a skill's SKILL.md for the in-panel reader. Guarded: only files under
+// ~/.claude/skills ending in .md, so an ?open=<path> param can't read elsewhere.
+export function readSkillDoc(p: string): string | null {
+  try {
+    const resolved = path.resolve(p);
+    if (!resolved.startsWith(SKILLS_DIR + path.sep)) return null;
+    if (!resolved.endsWith(".md")) return null;
+    return fs.readFileSync(resolved, "utf8");
+  } catch {
+    return null;
+  }
 }
