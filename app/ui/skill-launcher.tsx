@@ -133,8 +133,9 @@ export default function SkillLauncher({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* command box — at the top, like the search bar on the other panels */}
-      <section className="flex flex-col gap-2">
+      {/* command box — sticky at the top (panel bg + z-10) so the skill lists
+          scroll behind it instead of pushing it off-screen */}
+      <section className="sticky top-0 z-10 flex flex-col gap-2 bg-zinc-950 pb-3">
         <input
           value={freeform}
           onChange={(e) => setFreeform(e.target.value)}

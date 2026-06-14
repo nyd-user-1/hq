@@ -16,6 +16,7 @@ export default function ConsoleLayout({
         tabs={[
           { title: "Shipped", href: "/shipped", segment: "shipped" },
           { title: "Skills", href: "/skills", segment: "skills" },
+          { title: "CMD", href: "/cmd", segment: "cmd" },
           { title: "Routines", href: "/routines", segment: "routines" },
           { title: "Firehose", href: "/firehose", segment: "firehose" },
         ]}
