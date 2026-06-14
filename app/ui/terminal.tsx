@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
-import Efficiency from "@/app/ui/efficiency";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import { PANELS } from "@/app/ui/sidebar-nav";
 import { withPins } from "@/app/ui/keep-pins";
@@ -74,11 +73,8 @@ function fmtAgo(ms: number): string {
 // The Anthropic prompt cache holds ~5 minutes; reply inside the window and the
 // whole history is read at ~10% price. The header counts the window down.
 const CACHE_TTL_MS = 5 * 60 * 1000;
-// CONTEXT_LIMIT (1M window) + PRICING_CLIFF (200k premium line) live in
+// CONTEXT_LIMIT (1M window) + PRICING_CLIFF (200k cliff marker) live in
 // lib/limits — imported above so the client bundle never pulls in node:fs.
-// What the "copy wrap-up prompt" button puts on the clipboard — the cheap
-// alternative to letting auto-compact eat the session.
-const WRAP_UP_PROMPT = `We're close to the context limit — let's wrap up instead of auto-compacting. 1) Write a handoff note to the vault thread: current state, decisions made, open questions, exact next steps. 2) Save or update memory for anything durable. 3) Commit and push. Then I'll /clear and resume fresh from the note.`;
 
 // Module-scoped so it survives re-renders; stays 1 across soft nav (proof the
 // terminal is not remounting). Resets only on a full reload.
@@ -300,7 +296,6 @@ export default function Terminal({
   const [error, setError] = useState<string | null>(null);
   const [contextTokens, setContextTokens] = useState(0);
   const [lastWrite, setLastWrite] = useState<number | null>(null);
-  const [wrapCopied, setWrapCopied] = useState(false);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const stoppedRef = useRef(false); // true when the user killed the run via stop
   const sendTargetRef = useRef<string | null>(null); // session the in-flight send went to
@@ -652,7 +647,6 @@ export default function Terminal({
       : null;
   const ctxPct = (contextTokens / CONTEXT_LIMIT) * 100;
   const cliffPct = (PRICING_CLIFF / CONTEXT_LIMIT) * 100; // 200k tick on the bar
-  const pastCliff = contextTokens >= PRICING_CLIFF;
   const cacheWarm = cacheLeft !== null && cacheLeft > 0;
 
   return (
@@ -823,6 +817,14 @@ export default function Terminal({
             })}
           </div>
         </details>
+        {contextTokens > 0 && (
+          <span
+            className="font-mono text-[11px] text-zinc-500"
+            title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} (your 1M tier) before auto-compact territory`}
+          >
+            ctx {fmtTokens(contextTokens)}
+          </span>
+        )}
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
           {cacheLeft !== null &&
@@ -842,70 +844,27 @@ export default function Terminal({
                 cache cold
               </span>
             ))}
-          {contextTokens > 0 && (
+          {/* ctx bar (hidden until 75% — near-empty most of a 1M session); the
+              ctx number itself lives in the left cluster. */}
+          {contextTokens > 0 && ctxPct >= 75 && (
             <span
-              className="flex items-center gap-1.5 font-mono text-[11px] text-zinc-500"
-              title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} (your 1M tier) before auto-compact territory · the tick at ${fmtTokens(PRICING_CLIFF)} is where long-context pricing kicks in (~2× input)`}
+              className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800"
+              title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} · the tick at ${fmtTokens(PRICING_CLIFF)} is the long-context pricing cliff (~2× input)`}
             >
-              {/* The bar is hidden until 75% — on a 1M window it sits near-empty
-                  most of a session, so it's noise. The ctx NUMBER always shows. */}
-              {ctxPct >= 75 && (
-                <span className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800">
-                  <span
-                    className={`absolute inset-y-0 left-0 ${
-                      ctxPct >= 80
-                        ? "bg-red-500"
-                        : ctxPct >= 70
-                          ? "bg-amber-500"
-                          : "bg-zinc-600"
-                    }`}
-                    style={{ width: `${Math.min(100, ctxPct)}%` }}
-                  />
-                  {/* the long-context pricing cliff — a marker, not the wall */}
-                  <span
-                    className="absolute inset-y-0 w-px bg-amber-400/60"
-                    style={{ left: `${cliffPct}%` }}
-                  />
-                </span>
-              )}
-              <span>
-                ctx {fmtTokens(contextTokens)}
-                {pastCliff && (
-                  <span
-                    className="ml-1 text-amber-400"
-                    title={`past ${fmtTokens(PRICING_CLIFF)} — each turn now bills at the long-context premium (~2× input)`}
-                  >
-                    premium
-                  </span>
-                )}
-              </span>
+              <span
+                className={`absolute inset-y-0 left-0 ${
+                  ctxPct >= 80 ? "bg-red-500" : "bg-amber-500"
+                }`}
+                style={{ width: `${Math.min(100, ctxPct)}%` }}
+              />
+              <span
+                className="absolute inset-y-0 w-px bg-amber-400/60"
+                style={{ left: `${cliffPct}%` }}
+              />
             </span>
           )}
         </span>
       </div>
-      <Efficiency sessionId={resolvedId} />
-      {ctxPct >= 70 && (
-        <div className="-mt-1 mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px]">
-          <span className={ctxPct >= 80 ? "text-red-400" : "text-amber-400"}>
-            context {Math.round(ctxPct)}% — wrap up at a natural break instead
-            of letting auto-compact eat it
-          </span>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(WRAP_UP_PROMPT);
-              setWrapCopied(true);
-              setTimeout(() => setWrapCopied(false), 2500);
-            }}
-            className="rounded-md border border-zinc-700 px-2 py-0.5 text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
-          >
-            {wrapCopied ? "copied ✓ — paste it in your terminal" : "improve context"}
-          </button>
-          <span className="text-zinc-600">
-            → it writes a handoff memo · /clear · this pane offers the kickoff
-          </span>
-        </div>
-      )}
-
       <div
         ref={scrollRef}
         className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
