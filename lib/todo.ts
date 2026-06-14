@@ -60,17 +60,29 @@ export function addTodo(
   }
 ): TodoItem {
   const store = read();
+  let title = text.trim();
+  let body = extra?.body?.trim();
+  // A multi-line add (e.g. the "+ todo" chip): first line is the title, the rest
+  // becomes the body — so a one-sentence description lands in the dropdown
+  // instead of a giant truncated title.
+  if (!body) {
+    const nl = title.indexOf("\n");
+    if (nl !== -1) {
+      body = title.slice(nl + 1).trim();
+      title = title.slice(0, nl).trim();
+    }
+  }
   const item: TodoItem = {
     id: newId(),
-    text: text.trim(),
+    text: title,
     done: false,
     createdAt: Date.now(),
   };
-  if (extra?.body?.trim()) item.body = extra.body.trim();
+  if (body) item.body = body;
   if (extra?.addedBy) item.addedBy = extra.addedBy;
   if (extra?.parentId) item.parentId = extra.parentId;
   if (extra?.category) item.category = extra.category;
-  store.items.push(item);
+  store.items.unshift(item); // new to-dos go to the front of the list
   write(store);
   return item;
 }

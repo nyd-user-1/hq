@@ -78,7 +78,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       });
       if (res.ok) {
         const { item } = await res.json();
-        setItems((xs) => [...xs, item]);
+        setItems((xs) => [item, ...xs]);
       }
     } finally {
       setBusy(false);
@@ -156,11 +156,10 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
         {name}
         <span className="ml-2 normal-case tracking-normal text-zinc-600">
           {new Date(t.createdAt).toLocaleTimeString()}
-          {isSession ? ` · ${t.addedBy!.slice(0, 8)}` : ""}
         </span>
         {t.category && CAT_BY_KEY[t.category] && (
           <span
-            className={`ml-2 rounded px-1 normal-case tracking-normal ${CAT_BY_KEY[t.category].chip}`}
+            className={`ml-auto rounded px-1 normal-case tracking-normal ${CAT_BY_KEY[t.category].chip}`}
           >
             {CAT_BY_KEY[t.category].label}
           </span>
@@ -168,7 +167,9 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
         {t.claimedBy && (
           <span
             title={`claimed by session ${t.claimedBy}`}
-            className="ml-auto rounded bg-amber-500/15 px-1 normal-case tracking-normal text-amber-300/90"
+            className={`rounded bg-amber-500/15 px-1 normal-case tracking-normal text-amber-300/90 ${
+              t.category ? "ml-2" : "ml-auto"
+            }`}
           >
             {t.claimedBy.slice(0, 8)}
           </span>
@@ -302,6 +303,14 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                     >
                       {t.text}
                     </span>
+                    {t.addedBy && t.addedBy !== "you" && (
+                      <span
+                        title={`added by session ${t.addedBy}`}
+                        className="shrink-0 font-mono text-[10px] text-zinc-600"
+                      >
+                        {t.addedBy.slice(0, 8)}
+                      </span>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
