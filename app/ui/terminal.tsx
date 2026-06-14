@@ -288,7 +288,7 @@ export default function Terminal({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
-  const [queue, setQueue] = useState<string[]>([]); // batched asks — sent as ONE message
+  const taRef = useRef<HTMLTextAreaElement>(null); // send box — for auto-grow
   const [attachments, setAttachments] = useState<Attachment[]>([]); // staged screenshots
   const [dragOver, setDragOver] = useState<null | "file" | "todo">(null); // drop-zone hint
   const dragDepth = useRef(0); // enter/leave depth — kills the child-element flicker
@@ -516,14 +516,30 @@ export default function Terminal({
     return () => window.removeEventListener("hq:compose", onCompose);
   }, [paramKey]);
 
-  // Park the current draft in the queue; everything queued goes out as ONE
-  // message — one context read instead of several.
-  function queueDraft() {
+  // Capture the current draft as a to-do on the HQ list, then clear the box.
+  async function todoDraft() {
     const t = draft.trim();
     if (!t) return;
-    setQueue((q) => [...q, t]);
     setDraft("");
+    try {
+      await fetch("/api/todo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: t, addedBy: "you" }),
+      });
+    } catch {
+      setError("couldn't add to-do");
+    }
   }
+
+  // Auto-grow the send box from 1 line up to ~8, then scroll — mirrors the CLI
+  // input. Runs on every draft change (incl. the post-send clear → shrinks back).
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 176)}px`;
+  }, [draft]);
 
   // The send goes to the session ON SCREEN — its id is snapshotted here, at
   // send time, so "newest" can't silently re-aim it between typing and sending
@@ -545,11 +561,10 @@ export default function Terminal({
   async function doSend() {
     if (staged) return; // staging view — no session exists to send to
     const target = pinned ?? resolvedId;
-    const prompt = [...queue, draft.trim()].filter(Boolean).join("\n\n");
+    const prompt = draft.trim();
     const imgs = attachments; // snapshot — survives the clear below
     if (!target || sending || (!prompt && imgs.length === 0)) return;
     sendTargetRef.current = target;
-    setQueue([]);
     setAttachments([]);
     stoppedRef.current = false;
     setSending(true);
@@ -703,7 +718,7 @@ export default function Terminal({
         </div>
       )}
       {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
-      <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800 pb-3">
         <span className="flex items-center gap-1.5 text-xs">
           {/* Activity dot, same vocabulary as the session cards: blinking =
               writing right now, solid = active within the cache window (5 min),
@@ -1117,26 +1132,6 @@ export default function Terminal({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        {queue.length > 0 && (
-          <div className="flex flex-col gap-1">
-            {queue.map((q, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 rounded-md border border-dashed border-zinc-800 px-2.5 py-1 font-mono text-[11px] text-zinc-400"
-              >
-                <span className="text-zinc-600">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate">{q}</span>
-                <button
-                  onClick={() => setQueue((qs) => qs.filter((_, j) => j !== i))}
-                  aria-label="Remove queued ask"
-                  className="text-zinc-600 transition-colors hover:text-zinc-300"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {attachments.map((a) => (
@@ -1168,6 +1163,7 @@ export default function Terminal({
             pane root (the whole basin); paste + 📎 still funnel through addFiles. */}
         <div className="flex items-end gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
           <textarea
+            ref={taRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onPaste={(e) => {
@@ -1188,14 +1184,14 @@ export default function Terminal({
                 doSend();
               }
             }}
-            rows={2}
+            rows={1}
             disabled={staged}
             placeholder={
               staged
                 ? "no session yet — start one in your terminal first"
                 : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
-            className="min-h-0 flex-1 resize-none bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+            className="max-h-44 min-h-0 flex-1 resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <input
             ref={fileInputRef}
@@ -1212,41 +1208,37 @@ export default function Terminal({
             onClick={() => fileInputRef.current?.click()}
             disabled={staged || sending}
             title="attach a screenshot — pasting or dropping an image works too"
-            aria-label="Attach image"
-            className="shrink-0 rounded-md border border-zinc-800 px-2 py-1 font-mono text-[11px] text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Attach"
+            className="shrink-0 rounded-md border border-zinc-800 p-1.5 text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            📎
+            <svg
+              className="size-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
           <button
-            onClick={queueDraft}
+            onClick={todoDraft}
             disabled={staged || sending || !draft.trim()}
-            title="park this ask — everything queued sends as one message (one context read, not several)"
+            title="add this as a to-do on your HQ list"
             className="shrink-0 rounded-md border border-zinc-800 px-2 py-1 font-mono text-[11px] text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            + queue
+            + todo
           </button>
-          {sending ? (
+          {sending && (
             <button
               onClick={stopSend}
               title="kill the HQ-spawned headless run"
               className="shrink-0 rounded-md border border-red-500/50 px-2.5 py-1 text-xs text-red-400 transition-colors hover:border-red-400 hover:text-red-300"
             >
               stop
-            </button>
-          ) : (
-            <button
-              onClick={doSend}
-              disabled={
-                staged ||
-                (!draft.trim() &&
-                  queue.length === 0 &&
-                  attachments.length === 0)
-              }
-              className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {queue.length > 0
-                ? `send ×${queue.length + (draft.trim() ? 1 : 0)}`
-                : "send"}
             </button>
           )}
         </div>
