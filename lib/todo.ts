@@ -16,6 +16,7 @@ export type TodoItem = {
   text: string;
   done: boolean;
   createdAt: number;
+  parentId?: string; // set → this is a sub-item of the parent todo
 };
 
 type Store = { version: number; items: TodoItem[] };
