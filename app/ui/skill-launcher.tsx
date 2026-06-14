@@ -11,13 +11,39 @@ import type { Skill } from "@/lib/skills";
 // top runs any skill. All runs fire into Terminal 1 (the displayed ?session) via
 // claude -p; replies land in that terminal.
 
-// Harness built-ins — not readable from disk, so curated here with descriptions.
+// Harness built-in skills. These are compiled into the CLI / live in a
+// version-hashed temp dir with no readable SKILL.md, so they can't be discovered
+// from disk like ~/.claude/skills — curated here from the /help palette. (Pure
+// CLI utilities — /clear, /compact, /model, /theme, etc. — are intentionally
+// omitted; they aren't runnable via claude -p.)
 const BUILTIN: { cmd: string; cat: string; desc: string }[] = [
+  // review
   { cmd: "code-review", cat: "review", desc: "Review the current diff for correctness bugs + cleanups" },
-  { cmd: "verify", cat: "review", desc: "Run the app and confirm a change actually does what it should" },
-  { cmd: "simplify", cat: "review", desc: "Apply reuse / simplification / efficiency cleanups" },
-  { cmd: "run", cat: "build", desc: "Launch and drive the app to see a change working" },
-  { cmd: "deep-research", cat: "research", desc: "Fan-out, fact-checked, cited multi-source research report" },
+  { cmd: "simplify", cat: "review", desc: "Reuse / simplification / efficiency / altitude cleanups" },
+  { cmd: "verify", cat: "review", desc: "Verify a change works by running the app" },
+  { cmd: "security-review", cat: "review", desc: "Security review of the pending branch changes" },
+  { cmd: "review", cat: "review", desc: "Review a pull request" },
+  // build
+  { cmd: "run", cat: "build", desc: "Launch and drive this project's app to see a change working" },
+  { cmd: "init", cat: "build", desc: "Initialize a new CLAUDE.md with codebase docs" },
+  { cmd: "frontend-design", cat: "build", desc: "Create distinctive, production-grade frontend interfaces" },
+  { cmd: "design-sync", cat: "build", desc: "Push a React design system to claude.ai/design" },
+  { cmd: "run-skill-generator", cat: "build", desc: "Author / improve the run-<unit> skill" },
+  { cmd: "statusline", cat: "build", desc: "Set up Claude Code's status line UI" },
+  // research
+  { cmd: "deep-research", cat: "research", desc: "Fan-out web searches → fact-checked, cited report" },
+  { cmd: "claude-api", cat: "research", desc: "Reference for the Claude API / Anthropic SDK" },
+  { cmd: "batch", cat: "research", desc: "Plan a large change, execute in parallel across worktrees" },
+  { cmd: "advisor", cat: "research", desc: "Let Claude consult a stronger model at key moments" },
+  // automate
+  { cmd: "loop", cat: "automate", desc: "Run a prompt / command on a recurring interval" },
+  { cmd: "schedule", cat: "automate", desc: "Create / run scheduled cloud agents (routines)" },
+  { cmd: "autofix-pr", cat: "automate", desc: "Monitor and autofix issues with the current PR" },
+  { cmd: "team-onboarding", cat: "automate", desc: "Help teammates ramp on Claude Code" },
+  // config
+  { cmd: "update-config", cat: "config", desc: "Configure the Claude Code harness via settings.json" },
+  { cmd: "fewer-permission-prompts", cat: "config", desc: "Add a read-only tool allowlist from your transcripts" },
+  { cmd: "skill-creator", cat: "config", desc: "Create, edit, and optimize skills" },
 ];
 
 const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
