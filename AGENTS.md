@@ -34,7 +34,7 @@ The whole idea: **HQ reads the files Claude Code already writes to disk.** Every
 - `sessions-meta.ts` — Recents view-state sidecar (`~/.claude/hq/sessions-meta.json`): favorite / hidden / custom title, keyed by session id.
 - `skills.ts` — discovers the user's skills from `~/.claude/skills/*/SKILL.md` (name + description frontmatter) for the Skills panel.
 - `notes.ts` — saved "note blocks" (`~/.claude/hq/notes/*.md`); `saveNote` / `getNotes` / `getNoteFile`.
-- `todo.ts` — HQ-native To Do store (`~/.claude/hq/todo.json`): items with `parentId`/`claimedBy`/`body`/`addedBy` (collapsible sub-items + two-agent coordination).
+- `todo.ts` — HQ-native To Do store (`~/.claude/hq/todo.json`). A to-do = title + optional markdown `body` (NO sub-items — the breakdown lives as a markdown list in the body); fields `done`/`createdAt`/`body`/`addedBy`/`fromSession`/`claimedBy`/`category`. Panel (`todo-list.tsx`) = collapsible tool-step-style cards with category filters, drag-to-reorder (All view) + drag-to-terminal (inject), provenance line + session-in-body; new items prepend. Added via the `/todo` skill or the send-box "+ todo" chip (`terminal.tsx todoDraft`); multi-line add splits first-line title / rest body.
 - `lineage.ts` — the `/clear` chain reconstruction (same-cwd + adjacency heuristic).
 - `search.ts` + `archive.ts` + `text-search.ts` — unified Search (see below).
 - `pricing.ts` — USD estimates (see Gotchas).
