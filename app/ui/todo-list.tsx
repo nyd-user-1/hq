@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Markdown from "@/app/ui/md";
+import CopyCode from "@/app/ui/copy-code";
 import type { TodoItem } from "@/lib/todo";
 
 // Drag marker — must match TODO_DND_TYPE in terminal.tsx.
@@ -348,8 +349,16 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                     <div className="border-t border-zinc-800 px-3.5 py-3 font-mono text-[11px] leading-relaxed text-zinc-300">
                       {t.body && <Markdown text={t.body} />}
                       {sess && (
-                        <p className={`text-zinc-600 ${t.body ? "mt-2" : ""}`}>
-                          from session {sess.slice(0, 8)}
+                        <p
+                          className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-zinc-600 ${
+                            t.body ? "mt-2" : ""
+                          }`}
+                        >
+                          <CopyCode>{t.id}</CopyCode>
+                          from session
+                          <CopyCode copyText={sess}>
+                            {sess.slice(0, 8)}
+                          </CopyCode>
                         </p>
                       )}
                     </div>
