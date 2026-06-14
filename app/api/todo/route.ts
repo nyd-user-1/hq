@@ -18,19 +18,19 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { text } = await req.json().catch(() => ({}));
+  const { text, body, addedBy } = await req.json().catch(() => ({}));
   if (typeof text !== "string" || !text.trim()) {
     return new NextResponse("text required", { status: 400 });
   }
-  return NextResponse.json({ item: addTodo(text) });
+  return NextResponse.json({ item: addTodo(text, { body, addedBy }) });
 }
 
 export async function PATCH(req: Request) {
-  const { id, text, done, claimedBy } = await req.json().catch(() => ({}));
+  const { id, text, done, claimedBy, body } = await req.json().catch(() => ({}));
   if (typeof id !== "string" || !id) {
     return new NextResponse("id required", { status: 400 });
   }
-  const item = updateTodo(id, { text, done, claimedBy });
+  const item = updateTodo(id, { text, done, claimedBy, body });
   if (!item) return new NextResponse("not found", { status: 404 });
   return NextResponse.json({ item });
 }

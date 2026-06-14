@@ -26,15 +26,17 @@ const CopyGlyph = () => (
   </svg>
 );
 
-// Interactive To Do over the HQ-native store (/api/todo). One level of
-// sub-items: a parent renders as a collapsible group (done when all children
-// are). Each row has three intentional targets: checkbox = toggle, leading
-// handle (number / copy glyph) = click-to-copy, text = drag into a terminal.
+// To Do over the HQ-native store (/api/todo). Each item is a collapsible
+// disclosure card in the terminal's tool-step language: concise title collapsed;
+// expanded it houses a rich body (e.g. a /todo paste) + a provenance line
+// (● who · time · session). Sub-items nest inside the expanded body. Per row:
+// checkbox = toggle, leading handle (number / copy glyph) = click-to-copy, title
+// = drag into a terminal, click the row = expand. SSR-seeded; optimistic writes.
 export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [items, setItems] = useState<TodoItem[]>(initial);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const topLevel = items.filter((t) => !t.parentId);
@@ -50,7 +52,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       const res = await fetch("/api/todo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, addedBy: "you" }),
       });
       if (res.ok) {
         const { item } = await res.json();
@@ -86,8 +88,8 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     );
   }
 
-  function toggleCollapse(id: string) {
-    setCollapsed((s) => {
+  function toggleExpand(id: string) {
+    setExpanded((s) => {
       const n = new Set(s);
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
@@ -95,12 +97,13 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   }
 
   // A parent copies itself + its sub-items as a block (paste a whole feature into
-  // a terminal); a leaf or sub-item copies its own line.
+  // a terminal); otherwise the title, plus the body if there is one.
   function copyText(t: TodoItem): string {
     const children = kids(t.id);
-    return children.length
-      ? [t.text, ...children.map((c) => `- ${c.text}`)].join("\n")
-      : t.text;
+    if (children.length) {
+      return [t.text, ...children.map((c) => `- ${c.text}`)].join("\n");
+    }
+    return t.body ? `${t.text}\n\n${t.body}` : t.text;
   }
   function copy(t: TodoItem) {
     navigator.clipboard.writeText(copyText(t));
@@ -108,11 +111,13 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     setTimeout(() => setCopiedId((c) => (c === t.id ? null : c)), 1200);
   }
 
-  // Leading click-to-copy handle: a number for top-level rows, a copy glyph for
-  // sub-items. Flashes a green check on copy.
+  // Leading click-to-copy handle (stops the row from toggling).
   const copyHandle = (t: TodoItem, display: ReactNode, hasKids = false) => (
     <button
-      onClick={() => copy(t)}
+      onClick={(e) => {
+        e.stopPropagation();
+        copy(t);
+      }}
       title={hasKids ? "copy this item + its sub-items" : "copy this item"}
       className="mt-0.5 shrink-0 cursor-pointer p-0 font-mono text-zinc-600 transition-colors hover:text-zinc-200"
     >
@@ -120,7 +125,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     </button>
   );
 
-  // Draggable text (drag a to-do into a terminal as a prompt).
+  // Draggable title (drag a to-do into a terminal as a prompt).
   const label = (t: TodoItem, extra = "") => (
     <span
       draggable
@@ -141,7 +146,10 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const checkbox = (t: TodoItem) =>
     t.done ? (
       <button
-        onClick={() => toggle(t.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle(t.id);
+        }}
         title="mark not done"
         aria-label="Mark not done"
         className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center rounded-[3px] border border-green-600/70 bg-green-600/30 text-[9px] leading-none text-green-400 transition-colors hover:bg-green-600/40"
@@ -150,14 +158,16 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       </button>
     ) : (
       <button
-        onClick={() => toggle(t.id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle(t.id);
+        }}
         title="mark done"
         aria-label="Mark done"
         className="mt-0.5 size-3.5 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
       />
     );
 
-  // Which terminal claimed this item (two-agent coordination).
   const claimChip = (t: TodoItem) =>
     t.claimedBy ? (
       <span
@@ -167,6 +177,86 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
         {t.claimedBy.slice(0, 8)}
       </span>
     ) : null;
+
+  // Provenance header, mirroring the terminal's message line: ● who · time · id.
+  const provenance = (t: TodoItem) => {
+    const isSession = !!t.addedBy && t.addedBy !== "you";
+    const name = t.addedBy === "you" ? "you" : isSession ? "claude" : "added";
+    const dot =
+      t.addedBy === "you"
+        ? "text-blue-500"
+        : isSession
+          ? "text-orange-500"
+          : "text-zinc-600";
+    return (
+      <div className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+        <span className={`mr-1.5 normal-case ${dot}`}>●</span>
+        {name}
+        <span className="ml-2 normal-case tracking-normal text-zinc-600">
+          {new Date(t.createdAt).toLocaleTimeString()}
+          {isSession ? ` · ${t.addedBy!.slice(0, 8)}` : ""}
+        </span>
+      </div>
+    );
+  };
+
+  function renderNode(t: TodoItem, depth: number, num: number | null) {
+    const children = kids(t.id);
+    const expandable = !!t.body || children.length > 0;
+    const open = expanded.has(t.id);
+    const top = depth === 0;
+    const allKidsDone = children.length > 0 && children.every((c) => c.done);
+    return (
+      <li
+        key={t.id}
+        className={top ? "rounded-md border border-zinc-800 bg-zinc-900/30" : ""}
+      >
+        <div
+          className={`flex items-start gap-2 ${top ? "px-2.5 py-1.5" : "py-0.5"} ${
+            expandable ? "cursor-pointer" : ""
+          }`}
+          onClick={expandable ? () => toggleExpand(t.id) : undefined}
+        >
+          <span
+            className={`mt-0.5 w-3 shrink-0 select-none text-center font-mono text-zinc-600 transition-transform ${
+              open ? "rotate-90" : ""
+            } ${expandable ? "" : "opacity-0"}`}
+          >
+            ›
+          </span>
+          {checkbox(t)}
+          {copyHandle(
+            t,
+            top && num != null ? `${num}.` : <CopyGlyph />,
+            children.length > 0
+          )}
+          {label(t, allKidsDone ? "line-through text-zinc-600" : "")}
+          {claimChip(t)}
+        </div>
+        {open && (
+          <div
+            className={
+              top
+                ? "border-t border-zinc-800 px-3 py-2"
+                : "ml-3 border-l border-zinc-800 pl-3"
+            }
+          >
+            {provenance(t)}
+            {t.body && (
+              <p className="mt-1.5 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-zinc-400">
+                {t.body}
+              </p>
+            )}
+            {children.length > 0 && (
+              <ul className="mt-2 flex list-none flex-col gap-1">
+                {children.map((c) => renderNode(c, depth + 1, null))}
+              </ul>
+            )}
+          </div>
+        )}
+      </li>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -194,49 +284,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
 
       {topLevel.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-1.5 overflow-y-auto text-sm">
-          {topLevel.map((t, i) => {
-            const children = kids(t.id);
-            if (children.length === 0) {
-              return (
-                <li key={t.id} className="flex items-start gap-2">
-                  {checkbox(t)}
-                  {copyHandle(t, `${i + 1}.`)}
-                  {label(t)}
-                  {claimChip(t)}
-                </li>
-              );
-            }
-            const open = !collapsed.has(t.id);
-            const allDone = children.every((c) => c.done);
-            return (
-              <li key={t.id}>
-                <div className="flex items-start gap-2">
-                  <button
-                    onClick={() => toggleCollapse(t.id)}
-                    aria-label={open ? "Collapse" : "Expand"}
-                    className="mt-0.5 w-3.5 shrink-0 text-zinc-500 transition-colors hover:text-zinc-200"
-                  >
-                    {open ? "▾" : "▸"}
-                  </button>
-                  {copyHandle(t, `${i + 1}.`, true)}
-                  {label(t, allDone ? "line-through text-zinc-600" : "")}
-                  {claimChip(t)}
-                </div>
-                {open && (
-                  <ul className="ml-[1.4rem] mt-1.5 flex list-none flex-col gap-1.5 border-l border-zinc-800 pl-3">
-                    {children.map((c) => (
-                      <li key={c.id} className="flex items-start gap-2">
-                        {checkbox(c)}
-                        {copyHandle(c, <CopyGlyph />)}
-                        {label(c)}
-                        {claimChip(c)}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
+          {topLevel.map((t, i) => renderNode(t, 0, i + 1))}
         </ol>
       ) : (
         <p className="text-sm text-zinc-600">no to-do items yet</p>

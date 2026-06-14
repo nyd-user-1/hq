@@ -13,11 +13,13 @@ const STORE = path.join(STORE_DIR, "todo.json");
 
 export type TodoItem = {
   id: string;
-  text: string;
+  text: string; // concise title (the collapsed row)
   done: boolean;
   createdAt: number;
   parentId?: string; // set → this is a sub-item of the parent todo
   claimedBy?: string; // session id of the terminal working it (two-agent coordination)
+  body?: string; // rich description shown when the row is expanded (e.g. a /todo paste)
+  addedBy?: string; // provenance: a session id (Claude via /todo) or "you" (added in HQ)
 };
 
 type Store = { version: number; items: TodoItem[] };
@@ -47,7 +49,10 @@ export function getTodos(): TodoItem[] {
   return read().items;
 }
 
-export function addTodo(text: string): TodoItem {
+export function addTodo(
+  text: string,
+  extra?: { body?: string; addedBy?: string; parentId?: string }
+): TodoItem {
   const store = read();
   const item: TodoItem = {
     id: newId(),
@@ -55,6 +60,9 @@ export function addTodo(text: string): TodoItem {
     done: false,
     createdAt: Date.now(),
   };
+  if (extra?.body?.trim()) item.body = extra.body.trim();
+  if (extra?.addedBy) item.addedBy = extra.addedBy;
+  if (extra?.parentId) item.parentId = extra.parentId;
   store.items.push(item);
   write(store);
   return item;
@@ -62,13 +70,14 @@ export function addTodo(text: string): TodoItem {
 
 export function updateTodo(
   id: string,
-  patch: Partial<Pick<TodoItem, "text" | "done" | "claimedBy">>
+  patch: Partial<Pick<TodoItem, "text" | "done" | "claimedBy" | "body">>
 ): TodoItem | null {
   const store = read();
   const item = store.items.find((i) => i.id === id);
   if (!item) return null;
   if (typeof patch.text === "string") item.text = patch.text.trim();
   if (typeof patch.done === "boolean") item.done = patch.done;
+  if (typeof patch.body === "string") item.body = patch.body;
   if ("claimedBy" in patch) {
     if (patch.claimedBy) item.claimedBy = patch.claimedBy;
     else delete item.claimedBy; // empty/null releases the claim
