@@ -111,6 +111,17 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       />
     );
 
+  // Two-agent coordination: which terminal claimed this item (see who owns what).
+  const claimChip = (t: TodoItem) =>
+    t.claimedBy ? (
+      <span
+        title={`claimed by session ${t.claimedBy}`}
+        className="mt-0.5 shrink-0 rounded bg-amber-500/15 px-1 font-mono text-[10px] text-amber-300/90"
+      >
+        {t.claimedBy.slice(0, 8)}
+      </span>
+    ) : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <input
@@ -145,6 +156,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                   {checkbox(t)}
                   <span className="mr-1.5 mt-0.5 text-zinc-600">{i + 1}.</span>
                   {label(t)}
+                  {claimChip(t)}
                 </li>
               );
             }
@@ -166,6 +178,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                   <span className="mt-0.5 shrink-0 text-xs text-zinc-600">
                     {done}/{children.length}
                   </span>
+                  {claimChip(t)}
                 </div>
                 {open && (
                   <ul className="ml-[1.4rem] mt-1.5 flex list-none flex-col gap-1.5 border-l border-zinc-800 pl-3">
@@ -173,6 +186,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                       <li key={c.id} className="flex items-start gap-2">
                         {checkbox(c)}
                         {label(c)}
+                        {claimChip(c)}
                       </li>
                     ))}
                   </ul>

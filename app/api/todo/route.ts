@@ -26,11 +26,11 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const { id, text, done } = await req.json().catch(() => ({}));
+  const { id, text, done, claimedBy } = await req.json().catch(() => ({}));
   if (typeof id !== "string" || !id) {
     return new NextResponse("id required", { status: 400 });
   }
-  const item = updateTodo(id, { text, done });
+  const item = updateTodo(id, { text, done, claimedBy });
   if (!item) return new NextResponse("not found", { status: 404 });
   return NextResponse.json({ item });
 }

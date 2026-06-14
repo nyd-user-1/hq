@@ -17,6 +17,7 @@ export type TodoItem = {
   done: boolean;
   createdAt: number;
   parentId?: string; // set → this is a sub-item of the parent todo
+  claimedBy?: string; // session id of the terminal working it (two-agent coordination)
 };
 
 type Store = { version: number; items: TodoItem[] };
@@ -61,13 +62,17 @@ export function addTodo(text: string): TodoItem {
 
 export function updateTodo(
   id: string,
-  patch: Partial<Pick<TodoItem, "text" | "done">>
+  patch: Partial<Pick<TodoItem, "text" | "done" | "claimedBy">>
 ): TodoItem | null {
   const store = read();
   const item = store.items.find((i) => i.id === id);
   if (!item) return null;
   if (typeof patch.text === "string") item.text = patch.text.trim();
   if (typeof patch.done === "boolean") item.done = patch.done;
+  if ("claimedBy" in patch) {
+    if (patch.claimedBy) item.claimedBy = patch.claimedBy;
+    else delete item.claimedBy; // empty/null releases the claim
+  }
   write(store);
   return item;
 }
