@@ -4,11 +4,9 @@ import TabNav from "@/app/ui/tab-nav";
 
 export const dynamic = "force-dynamic";
 
-// Activity panel: To Do · Sessions · SDK · Components tabs at the top (To Do
-// first — the "panels" button lands here). Sessions also lives in the sidebar
-// Recents; SDK = Agent SDK runs, kept out of Recents; Components = the HQ
-// component registry. Calls (the $/call Ledger) moved to the Metrics panel with
-// the other cost views.
+// Activity panel: To Do · Components tabs at the top (To Do first — the "panels"
+// button lands here). Components = the HQ component registry. Sessions + SDK
+// moved to the Console panel; Calls (the $/call Ledger) moved to Metrics.
 export default function ActivityLayout({
   children,
 }: {
@@ -19,8 +17,6 @@ export default function ActivityLayout({
       <TabNav
         tabs={[
           { title: "To Do", href: "/todo", segment: "todo" },
-          { title: "Sessions", href: "/sessions", segment: "sessions" },
-          { title: "SDK", href: "/sdk", segment: "sdk" },
           { title: "Components", href: "/components", segment: "components" },
         ]}
       />

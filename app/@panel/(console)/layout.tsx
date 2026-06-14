@@ -4,7 +4,8 @@ import TabNav from "@/app/ui/tab-nav";
 
 export const dynamic = "force-dynamic";
 
-// Console panel: Shipped · Skills · CMD · Routines · Firehose.
+// Console panel: Shipped · Sessions · SDK · Skills · CMD · Routines · Firehose.
+// Sessions also lives in the sidebar Recents; SDK = Agent SDK runs.
 export default function ConsoleLayout({
   children,
 }: {
@@ -15,6 +16,8 @@ export default function ConsoleLayout({
       <TabNav
         tabs={[
           { title: "Shipped", href: "/shipped", segment: "shipped" },
+          { title: "Sessions", href: "/sessions", segment: "sessions" },
+          { title: "SDK", href: "/sdk", segment: "sdk" },
           { title: "Skills", href: "/skills", segment: "skills" },
           { title: "CMD", href: "/cmd", segment: "cmd" },
           { title: "Routines", href: "/routines", segment: "routines" },

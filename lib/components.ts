@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+
 // The HQ component registry — hand-curated (approval is a human judgment, not
 // something you can derive from disk). APPROVED = reviewed, named per the
 // [Category][Descriptor][Element] taxonomy, single-responsibility, reusable.
@@ -53,3 +57,56 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "SidebarToggle", file: "app/ui/sidebar-toggle.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — the boundary sidebar toggle." },
   { name: "SearchTrigger", file: "app/ui/search-trigger.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — opens/closes the Search panel (active state)." },
 ];
+
+// The source of a registered component, read from disk (the file lives in the
+// repo; HQ is localhost). Every registered component lives under app/ui, so the
+// read is statically scoped there (static prefix + dynamic basename) — that
+// keeps the build's file-tracer from slurping the whole project. Empty string
+// if it can't be read.
+export function readComponentSource(file: string): string {
+  try {
+    return fs.readFileSync(
+      path.join(process.cwd(), "app", "ui", path.basename(file)),
+      "utf8"
+    );
+  } catch {
+    return "";
+  }
+}
+
+// Reorder is persisted to an HQ-native sidecar (same "disk is the database"
+// pattern as todo.json) — an array of component names in display order.
+const ORDER_FILE = path.join(
+  os.homedir(),
+  ".claude",
+  "hq",
+  "components-order.json"
+);
+
+function readOrder(): string[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(ORDER_FILE, "utf8"));
+    return Array.isArray(parsed.order) ? parsed.order : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveComponentsOrder(order: string[]): void {
+  fs.mkdirSync(path.dirname(ORDER_FILE), { recursive: true });
+  fs.writeFileSync(ORDER_FILE, JSON.stringify({ order }, null, 2));
+}
+
+// Registry in the saved display order; names absent from the sidecar keep their
+// registry position (appended after the ordered ones). Stable.
+export function orderedComponents(): ComponentEntry[] {
+  const order = readOrder();
+  if (!order.length) return COMPONENTS;
+  const rank = new Map(order.map((n, i) => [n, i]));
+  return [...COMPONENTS].sort((a, b) => {
+    const ra = rank.has(a.name) ? rank.get(a.name)! : Infinity;
+    const rb = rank.has(b.name) ? rank.get(b.name)! : Infinity;
+    if (ra !== rb) return ra - rb;
+    return COMPONENTS.indexOf(a) - COMPONENTS.indexOf(b);
+  });
+}
