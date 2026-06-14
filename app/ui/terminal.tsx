@@ -1191,7 +1191,7 @@ export default function Terminal({
                 ? "no session yet — start one in your terminal first"
                 : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
-            className="max-h-[200px] min-h-[88px] flex-1 resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+            className="max-h-[200px] min-h-[64px] flex-1 resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <input
             ref={fileInputRef}
@@ -1208,20 +1208,9 @@ export default function Terminal({
             onClick={() => fileInputRef.current?.click()}
             title="attach a screenshot — pasting or dropping an image works too"
             aria-label="Attach"
-            className="shrink-0 cursor-pointer rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-100 transition-colors hover:bg-zinc-700"
+            className="shrink-0 cursor-pointer rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-zinc-100 transition-colors hover:bg-zinc-700"
           >
-            <svg
-              className="size-3.5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            + attach
           </button>
           <button
             onClick={todoDraft}
