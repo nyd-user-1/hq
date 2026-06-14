@@ -1,20 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { Inline } from "@/app/ui/md";
 import type { TodoItem } from "@/lib/todo";
 
-// Interactive To Do list over the HQ-native store (/api/todo). Add + toggle
-// live, in HQ — no vault round-trip. Checking an item strikes it through and
-// sinks it to the bottom (not hidden); "Clear completed tasks" deletes them.
-// Reorder/drag and the /todo skill build on the same API. SSR seeds `initial`;
-// mutations are optimistic.
+// Interactive To Do list over the HQ-native store (/api/todo). Add (↵) + toggle
+// live, in HQ — no vault round-trip. Checking an item strikes it through IN
+// PLACE (it doesn't move); "Clear completed tasks" (under the entry) deletes the
+// checked ones. Item text renders as inline markdown (**bold**, ~~strike~~,
+// ==highlight==, `code`, links). SSR seeds `initial`; mutations are optimistic.
 export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [items, setItems] = useState<TodoItem[]>(initial);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const active = items.filter((t) => !t.done);
-  const done = items.filter((t) => t.done);
+  const doneCount = items.filter((t) => t.done).length;
 
   async function add() {
     const text = draft.trim();
@@ -63,53 +63,34 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") add();
-          }}
-          placeholder="add a to-do — ↵ to save"
-          className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
-        />
-        <button
-          onClick={add}
-          disabled={!draft.trim() || busy}
-          className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          add
-        </button>
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") add();
+        }}
+        placeholder="add a to-do — ↵ to save"
+        className="rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
+      />
+
+      {/* Clear-completed lives under the entry box and reserves its own line, so
+          the list start doesn't jump when the button appears/disappears. */}
+      <div className="flex min-h-[1.125rem] items-center">
+        {doneCount > 0 && (
+          <button
+            onClick={clearCompleted}
+            className="text-xs text-zinc-600 transition-colors hover:text-zinc-300"
+          >
+            Clear completed tasks ({doneCount})
+          </button>
+        )}
       </div>
 
-      <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
-        {active.length === 0 && done.length === 0 && (
-          <p className="text-sm text-zinc-600">no to-do items yet</p>
-        )}
-
-        {/* Active — numbered, in store order */}
-        <ol className="flex list-none flex-col gap-1.5 text-sm text-zinc-300">
-          {active.map((t, i) => (
+      {items.length > 0 ? (
+        <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-1.5 overflow-y-auto text-sm">
+          {items.map((t, i) => (
             <li key={t.id} className="flex items-start gap-2">
-              <button
-                onClick={() => toggle(t.id)}
-                title="mark done"
-                aria-label="Mark done"
-                className="mt-0.5 size-3.5 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="mr-1.5 text-zinc-600">{i + 1}.</span>
-                {t.text}
-              </span>
-            </li>
-          ))}
-        </ol>
-
-        {/* Completed — sunk to the bottom, struck through, click to restore */}
-        {done.length > 0 && (
-          <ul className="flex list-none flex-col gap-1.5 pt-1 text-sm">
-            {done.map((t) => (
-              <li key={t.id} className="flex items-start gap-2 text-zinc-600">
+              {t.done ? (
                 <button
                   onClick={() => toggle(t.id)}
                   title="mark not done"
@@ -118,20 +99,27 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                 >
                   ✓
                 </button>
-                <span className="min-w-0 flex-1 line-through">{t.text}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {done.length > 0 && (
-        <button
-          onClick={clearCompleted}
-          className="self-start text-xs text-zinc-600 transition-colors hover:text-zinc-300"
-        >
-          Clear completed tasks ({done.length})
-        </button>
+              ) : (
+                <button
+                  onClick={() => toggle(t.id)}
+                  title="mark done"
+                  aria-label="Mark done"
+                  className="mt-0.5 size-3.5 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
+                />
+              )}
+              <span
+                className={`min-w-0 flex-1 ${
+                  t.done ? "text-zinc-600 line-through" : "text-zinc-300"
+                }`}
+              >
+                <span className="mr-1.5 text-zinc-600">{i + 1}.</span>
+                <Inline text={t.text} />
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-zinc-600">no to-do items yet</p>
       )}
     </div>
   );
