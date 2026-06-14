@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
 // first, labelled by the short session id (+ a dim project suffix, or a custom
-// name once renamed) so each row lines up 1:1 with the id in the terminal header.
-// Clicking one pins the center terminal to it (?session=<id>). Per-session view
-// metadata — favorite (pins to top), hidden (soft-delete), and rename — lives in
-// an HQ sidecar (~/.claude/hq/sessions-meta.json), never written into the
+// name once renamed). Clicking a row pins the center terminal to it
+// (?session=<id>). Per-row actions live behind a ⋮ kebab menu (Star / Rename /
+// Open beside Terminal 1 / Add to project / Hide) — like the Claude.ai chat row,
+// NOT a cramped strip of inline icons. View metadata (favorite/hidden/rename)
+// lives in an HQ sidecar (~/.claude/hq/sessions-meta.json), never in the
 // transcripts. A Group-by control (None/Date/Project) buckets the list.
 type Recent = {
   id: string;
@@ -78,35 +79,18 @@ function groupSessions(
     .sort((a, b) => b.sessions[0].lastActive - a.sessions[0].lastActive);
 }
 
-// split-view glyph for the "open beside Terminal 1" affordance.
 function SplitIcon() {
   return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <line x1="12" y1="4" x2="12" y2="20" />
     </svg>
   );
 }
 
-function StarIcon({ filled }: { filled: boolean }) {
+function StarIcon({ filled, className = "size-3.5" }: { filled: boolean; className?: string }) {
   return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill={filled ? "currentColor" : "none"}
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
@@ -114,15 +98,7 @@ function StarIcon({ filled }: { filled: boolean }) {
 
 function PencilIcon() {
   return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
     </svg>
@@ -131,15 +107,7 @@ function PencilIcon() {
 
 function EyeOffIcon() {
   return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9.88 9.88a3 3 0 0 0 4.24 4.24" />
       <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
       <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
@@ -150,32 +118,26 @@ function EyeOffIcon() {
 
 function EyeIcon() {
   return (
-    <svg
-      className="size-3.5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
 
+function ArchiveIcon() {
+  return (
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="5" rx="1" />
+      <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
+      <line x1="10" y1="13" x2="14" y2="13" />
+    </svg>
+  );
+}
+
 function BranchIcon() {
   return (
-    <svg
-      className="size-2.5 shrink-0"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className="size-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="6" x2="6" y1="3" y2="15" />
       <circle cx="18" cy="6" r="3" />
       <circle cx="6" cy="18" r="3" />
@@ -184,17 +146,19 @@ function BranchIcon() {
   );
 }
 
+function KebabIcon() {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  );
+}
+
 function Sliders({ active }: { active: boolean }) {
   return (
-    <svg
-      className={`size-3.5 transition-colors ${active ? "text-zinc-300" : "text-zinc-600"}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={`size-3.5 transition-colors ${active ? "text-zinc-300" : "text-zinc-600"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="21" x2="14" y1="4" y2="4" />
       <line x1="10" x2="3" y1="4" y2="4" />
       <line x1="21" x2="12" y1="12" y2="12" />
@@ -210,6 +174,7 @@ function Sliders({ active }: { active: boolean }) {
 
 export default function SidebarRecents() {
   const pathname = usePathname() ?? "/";
+  const router = useRouter();
   const params = useSearchParams();
   const current = params.get("session"); // terminal 1's session
   const pairParam = params.get("pair"); // terminal 2's session (if open)
@@ -219,6 +184,8 @@ export default function SidebarRecents() {
   const [showHidden, setShowHidden] = useState(false);
   const [editing, setEditing] = useState<string | null>(null); // session id being renamed
   const [editValue, setEditValue] = useState("");
+  const [menuFor, setMenuFor] = useState<string | null>(null); // row whose ⋮ menu is open
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDetailsElement>(null);
 
   // Restore the saved grouping (client-only → useEffect, no hydration mismatch).
@@ -251,6 +218,27 @@ export default function SidebarRecents() {
       window.removeEventListener("focus", onFocus);
     };
   }, []);
+
+  // Close the kebab menu on any outside click, Escape, or scroll. (The menu
+  // itself stops propagation; its items close it explicitly.)
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => {
+      setMenuFor(null);
+      setMenuPos(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [menuFor]);
 
   const choose = (v: GroupBy) => {
     setGroupBy(v);
@@ -294,9 +282,22 @@ export default function SidebarRecents() {
     setEditing(null);
   };
 
+  const openMenu = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenuPos({ top: r.bottom + 4, left: r.left });
+    setMenuFor(id);
+  };
+  const closeMenu = () => {
+    setMenuFor(null);
+    setMenuPos(null);
+  };
+
   const hiddenCount = sessions.filter((s) => s.hidden).length;
   const visible = showHidden ? sessions : sessions.filter((s) => !s.hidden);
   const groups = groupSessions(visible, groupBy);
+  const menuSession = menuFor ? sessions.find((s) => s.id === menuFor) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
@@ -344,21 +345,13 @@ export default function SidebarRecents() {
               )}
               {g.sessions.map((s) => {
                 const active = current === s.id;
-                // Open this session in Terminal 2, preserving Terminal 1 (?session).
-                const pairHref = current
-                  ? `${pathname}?session=${current}&pair=${s.id}`
-                  : `${pathname}?pair=${s.id}`;
-                // Open in Terminal 1, preserving Terminal 2 if it's already open.
                 const openHref = pairParam
                   ? `${pathname}?session=${s.id}&pair=${pairParam}`
                   : `${pathname}?session=${s.id}`;
 
                 if (editing === s.id) {
                   return (
-                    <div
-                      key={s.id}
-                      className="flex items-center rounded-md bg-zinc-800"
-                    >
+                    <div key={s.id} className="flex items-center rounded-md bg-zinc-800">
                       <input
                         autoFocus
                         value={editValue}
@@ -379,14 +372,14 @@ export default function SidebarRecents() {
                   <div
                     key={s.id}
                     className={`group flex items-center rounded-md transition-colors ${
-                      active ? "bg-zinc-800" : "hover:bg-zinc-800/60"
+                      active || menuFor === s.id ? "bg-zinc-800" : "hover:bg-zinc-800/60"
                     } ${s.hidden ? "opacity-50" : ""}`}
                   >
                     <Link
                       href={openHref}
                       scroll={false}
                       title={`${s.project} · ${s.customTitle || s.title}`}
-                      className={`flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-sm transition-colors ${
+                      className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-sm transition-colors ${
                         active
                           ? "text-zinc-100"
                           : "text-zinc-400 group-hover:text-zinc-200"
@@ -422,47 +415,23 @@ export default function SidebarRecents() {
                         }`}
                       />
                     </Link>
-                    {/* favorite — stays lit when starred, else appears on hover */}
+                    {/* favorite indicator — subtle, persistent (toggle lives in the menu) */}
+                    {s.favorite && (
+                      <span className="shrink-0 pl-1 text-amber-400" title="favorite" aria-hidden>
+                        <StarIcon filled className="size-3" />
+                      </span>
+                    )}
+                    {/* the one row affordance: a kebab → dropdown menu */}
                     <button
-                      onClick={() => toggleFavorite(s)}
-                      title={s.favorite ? "unfavorite" : "favorite"}
-                      aria-label={s.favorite ? "unfavorite" : "favorite"}
-                      className={`shrink-0 px-1 py-1.5 transition ${
-                        s.favorite
-                          ? "text-amber-400 opacity-100"
-                          : "text-zinc-600 opacity-0 hover:text-amber-400 group-hover:opacity-100"
+                      onClick={(e) => openMenu(e, s.id)}
+                      title="more actions"
+                      aria-label="more actions"
+                      className={`shrink-0 px-1.5 py-1.5 text-zinc-500 transition-opacity hover:text-zinc-200 ${
+                        menuFor === s.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                       }`}
                     >
-                      <StarIcon filled={s.favorite} />
+                      <KebabIcon />
                     </button>
-                    {/* rename — hover only */}
-                    <button
-                      onClick={() => startEdit(s)}
-                      title="rename"
-                      aria-label="rename session"
-                      className="shrink-0 px-1 py-1.5 text-zinc-600 opacity-0 transition hover:text-zinc-200 group-hover:opacity-100"
-                    >
-                      <PencilIcon />
-                    </button>
-                    {/* hide / unhide — hover only */}
-                    <button
-                      onClick={() => toggleHidden(s)}
-                      title={s.hidden ? "unhide" : "hide"}
-                      aria-label={s.hidden ? "unhide session" : "hide session"}
-                      className="shrink-0 px-1 py-1.5 text-zinc-600 opacity-0 transition hover:text-zinc-200 group-hover:opacity-100"
-                    >
-                      {s.hidden ? <EyeIcon /> : <EyeOffIcon />}
-                    </button>
-                    {/* split — open beside Terminal 1, hover only */}
-                    <Link
-                      href={pairHref}
-                      scroll={false}
-                      title="open beside Terminal 1"
-                      aria-label="open beside Terminal 1"
-                      className="shrink-0 px-2 py-1.5 text-zinc-600 opacity-0 transition hover:text-zinc-200 group-hover:opacity-100"
-                    >
-                      <SplitIcon />
-                    </Link>
                   </div>
                 );
               })}
@@ -477,6 +446,75 @@ export default function SidebarRecents() {
               {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Kebab dropdown — fixed-positioned so the scroll container can't clip it.
+          One menu at a time; opens from the clicked row's ⋮. */}
+      {menuSession && menuPos && (
+        <div
+          role="menu"
+          onClick={(e) => e.stopPropagation()}
+          style={{ top: menuPos.top, left: menuPos.left }}
+          className="fixed z-50 flex w-52 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+        >
+          <button
+            role="menuitem"
+            onClick={() => {
+              toggleFavorite(menuSession);
+              closeMenu();
+            }}
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <StarIcon filled={menuSession.favorite} />
+            {menuSession.favorite ? "Unstar" : "Star"}
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              startEdit(menuSession);
+              closeMenu();
+            }}
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <PencilIcon />
+            Rename
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              const pairHref = current
+                ? `${pathname}?session=${current}&pair=${menuSession.id}`
+                : `${pathname}?pair=${menuSession.id}`;
+              router.push(pairHref, { scroll: false });
+              closeMenu();
+            }}
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <SplitIcon />
+            Open beside Terminal 1
+          </button>
+          <button
+            role="menuitem"
+            disabled
+            title="coming soon — needs the project view"
+            className="flex cursor-default items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-600"
+          >
+            <ArchiveIcon />
+            Add to project
+          </button>
+          <div className="my-1 h-px bg-zinc-800" />
+          <button
+            role="menuitem"
+            onClick={() => {
+              toggleHidden(menuSession);
+              closeMenu();
+            }}
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            {menuSession.hidden ? <EyeIcon /> : <EyeOffIcon />}
+            {menuSession.hidden ? "Unhide" : "Hide"}
+          </button>
         </div>
       )}
     </div>
