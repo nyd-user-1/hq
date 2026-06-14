@@ -166,11 +166,11 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                     onClick={expandable ? () => toggleExpand(t.id) : undefined}
                   >
                     <span
-                      className={`shrink-0 select-none font-mono text-zinc-600 transition-transform ${
+                      className={`mt-0.5 shrink-0 select-none text-[10px] text-zinc-500 transition-transform ${
                         open ? "rotate-90" : ""
                       } ${expandable ? "" : "invisible"}`}
                     >
-                      ›
+                      ▶
                     </span>
                     <span className="shrink-0 font-mono text-xs text-zinc-600">
                       {i + 1}.
