@@ -70,7 +70,7 @@ export default function SkillLauncher({ skills }: { skills: Skill[] }) {
         onClick={() => run(`/${cmd}`, `/${cmd}`)}
         disabled={running !== null}
         title={desc || `/${cmd}`}
-        className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-1.5 text-left transition-colors hover:bg-zinc-800/30 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-3 text-left transition-colors hover:bg-zinc-800/30 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span className="shrink-0 font-mono text-xs text-zinc-200">/{cmd}</span>
         <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
@@ -85,26 +85,7 @@ export default function SkillLauncher({ skills }: { skills: Skill[] }) {
 
   return (
     <div className="flex flex-col gap-5">
-      {skills.length > 0 && (
-        <section className="flex flex-col gap-1">
-          <h2 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-            your skills · ~/.claude/skills
-          </h2>
-          <div className="flex flex-col">
-            {skills.map((s) => row(s.name, s.description, `~${fmt(s.tokens)} tok`))}
-          </div>
-        </section>
-      )}
-
-      <section className="flex flex-col gap-1">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-          built-in
-        </h2>
-        <div className="flex flex-col">
-          {BUILTIN.map((b) => row(b.cmd, b.desc, b.cat.toUpperCase()))}
-        </div>
-      </section>
-
+      {/* command input — at the top, like the search bar on the other panels */}
       <section className="flex flex-col gap-2">
         <div className="flex gap-2">
           <input
@@ -139,6 +120,26 @@ export default function SkillLauncher({ skills }: { skills: Skill[] }) {
             {error}
           </p>
         )}
+      </section>
+
+      {skills.length > 0 && (
+        <section className="flex flex-col gap-1">
+          <h2 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+            your skills · ~/.claude/skills
+          </h2>
+          <div className="flex flex-col">
+            {skills.map((s) => row(s.name, s.description, `~${fmt(s.tokens)} tok`))}
+          </div>
+        </section>
+      )}
+
+      <section className="flex flex-col gap-1">
+        <h2 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          built-in
+        </h2>
+        <div className="flex flex-col">
+          {BUILTIN.map((b) => row(b.cmd, b.desc, b.cat.toUpperCase()))}
+        </div>
       </section>
     </div>
   );
