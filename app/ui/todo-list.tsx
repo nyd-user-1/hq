@@ -1,21 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { TodoItem } from "@/lib/todo";
 
 // Drag marker — must match TODO_DND_TYPE in terminal.tsx. Dropping a card on a
 // terminal pane fills that pane's message box with the to-do text.
 const TODO_DND_TYPE = "application/x-hq-todo";
 
-// Interactive To Do over the HQ-native store (/api/todo). Add (↵), toggle, and
-// clear-completed live. Supports one level of sub-items: a parent with children
-// renders as a collapsible group (no checkbox of its own — it's done when all
-// its children are). Each row is draggable into a terminal as a prompt.
+// lucide "copy" — the click-to-copy handle for sub-items (top-level rows use
+// their number as the handle).
+const CopyGlyph = () => (
+  <svg
+    width="11"
+    height="11"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="inline-block align-[-1px]"
+  >
+    <rect width="13" height="13" x="9" y="9" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+// Interactive To Do over the HQ-native store (/api/todo). One level of
+// sub-items: a parent renders as a collapsible group (done when all children
+// are). Each row has three intentional targets: checkbox = toggle, leading
+// handle (number / copy glyph) = click-to-copy, text = drag into a terminal.
 export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [items, setItems] = useState<TodoItem[]>(initial);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const topLevel = items.filter((t) => !t.parentId);
   const kids = (id: string) => items.filter((t) => t.parentId === id);
@@ -74,7 +94,33 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     });
   }
 
-  // Draggable text span (drag a to-do into a terminal as a prompt).
+  // A parent copies itself + its sub-items as a block (paste a whole feature into
+  // a terminal); a leaf or sub-item copies its own line.
+  function copyText(t: TodoItem): string {
+    const children = kids(t.id);
+    return children.length
+      ? [t.text, ...children.map((c) => `- ${c.text}`)].join("\n")
+      : t.text;
+  }
+  function copy(t: TodoItem) {
+    navigator.clipboard.writeText(copyText(t));
+    setCopiedId(t.id);
+    setTimeout(() => setCopiedId((c) => (c === t.id ? null : c)), 1200);
+  }
+
+  // Leading click-to-copy handle: a number for top-level rows, a copy glyph for
+  // sub-items. Flashes a green check on copy.
+  const copyHandle = (t: TodoItem, display: ReactNode, hasKids = false) => (
+    <button
+      onClick={() => copy(t)}
+      title={hasKids ? "copy this item + its sub-items" : "copy this item"}
+      className="mt-0.5 shrink-0 cursor-pointer p-0 font-mono text-zinc-600 transition-colors hover:text-zinc-200"
+    >
+      {copiedId === t.id ? <span className="text-green-400">✓</span> : display}
+    </button>
+  );
+
+  // Draggable text (drag a to-do into a terminal as a prompt).
   const label = (t: TodoItem, extra = "") => (
     <span
       draggable
@@ -111,7 +157,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       />
     );
 
-  // Two-agent coordination: which terminal claimed this item (see who owns what).
+  // Which terminal claimed this item (two-agent coordination).
   const claimChip = (t: TodoItem) =>
     t.claimedBy ? (
       <span
@@ -154,15 +200,14 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
               return (
                 <li key={t.id} className="flex items-start gap-2">
                   {checkbox(t)}
-                  <span className="mr-1.5 mt-0.5 text-zinc-600">{i + 1}.</span>
+                  {copyHandle(t, `${i + 1}.`)}
                   {label(t)}
                   {claimChip(t)}
                 </li>
               );
             }
             const open = !collapsed.has(t.id);
-            const done = children.filter((c) => c.done).length;
-            const allDone = done === children.length;
+            const allDone = children.every((c) => c.done);
             return (
               <li key={t.id}>
                 <div className="flex items-start gap-2">
@@ -173,11 +218,8 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                   >
                     {open ? "▾" : "▸"}
                   </button>
-                  <span className="mr-1.5 mt-0.5 text-zinc-600">{i + 1}.</span>
+                  {copyHandle(t, `${i + 1}.`, true)}
                   {label(t, allDone ? "line-through text-zinc-600" : "")}
-                  <span className="mt-0.5 shrink-0 text-xs text-zinc-600">
-                    {done}/{children.length}
-                  </span>
                   {claimChip(t)}
                 </div>
                 {open && (
@@ -185,6 +227,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                     {children.map((c) => (
                       <li key={c.id} className="flex items-start gap-2">
                         {checkbox(c)}
+                        {copyHandle(c, <CopyGlyph />)}
                         {label(c)}
                         {claimChip(c)}
                       </li>
