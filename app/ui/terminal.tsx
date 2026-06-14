@@ -728,6 +728,9 @@ export default function Terminal({
       ? CACHE_TTL_MS - (now - lastWrite)
       : null;
   const ctxPct = (contextTokens / CONTEXT_LIMIT) * 100;
+  // % of the 1M window still free — mirrors the CLI's own "ctx NN%" readout
+  // (which counts down as the session fills), not the raw token count.
+  const ctxLeftPct = Math.max(0, Math.round(100 - ctxPct));
   const cliffPct = (PRICING_CLIFF / CONTEXT_LIMIT) * 100; // 200k tick on the bar
   const cacheWarm = cacheLeft !== null && cacheLeft > 0;
 
@@ -902,9 +905,9 @@ export default function Terminal({
         {contextTokens > 0 && (
           <span
             className="font-mono text-[11px] text-zinc-500"
-            title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} (your 1M tier) before auto-compact territory`}
+            title={`~${ctxLeftPct}% of your 1M window left — ${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} used (mirrors the CLI's ctx %)`}
           >
-            ctx {fmtTokens(contextTokens)}
+            ctx {ctxLeftPct}%
           </span>
         )}
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
