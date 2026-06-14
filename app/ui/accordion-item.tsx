@@ -9,7 +9,7 @@ const DND_TYPE = "application/x-hq-todo";
 const DND_ID_TYPE = "application/x-hq-todo-id";
 
 // lucide "copy" — hover-revealed copy affordance.
-const CopyGlyph = () => (
+export const CopyGlyph = () => (
   <svg
     width="12"
     height="12"
@@ -47,7 +47,7 @@ export default function AccordionItem({
   expandable,
   open,
   onToggleExpand,
-  copied,
+  copied = false,
   onCopy,
   trailing,
   children,
@@ -75,8 +75,8 @@ export default function AccordionItem({
   expandable: boolean;
   open: boolean;
   onToggleExpand: () => void;
-  copied: boolean;
-  onCopy: () => void;
+  copied?: boolean; // header copy button only renders when onCopy is given
+  onCopy?: () => void;
   trailing?: ReactNode; // e.g. a checkbox; position it with ml-auto
   children?: ReactNode; // body, shown when open
   // drag-to-terminal + reorder
@@ -182,20 +182,22 @@ export default function AccordionItem({
           >
             {label}
           </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onCopy();
-            }}
-            title="copy"
-            className="shrink-0 p-0 text-zinc-600 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/card:opacity-100"
-          >
-            {copied ? (
-              <span className="text-green-400">✓</span>
-            ) : (
-              <CopyGlyph />
-            )}
-          </button>
+          {onCopy && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCopy();
+              }}
+              title="copy"
+              className="shrink-0 p-0 text-zinc-600 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/card:opacity-100"
+            >
+              {copied ? (
+                <span className="text-green-400">✓</span>
+              ) : (
+                <CopyGlyph />
+              )}
+            </button>
+          )}
           {trailing}
         </div>
         {open && children && (

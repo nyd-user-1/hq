@@ -1067,7 +1067,7 @@ export default function Terminal({
               key={i}
               className="group rounded-md border border-zinc-800 bg-zinc-900/30"
             >
-              <summary className="flex cursor-pointer list-none items-baseline gap-2 px-3 py-1.5 font-mono text-xs marker:content-none">
+              <summary className="flex cursor-pointer list-none items-baseline gap-2 px-3 py-1.5 font-mono text-xs marker:content-none [&::-webkit-details-marker]:hidden">
                 <span className="text-zinc-600 transition-transform group-open:rotate-90">
                   ›
                 </span>

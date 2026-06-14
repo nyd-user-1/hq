@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import AccordionItem from "@/app/ui/accordion-item";
+import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
 
 type Item = {
   name: string;
@@ -45,7 +45,7 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
   }
 
   function copy(c: Item) {
-    navigator.clipboard.writeText(c.file);
+    navigator.clipboard.writeText(c.code);
     setCopied(c.name);
     setTimeout(() => setCopied((x) => (x === c.name ? null : x)), 1200);
   }
@@ -78,8 +78,6 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
       expandable={!!c.code}
       open={expanded.has(c.name)}
       onToggleExpand={() => toggleExpand(c.name)}
-      copied={copied === c.name}
-      onCopy={() => copy(c)}
       dragText={c.file}
       dragId={c.name}
       dragSourceId={draggingId}
@@ -101,9 +99,23 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
         setDraggingId(null);
       }}
     >
-      <pre className="scrollbar-none max-h-[420px] overflow-auto whitespace-pre text-[10px] leading-relaxed text-zinc-400">
-        {c.code || "— source unavailable —"}
-      </pre>
+      <div className="group/code relative">
+        <button
+          onClick={() => copy(c)}
+          title="copy source"
+          aria-label="Copy source"
+          className="absolute right-2 top-2 z-10 rounded bg-zinc-900/80 p-1 text-zinc-500 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/code:opacity-100"
+        >
+          {copied === c.name ? (
+            <span className="text-[10px] text-green-400">✓</span>
+          ) : (
+            <CopyGlyph />
+          )}
+        </button>
+        <pre className="scrollbar-none max-h-[420px] overflow-auto whitespace-pre text-[10px] leading-relaxed text-zinc-400">
+          {c.code || "— source unavailable —"}
+        </pre>
+      </div>
     </AccordionItem>
   );
 
