@@ -507,6 +507,20 @@ export default function Terminal({
     };
   }, []);
 
+  // Compose "Send to terminal": the Compose tray dispatches hq:compose with the
+  // assembled text; the PRIMARY terminal (Terminal 1) drops it into its message
+  // box. Decoupled via a window event so the panel never prop-drills into here.
+  useEffect(() => {
+    if (paramKey !== "session") return; // Compose targets Terminal 1 for now
+    const onCompose = (e: Event) => {
+      const text = (e as CustomEvent).detail?.text;
+      if (typeof text === "string" && text)
+        setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text));
+    };
+    window.addEventListener("hq:compose", onCompose);
+    return () => window.removeEventListener("hq:compose", onCompose);
+  }, [paramKey]);
+
   // Park the current draft in the queue; everything queued goes out as ONE
   // message — one context read instead of several.
   function queueDraft() {
