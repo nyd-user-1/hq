@@ -115,7 +115,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
         onKeyDown={(e) => {
           if (e.key === "Enter") add();
         }}
-        placeholder="add a to-do — ↵ to save"
+        placeholder="Add todo, hit enter"
         className="rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
       />
 
@@ -160,11 +160,10 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
 
       {list.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-3 overflow-y-auto pt-1 text-sm">
-          {list.map((t, i) => (
+          {list.map((t) => (
             <AccordionTodoItem
               key={t.id}
               item={t}
-              index={i}
               open={expanded.has(t.id)}
               copied={copiedId === t.id}
               reorderEnabled={cat === null}

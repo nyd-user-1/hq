@@ -2,17 +2,17 @@
 
 import Markdown from "@/app/ui/md";
 import MetaChipRow from "@/app/ui/meta-chip-row";
-import AccordionItem from "@/app/ui/accordion-item";
+import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
 import { CAT_BY_KEY } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
 
 // One collapsible To Do card — a thin wrapper over the generic AccordionItem
-// that maps a TodoItem to it: provenance (● who · time · category), the numbered
-// draggable title, a done checkbox (trailing), and a body of markdown + a
-// MetaChipRow footer. TodoList owns the state and passes the callbacks.
+// that maps a TodoItem to it: provenance (● who · category), a draggable title,
+// a done checkbox (trailing), and a body of markdown + a MetaChipRow footer. The
+// copy lives in the body's top-right (like the Components cards); the created-at
+// time sits at the end of the meta row as "at <time>". TodoList owns the state.
 export default function AccordionTodoItem({
   item,
-  index,
   open,
   copied,
   reorderEnabled,
@@ -27,7 +27,6 @@ export default function AccordionTodoItem({
   onDropEdge,
 }: {
   item: TodoItem;
-  index: number;
   open: boolean;
   copied: boolean;
   reorderEnabled: boolean;
@@ -55,21 +54,29 @@ export default function AccordionTodoItem({
         : "text-zinc-600";
   const cat = t.category ? CAT_BY_KEY[t.category] : undefined;
 
+  // The created-at time now sits at the END of the meta row ("at <time>")
+  // rather than in the provenance header.
+  const metaItems = [
+    ...(sess
+      ? [
+          { label: "Task", value: t.id },
+          { label: "via session", value: sess.slice(0, 8), copyText: sess },
+        ]
+      : []),
+    { label: "at", value: new Date(t.createdAt).toLocaleTimeString() },
+  ];
+
   return (
     <AccordionItem
       who={who}
       dotClass={dotClass}
-      meta={new Date(t.createdAt).toLocaleTimeString()}
       tag={cat ? { label: cat.label, chipClass: cat.chip } : undefined}
       claimedBy={t.claimedBy}
-      index={index + 1}
       label={t.text}
       done={t.done}
       expandable={expandable}
       open={open}
       onToggleExpand={onToggleExpand}
-      copied={copied}
-      onCopy={onCopy}
       dragText={t.text}
       dragId={t.id}
       dragSourceId={dragSourceId}
@@ -105,23 +112,23 @@ export default function AccordionTodoItem({
         )
       }
     >
-      {(t.body || sess) && (
-        <>
+      {expandable && (
+        <div className="group/body relative">
+          <button
+            onClick={onCopy}
+            title="copy"
+            aria-label="Copy to-do"
+            className="absolute right-0 top-0 z-10 rounded bg-zinc-900/80 p-1 text-zinc-500 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/body:opacity-100"
+          >
+            {copied ? (
+              <span className="text-[10px] text-green-400">✓</span>
+            ) : (
+              <CopyGlyph />
+            )}
+          </button>
           {t.body && <Markdown text={t.body} />}
-          {sess && (
-            <MetaChipRow
-              divider={!!t.body}
-              items={[
-                { label: "Task", value: t.id },
-                {
-                  label: "via session",
-                  value: sess.slice(0, 8),
-                  copyText: sess,
-                },
-              ]}
-            />
-          )}
-        </>
+          <MetaChipRow divider={!!t.body} items={metaItems} />
+        </div>
       )}
     </AccordionItem>
   );
