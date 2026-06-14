@@ -6,6 +6,10 @@ import type { TodoItem } from "@/lib/todo";
 
 // Drag marker — must match TODO_DND_TYPE in terminal.tsx.
 const TODO_DND_TYPE = "application/x-hq-todo";
+// Carries the item id during a row drag → dropping on another row reorders.
+// (A drop on a terminal reads TODO_DND_TYPE/text and injects instead — the drop
+// target decides; one drag serves both.)
+const TODO_ID_TYPE = "application/x-hq-todo-id";
 
 // lucide "copy" — hover-revealed copy affordance.
 const CopyGlyph = () => (
@@ -47,6 +51,11 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [cat, setCat] = useState<string | null>(null); // active category filter
+  const [draggingId, setDraggingId] = useState<string | null>(null); // row being reordered
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    pos: "before" | "after";
+  } | null>(null);
 
   const all = items.filter((t) => !t.parentId);
   const list = cat ? all.filter((t) => t.category === cat) : all;
@@ -113,6 +122,23 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     navigator.clipboard.writeText(t.body ? `${t.text}\n\n${t.body}` : t.text);
     setCopiedId(t.id);
     setTimeout(() => setCopiedId((c) => (c === t.id ? null : c)), 1200);
+  }
+
+  // Move the dragged row before/after the target and persist the new order.
+  function reorder(targetId: string, pos: "before" | "after") {
+    if (!draggingId || draggingId === targetId) return;
+    const order = items.map((i) => i.id).filter((id) => id !== draggingId);
+    let at = order.indexOf(targetId);
+    if (at < 0) return;
+    if (pos === "after") at += 1;
+    order.splice(at, 0, draggingId);
+    const byId = new Map(items.map((i) => [i.id, i]));
+    setItems(order.map((id) => byId.get(id)!));
+    fetch("/api/todo", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order }),
+    }).catch(() => {});
   }
 
   const provenance = (t: TodoItem) => {
@@ -208,7 +234,36 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
             const expandable = !!t.body;
             const open = expanded.has(t.id);
             return (
-              <li key={t.id} className="flex flex-col gap-1.5">
+              <li
+                key={t.id}
+                className={`relative flex flex-col gap-1.5 transition-opacity ${
+                  draggingId === t.id ? "opacity-40" : ""
+                }`}
+                onDragOver={(e) => {
+                  if (cat !== null || !draggingId || draggingId === t.id) return;
+                  e.preventDefault();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const pos =
+                    e.clientY < r.top + r.height / 2 ? "before" : "after";
+                  setDropTarget((d) =>
+                    d?.id === t.id && d.pos === pos ? d : { id: t.id, pos }
+                  );
+                }}
+                onDrop={(e) => {
+                  if (cat !== null || !draggingId) return;
+                  e.preventDefault();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  reorder(
+                    t.id,
+                    e.clientY < r.top + r.height / 2 ? "before" : "after"
+                  );
+                  setDropTarget(null);
+                  setDraggingId(null);
+                }}
+              >
+                {dropTarget?.id === t.id && dropTarget.pos === "before" && (
+                  <span className="pointer-events-none absolute inset-x-0 -top-1.5 h-0.5 rounded bg-sky-500" />
+                )}
                 {provenance(t)}
                 <div className="group/card rounded-md border border-zinc-800 bg-zinc-900/30">
                   <div
@@ -232,7 +287,13 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                       onDragStart={(e) => {
                         e.dataTransfer.setData(TODO_DND_TYPE, t.text);
                         e.dataTransfer.setData("text/plain", t.text);
-                        e.dataTransfer.effectAllowed = "copy";
+                        e.dataTransfer.setData(TODO_ID_TYPE, t.id);
+                        e.dataTransfer.effectAllowed = "copyMove";
+                        setDraggingId(t.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingId(null);
+                        setDropTarget(null);
                       }}
                       title={t.text}
                       className={`min-w-0 flex-1 cursor-grab truncate text-xs active:cursor-grabbing ${
@@ -285,6 +346,9 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
                     </div>
                   )}
                 </div>
+                {dropTarget?.id === t.id && dropTarget.pos === "after" && (
+                  <span className="pointer-events-none absolute inset-x-0 -bottom-1.5 h-0.5 rounded bg-sky-500" />
+                )}
               </li>
             );
           })}
