@@ -1,0 +1,55 @@
+// The HQ component registry — hand-curated (approval is a human judgment, not
+// something you can derive from disk). APPROVED = reviewed, named per the
+// [Category][Descriptor][Element] taxonomy, single-responsibility, reusable.
+// REVIEW = exists in app/ui but hasn't been audited into the design system yet.
+// This is the first real index for the component-library effort; the Components
+// panel reads it.
+export type ComponentKind = "presentational" | "container";
+export type ComponentStatus = "approved" | "review";
+
+export type ComponentEntry = {
+  name: string;
+  file: string;
+  kind: ComponentKind;
+  status: ComponentStatus;
+  desc: string;
+};
+
+export const COMPONENTS: ComponentEntry[] = [
+  // ── Approved ──────────────────────────────────────────────────────────────
+  { name: "TabNav", file: "app/ui/tab-nav.tsx", kind: "presentational", status: "approved", desc: "Panel tab bar — active/inactive pills; carries the terminal pins across nav." },
+  { name: "Boundary", file: "app/ui/boundary.tsx", kind: "presentational", status: "approved", desc: "Dashed route-anatomy frame with a file-path chip + lead/trail slots." },
+  { name: "BoundaryChip", file: "app/ui/boundary-chip.tsx", kind: "presentational", status: "approved", desc: "Click-to-copy file-path chip that sits on a Boundary." },
+  { name: "CopyCode", file: "app/ui/copy-code.tsx", kind: "presentational", status: "approved", desc: "Inline code chip, click-to-copy; optional copyText (show short, copy full)." },
+  { name: "MetaChipRow", file: "app/ui/meta-chip-row.tsx", kind: "presentational", status: "approved", desc: "Row of labeled copy chips — {label, value, copyText?}[]; optional divider." },
+  { name: "AccordionTodoItem", file: "app/ui/accordion-todo-item.tsx", kind: "presentational", status: "approved", desc: "Collapsible to-do card — provenance header, disclosure body, MetaChipRow footer." },
+  { name: "ButtonChipIcon", file: "app/ui/button-chip-icon.tsx", kind: "presentational", status: "approved", desc: "Square icon chip-button — sidebar toggle, search, panel expand/close all use it." },
+  { name: "ButtonChipAction", file: "app/ui/button-chip-action.tsx", kind: "presentational", status: "approved", desc: "“+ label” action chip with an accent — the send box's + attach / + todo." },
+
+  // ── Review ────────────────────────────────────────────────────────────────
+  { name: "Terminal", file: "app/ui/terminal.tsx", kind: "container", status: "review", desc: "The persistent center pane — stream, send box, header, panels dropdown. Huge; ripe for sub-extraction." },
+  { name: "Shell", file: "app/ui/shell.tsx", kind: "container", status: "review", desc: "Root three-column layout (sidebar · terminal · panel)." },
+  { name: "AppPanel", file: "app/ui/app-panel.tsx", kind: "container", status: "review", desc: "Right slide-in panel portal; owns expand/close state (now uses ButtonChipIcon)." },
+  { name: "PanelWrapper", file: "app/ui/panel-wrapper.tsx", kind: "container", status: "review", desc: "Reads the route to decide if the panel is open; mounts AppPanel." },
+  { name: "TodoList", file: "app/ui/todo-list.tsx", kind: "container", status: "review", desc: "To Do container — list state + persistence; renders AccordionTodoItem rows." },
+  { name: "Sidebar", file: "app/ui/sidebar.tsx", kind: "container", status: "review", desc: "Left rail — nameplate, new-session, Recents." },
+  { name: "SidebarRecents", file: "app/ui/sidebar-recents.tsx", kind: "container", status: "review", desc: "Recent-sessions list with favorite/hide/rename kebab." },
+  { name: "SidebarColumn", file: "app/ui/sidebar-column.tsx", kind: "presentational", status: "review", desc: "Collapsible width wrapper for the sidebar." },
+  { name: "PairColumn", file: "app/ui/pair-column.tsx", kind: "container", status: "review", desc: "Terminal 2 column (pair mode); has its own close button." },
+  { name: "ComposeTray", file: "app/ui/compose-tray.tsx", kind: "container", status: "review", desc: "Compose drag-in tray; send-to-terminal." },
+  { name: "SkillLauncher", file: "app/ui/skill-launcher.tsx", kind: "container", status: "review", desc: "Skill browser + command box — this panel borrows its row pattern." },
+  { name: "RoutinePanel", file: "app/ui/routine-panel.tsx", kind: "container", status: "review", desc: "Routines panel." },
+  { name: "Markdown", file: "app/ui/md.tsx", kind: "presentational", status: "review", desc: "Lightweight markdown renderer; emits CopyCode for inline code." },
+  { name: "TokenMeter", file: "app/ui/token-meter.tsx", kind: "presentational", status: "review", desc: "Token / $ meter rendering." },
+  { name: "ForecastMeter", file: "app/ui/forecast-meter.tsx", kind: "presentational", status: "review", desc: "Forecast gauge." },
+  { name: "Efficiency", file: "app/ui/efficiency.tsx", kind: "presentational", status: "review", desc: "Efficiency Mode strip / toggle." },
+  { name: "CopyText", file: "app/ui/copy-text.tsx", kind: "presentational", status: "review", desc: "Click-to-copy text wrapper — overlaps CopyCode; candidate to fold into the copy-chip family." },
+  { name: "BackLink", file: "app/ui/back-link.tsx", kind: "presentational", status: "review", desc: "Panel back link (push + refresh) — the parallel-route back-nav fix." },
+  { name: "FlashOnNav", file: "app/ui/flash-on-nav.tsx", kind: "presentational", status: "review", desc: "Flashes the boundary on route change." },
+  { name: "CollapsibleBoundary", file: "app/ui/collapsible-boundary.tsx", kind: "presentational", status: "review", desc: "Boundary variant that collapses — candidate to fold into Boundary." },
+  { name: "SearchInput", file: "app/ui/search-input.tsx", kind: "presentational", status: "review", desc: "Search box input." },
+  { name: "NewSessionItem", file: "app/ui/new-session-item.tsx", kind: "presentational", status: "review", desc: "“+ New Session” row." },
+  { name: "NoteBody", file: "app/ui/note-body.tsx", kind: "presentational", status: "review", desc: "Saved note-block body." },
+  { name: "SidebarToggle", file: "app/ui/sidebar-toggle.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — the boundary sidebar toggle." },
+  { name: "SearchTrigger", file: "app/ui/search-trigger.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — opens/closes the Search panel (active state)." },
+];

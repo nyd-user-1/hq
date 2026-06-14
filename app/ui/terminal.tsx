@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
+import ButtonChipAction from "@/app/ui/button-chip-action";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import { PANELS } from "@/app/ui/sidebar-nav";
 import { withPins } from "@/app/ui/keep-pins";
@@ -1282,21 +1283,18 @@ export default function Terminal({
               e.currentTarget.value = "";
             }}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
+          <ButtonChipAction
+            label="attach"
+            ariaLabel="Attach"
             title="attach a screenshot — pasting or dropping an image works too"
-            aria-label="Attach"
-            className="shrink-0 cursor-pointer rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-zinc-100 transition-colors hover:bg-zinc-700"
-          >
-            + attach
-          </button>
-          <button
-            onClick={todoDraft}
+            onClick={() => fileInputRef.current?.click()}
+          />
+          <ButtonChipAction
+            label="todo"
+            accent="text-violet-300"
             title="add this as a to-do on your HQ list"
-            className="shrink-0 cursor-pointer rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-violet-300 transition-colors hover:bg-zinc-700"
-          >
-            + todo
-          </button>
+            onClick={todoDraft}
+          />
           {sending && (
             <button
               onClick={stopSend}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import ButtonChipIcon from "@/app/ui/button-chip-icon";
 
 // The right "app panel": a slide-in column portaled into #app-panel-root (a flex
 // sibling of the terminal inside the shell). Open/closed + width are driven by
@@ -50,52 +51,54 @@ export default function AppPanel({
               at -top-2.5 (−10px) like the path chip, poking up through the
               clip-path's 12px top opening */}
           <div className="absolute right-3 -top-2.5 z-10 flex gap-1.5">
-            <button
+            <ButtonChipIcon
               onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? "Collapse to a third" : "Expand to half"}
-              className="flex shrink-0 items-center bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
-            >
-              {/* columns icon shows the TARGET layout: Columns2 (→ half) when
-                  collapsed, Columns3 (→ third) when expanded */}
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect width="18" height="18" x="3" y="3" rx="2" />
-                {expanded ? (
-                  <>
-                    <path d="M9 3v18" />
-                    <path d="M15 3v18" />
-                  </>
-                ) : (
-                  <path d="M12 3v18" />
-                )}
-              </svg>
-            </button>
-            <button
+              label={expanded ? "Collapse to a third" : "Expand to half"}
+              className="shrink-0"
+              icon={
+                // columns icon shows the TARGET layout: Columns2 (→ half) when
+                // collapsed, Columns3 (→ third) when expanded
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  {expanded ? (
+                    <>
+                      <path d="M9 3v18" />
+                      <path d="M15 3v18" />
+                    </>
+                  ) : (
+                    <path d="M12 3v18" />
+                  )}
+                </svg>
+              }
+            />
+            <ButtonChipIcon
               onClick={onClose}
-              aria-label="Close panel"
-              className="flex shrink-0 items-center bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
+              label="Close panel"
+              className="shrink-0"
+              icon={
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              }
+            />
           </div>
           {/* -mt-3 lifts the scroll box so its boundary box sits flush at the
               column top (level with sidebar/terminal); pt-3 keeps the chip clear
