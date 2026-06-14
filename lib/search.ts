@@ -7,6 +7,7 @@ import {
   getArchiveSessions,
   warmIndex,
 } from "./archive";
+import { NOTES_DIR, noteTitle } from "./notes";
 
 // Full-text search over the two things HQ can see: transcripts (EVERY session
 // ever, via the all-time persisted index in lib/archive.ts) and memory
@@ -20,12 +21,12 @@ const MEMORY_DIR = path.join(
   "memory"
 );
 
-export type SearchScope = "all" | "transcripts" | "memory";
+export type SearchScope = "all" | "transcripts" | "memory" | "notes";
 export type SortDir = "new" | "old"; // result order: newest-first (default) / oldest-first
 
 export type SearchHit = {
-  kind: "transcript" | "memory";
-  /** transcript: session id (click pins the terminal); memory: file name */
+  kind: "transcript" | "memory" | "note";
+  /** transcript: session id (click pins the terminal); memory/note: file name */
   ref: string;
   title: string;
   snippet: string;
@@ -103,6 +104,42 @@ function searchMemory(toks: string[]): SearchHit[] {
   return hits;
 }
 
+// Saved note blocks (~/.claude/hq/notes/*.md) — same substring/token read as
+// memory. Title is the note's first body line (the filename is a timestamp).
+function searchNotes(toks: string[]): SearchHit[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(NOTES_DIR);
+  } catch {
+    return [];
+  }
+  const hits: SearchHit[] = [];
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
+    const full = path.join(NOTES_DIR, name);
+    let content: string;
+    let mtime: number;
+    try {
+      content = fs.readFileSync(full, "utf8");
+      mtime = fs.statSync(full).mtimeMs;
+    } catch {
+      continue;
+    }
+    const mt = scoreNorm(normalize(content), toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "note",
+      ref: name,
+      title: noteTitle(content),
+      snippet: snippetAround(content, toks[0]),
+      at: mtime,
+      score: mt.score,
+      phrase: mt.phrase,
+    });
+  }
+  return hits;
+}
+
 export function search(
   query: string,
   scope: SearchScope = "all",
@@ -117,16 +154,17 @@ export function search(
   if (toks.length === 0) return { hits: [], building: false };
 
   const t =
-    scope !== "memory"
+    scope === "all" || scope === "transcripts"
       ? searchTranscripts(toks)
       : { hits: [] as SearchHit[], building: false };
-  const m = scope !== "transcripts" ? searchMemory(toks) : [];
+  const m = scope === "all" || scope === "memory" ? searchMemory(toks) : [];
+  const n = scope === "all" || scope === "notes" ? searchNotes(toks) : [];
 
   // Phrase is a hard tier: if the contiguous phrase matched anywhere, show ONLY
   // phrase hits — searching a full phrase is a NARROWING act (find the needle),
   // so scattered-term cards are noise. AND-of-tokens results survive only when
   // the phrase appears nowhere (e.g. two words never adjacent).
-  const all = [...t.hits, ...m];
+  const all = [...t.hits, ...m, ...n];
   const anyPhrase = all.some((h) => h.phrase);
   // Default newest-first; the UI toggle flips to oldest-first (so the ORIGINAL
   // occurrence of a phrase rises to the top). Recency is primary; score breaks
@@ -156,13 +194,13 @@ export function recent(
   limit = 40
 ): SearchHit[] {
   const out: SearchHit[] = [];
-  if (scope !== "memory") {
+  if (scope === "all" || scope === "transcripts") {
     for (const s of getArchiveSessions()) {
       const title = s.project && s.project !== "~" ? s.project : s.title || s.id.slice(0, 8);
       out.push({ kind: "transcript", ref: s.id, title, snippet: s.title || "", at: s.lastActive, score: 0, phrase: false });
     }
   }
-  if (scope !== "transcripts") {
+  if (scope === "all" || scope === "memory") {
     let names: string[] = [];
     try { names = fs.readdirSync(MEMORY_DIR); } catch { names = []; }
     for (const name of names) {
@@ -174,6 +212,28 @@ export function recent(
           ref: name,
           title: name.slice(0, -3),
           snippet: memoryDescription(fs.readFileSync(full, "utf8")),
+          at: fs.statSync(full).mtimeMs,
+          score: 0,
+          phrase: false,
+        });
+      } catch {
+        // file vanished mid-read
+      }
+    }
+  }
+  if (scope === "all" || scope === "notes") {
+    let names: string[] = [];
+    try { names = fs.readdirSync(NOTES_DIR); } catch { names = []; }
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const full = path.join(NOTES_DIR, name);
+      try {
+        const content = fs.readFileSync(full, "utf8");
+        out.push({
+          kind: "note",
+          ref: name,
+          title: noteTitle(content),
+          snippet: noteTitle(content),
           at: fs.statSync(full).mtimeMs,
           score: 0,
           phrase: false,

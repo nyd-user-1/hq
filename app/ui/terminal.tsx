@@ -164,6 +164,46 @@ function CopyChip({ label, text }: { label: string; text: string }) {
   );
 }
 
+// Sibling of the copy button: save a message block as a searchable note (.md
+// under ~/.claude/hq/notes). Flips to a green check and stays lit once saved
+// (the block also takes a blue border).
+function NoteButton({ saved, onSave }: { saved: boolean; onSave: () => void }) {
+  return (
+    <button
+      onClick={onSave}
+      title={saved ? "saved as note" : "save as a searchable note"}
+      aria-label="Save as note"
+      className={`absolute right-9 top-2 rounded-md border bg-zinc-900 p-1.5 transition ${
+        saved
+          ? "border-green-600/60 text-green-400 opacity-100"
+          : "border-zinc-700 text-zinc-500 opacity-0 hover:text-zinc-200 focus:opacity-100 group-hover/turn:opacity-100"
+      }`}
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {saved ? (
+          <path d="M20 6 9 17l-5-5" />
+        ) : (
+          <>
+            <path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M15 3v5h5" />
+            <line x1="8" y1="13" x2="14" y2="13" />
+            <line x1="8" y1="17" x2="14" y2="17" />
+          </>
+        )}
+      </svg>
+    </button>
+  );
+}
+
 // Hover-reveal copy button for a message block — grab a reply/prompt verbatim
 // instead of asking Claude to reprint it.
 function CopyButton({ text }: { text: string }) {
@@ -289,6 +329,7 @@ export default function Terminal({
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null); // send box — for auto-grow
+  const [savedNotes, setSavedNotes] = useState<Set<string>>(new Set()); // blocks saved as notes (keyed by text)
   const [attachments, setAttachments] = useState<Attachment[]>([]); // staged screenshots
   const [dragOver, setDragOver] = useState<null | "file" | "todo">(null); // drop-zone hint
   const dragDepth = useRef(0); // enter/leave depth — kills the child-element flicker
@@ -529,6 +570,28 @@ export default function Terminal({
       });
     } catch {
       setError("couldn't add to-do");
+    }
+  }
+
+  // Save a message block as a searchable note (.md under ~/.claude/hq/notes) so
+  // a good reply is findable later without scrolling the transcript.
+  async function saveNoteBlock(it: { text: string; role?: string; at?: string }) {
+    if (!it.text?.trim() || savedNotes.has(it.text)) return;
+    setSavedNotes((s) => new Set(s).add(it.text)); // optimistic — green check + blue border
+    try {
+      await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: it.text,
+          role: it.role,
+          at: it.at,
+          sessionId: pinned ?? resolvedId,
+          project,
+        }),
+      });
+    } catch {
+      setError("couldn't save note");
     }
   }
 
@@ -966,11 +1029,19 @@ export default function Terminal({
               </span>
               <div
                 className={`group/turn relative break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
-                  it.role === "user"
-                    ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
-                    : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
+                  savedNotes.has(it.text)
+                    ? it.role === "user"
+                      ? "whitespace-pre-wrap border-blue-500/70 bg-zinc-900 text-zinc-100"
+                      : "border-blue-500/70 bg-zinc-900/40 text-zinc-300"
+                    : it.role === "user"
+                      ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
+                      : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
                 }`}
               >
+                <NoteButton
+                  saved={savedNotes.has(it.text)}
+                  onSave={() => saveNoteBlock(it)}
+                />
                 <CopyButton text={it.text} />
                 {it.role === "assistant" ? <Markdown text={it.text} /> : it.text}
                 {it.role === "assistant" && it.turnTokens ? (

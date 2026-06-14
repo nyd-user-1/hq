@@ -15,6 +15,7 @@ import {
   type SearchScope,
   type SortDir,
 } from "@/lib/search";
+import { getNoteFile } from "@/lib/notes";
 
 export const dynamic = "force-dynamic";
 
@@ -111,14 +112,17 @@ export default async function Search({
     sort?: string;
     open?: string;
     openSession?: string;
+    openNote?: string;
     session?: string;
     pair?: string;
   }>;
 }) {
-  const { q = "", scope: rawScope, sort: rawSort, open, openSession, session, pair } =
+  const { q = "", scope: rawScope, sort: rawSort, open, openSession, openNote, session, pair } =
     await searchParams;
   const scope: SearchScope =
-    rawScope === "transcripts" || rawScope === "memory" ? rawScope : "all";
+    rawScope === "transcripts" || rawScope === "memory" || rawScope === "notes"
+      ? rawScope
+      : "all";
   const sortDir: SortDir = rawSort === "old" ? "old" : "new";
   // Carry the terminal pins on every in-panel nav. Dropping ?session/?pair
   // un-pins the terminal, which then self-re-pins via router.replace and wipes
@@ -206,6 +210,35 @@ export default async function Search({
     );
   }
 
+  // ── opened note ───────────────────────────────────────────────────────────
+  if (openNote) {
+    const content = getNoteFile(openNote);
+    const body = content ? content.replace(/^---[\s\S]*?---\n/, "") : "";
+    return (
+      <Boundary label="@panel/search/page.tsx">
+        <div className="flex items-baseline gap-3">
+          <Link
+            href={back}
+            scroll={false}
+            className="shrink-0 font-mono text-xs text-blue-400 hover:text-blue-300"
+          >
+            ← results
+          </Link>
+          <span className="min-w-0 truncate font-mono text-xs text-zinc-500">
+            note
+          </span>
+        </div>
+        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto text-sm">
+          {content ? (
+            <Markdown text={body} />
+          ) : (
+            <p className="text-xs text-zinc-600">note not found</p>
+          )}
+        </div>
+      </Boundary>
+    );
+  }
+
   // ── query + results ─────────────────────────────────────────────────────
   // No query → browse the most-recent transcripts + memory as cards (honors the
   // scope chips + sort toggle). With a query → ranked search hits.
@@ -235,6 +268,7 @@ export default async function Search({
           {scopeChip("All", "all")}
           {scopeChip("Transcripts", "transcripts")}
           {scopeChip("Memory", "memory")}
+          {scopeChip("Notes", "notes")}
           <Link
             href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
               sortDir === "new" ? "old" : "new"
@@ -267,7 +301,9 @@ export default async function Search({
               href={
                 h.kind === "transcript"
                   ? `${back}&openSession=${h.ref}`
-                  : `${back}&open=${encodeURIComponent(h.ref)}`
+                  : h.kind === "note"
+                    ? `${back}&openNote=${encodeURIComponent(h.ref)}`
+                    : `${back}&open=${encodeURIComponent(h.ref)}`
               }
               scroll={false}
               className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
@@ -283,7 +319,9 @@ export default async function Search({
                   className={`ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
                     h.kind === "memory"
                       ? "bg-violet-500/15 text-violet-300"
-                      : "bg-emerald-500/15 text-emerald-300"
+                      : h.kind === "note"
+                        ? "bg-blue-500/15 text-blue-300"
+                        : "bg-emerald-500/15 text-emerald-300"
                   }`}
                 >
                   {h.kind}
