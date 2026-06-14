@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import type { Skill } from "@/lib/skills";
 
-// Categorized skill launcher: each button fires its slash command into the
-// newest session via /api/terminal (claude -p --resume), and the freeform box
-// runs any command (with args). Replies land in the Dashboard terminal; a run
-// also refreshes Recent Runs below.
-const GROUPS: { label: string; skills: string[] }[] = [
-  { label: "Review", skills: ["code-review", "verify", "simplify"] },
-  { label: "Build", skills: ["run"] },
-  { label: "Research", skills: ["deep-research"] },
+// Skill launcher in the Memory-Audit row aesthetic: clean rows (name ·
+// description · right-meta), grouped into YOUR SKILLS (discovered from
+// ~/.claude/skills) and BUILT-IN (harness skills, which aren't on disk). Clicking
+// a row fires its slash command into the newest session via /api/terminal
+// (claude -p --resume); the freeform box runs any command with args. Replies land
+// in the Dashboard terminal and a run refreshes Recent Runs below.
+
+// Harness built-ins — not readable from disk, so curated here with descriptions.
+const BUILTIN: { cmd: string; cat: string; desc: string }[] = [
+  { cmd: "code-review", cat: "review", desc: "Review the current diff for correctness bugs + cleanups" },
+  { cmd: "verify", cat: "review", desc: "Run the app and confirm a change actually does what it should" },
+  { cmd: "simplify", cat: "review", desc: "Apply reuse / simplification / efficiency cleanups" },
+  { cmd: "run", cat: "build", desc: "Launch and drive the app to see a change working" },
+  { cmd: "deep-research", cat: "research", desc: "Fan-out, fact-checked, cited multi-source research report" },
 ];
 
-export default function SkillLauncher() {
+const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
+
+export default function SkillLauncher({ skills }: { skills: Skill[] }) {
   const router = useRouter();
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,69 +60,113 @@ export default function SkillLauncher() {
     setFreeform("");
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3">
-        {GROUPS.map((g) => (
-          <div key={g.label} className="flex flex-wrap items-center gap-2">
-            <span className="w-16 shrink-0 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-              {g.label}
+  // One clean, clickable row — slash command · description · right-meta. Mirrors
+  // the audit panel's rows, but the whole row runs the skill.
+  const row = (cmd: string, desc: string, meta: ReactNode, argHint?: string) => {
+    const isRunning = running === `/${cmd}`;
+    return (
+      <button
+        key={cmd}
+        onClick={() => run(`/${cmd}`, `/${cmd}`)}
+        disabled={running !== null}
+        title={desc || `/${cmd}`}
+        className="group flex w-full flex-col gap-0.5 border-b border-zinc-800/60 py-1.5 text-left transition-colors hover:bg-zinc-800/30 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <span className="flex items-baseline gap-2 font-mono text-xs">
+          <span className="min-w-0 flex-1 truncate text-zinc-200 group-hover:text-zinc-100">
+            /{cmd}
+            {argHint ? <span className="ml-1.5 text-zinc-600">{argHint}</span> : null}
+          </span>
+          {isRunning ? (
+            <span className="shrink-0 text-orange-300">running…</span>
+          ) : (
+            <span className="shrink-0 text-[10px] text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100">
+              ▶ run
             </span>
-            {g.skills.map((s) => {
-              const isRunning = running === `/${s}`;
-              return (
-                <button
-                  key={s}
-                  onClick={() => run(`/${s}`, `/${s}`)}
-                  disabled={running !== null}
-                  className={`rounded-md border px-3 py-1.5 font-mono text-sm transition-colors ${
-                    isRunning
-                      ? "border-orange-500/60 bg-orange-500/10 text-orange-300"
-                      : "border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-700 disabled:hover:text-zinc-300"
-                  }`}
-                >
-                  {isRunning ? `/${s} …` : `/${s}`}
-                </button>
-              );
-            })}
+          )}
+          {meta}
+        </span>
+        {desc ? (
+          <span className="truncate text-[11px] text-zinc-500">{desc}</span>
+        ) : null}
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      {skills.length > 0 && (
+        <section className="flex flex-col gap-1">
+          <h2 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+            your skills · ~/.claude/skills
+          </h2>
+          <div className="flex flex-col">
+            {skills.map((s) =>
+              row(
+                s.name,
+                s.description,
+                <span className="shrink-0 font-mono text-[11px] text-zinc-600">
+                  ~{fmt(s.tokens)} tok
+                </span>,
+                s.argHint
+              )
+            )}
           </div>
-        ))}
-      </div>
-
-      <div className="flex gap-2">
-        <input
-          value={freeform}
-          onChange={(e) => setFreeform(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submitFreeform()}
-          disabled={running !== null}
-          placeholder="/command args — run any skill"
-          className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 font-mono text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none disabled:opacity-40"
-        />
-        <button
-          onClick={submitFreeform}
-          disabled={running !== null || !freeform.trim()}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Run
-        </button>
-      </div>
-
-      {running ? (
-        <p className="font-mono text-xs text-zinc-500">
-          running <span className="text-orange-300">{running}</span> in the newest
-          session — reply lands in the terminal, can take minutes
-        </p>
-      ) : (
-        <p className="text-xs text-zinc-600">
-          fires into the newest session via{" "}
-          <code className="font-mono text-zinc-400">claude -p</code>
-        </p>
+        </section>
       )}
-      {error && (
-        <p className="whitespace-pre-wrap font-mono text-xs text-red-400">
-          {error}
-        </p>
-      )}
+
+      <section className="flex flex-col gap-1">
+        <h2 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          built-in
+        </h2>
+        <div className="flex flex-col">
+          {BUILTIN.map((b) =>
+            row(
+              b.cmd,
+              b.desc,
+              <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-zinc-600">
+                {b.cat}
+              </span>
+            )
+          )}
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <input
+            value={freeform}
+            onChange={(e) => setFreeform(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submitFreeform()}
+            disabled={running !== null}
+            placeholder="/command args — run any skill"
+            className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 font-mono text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none disabled:opacity-40"
+          />
+          <button
+            onClick={submitFreeform}
+            disabled={running !== null || !freeform.trim()}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Run
+          </button>
+        </div>
+        {running ? (
+          <p className="font-mono text-xs text-zinc-500">
+            running <span className="text-orange-300">{running}</span> in the
+            newest session — reply lands in the terminal, can take minutes
+          </p>
+        ) : (
+          <p className="text-xs text-zinc-600">
+            fires into the newest session via{" "}
+            <code className="font-mono text-zinc-400">claude -p</code>
+          </p>
+        )}
+        {error && (
+          <p className="whitespace-pre-wrap font-mono text-xs text-red-400">
+            {error}
+          </p>
+        )}
+      </section>
     </div>
   );
 }
