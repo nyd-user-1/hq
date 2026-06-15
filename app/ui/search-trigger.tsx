@@ -24,7 +24,7 @@ export default function SearchTrigger() {
         active ? "text-zinc-100" : ""
       }`}
     >
-      Search
+      search
       <svg
         width="11"
         height="11"

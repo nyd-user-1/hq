@@ -21,6 +21,10 @@ export default function BoundaryChip({
   copyText?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  // Display the file name WITHOUT its extension (terminal.tsx → terminal); the
+  // click-to-copy still copies the FULL path (extension kept) so it drops cleanly
+  // into a terminal.
+  const shown = label.replace(/\.tsx?$/, "");
   return (
     <button
       onClick={() => {
@@ -31,7 +35,7 @@ export default function BoundaryChip({
       title={copyText ? `click to copy ${copyText}` : "click to copy path"}
       className={`${CHIP_CLASS} min-w-0 truncate`}
     >
-      {copied ? "copied ✓" : label}
+      {copied ? "copied ✓" : shown}
     </button>
   );
 }

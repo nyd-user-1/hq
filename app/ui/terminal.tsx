@@ -1221,10 +1221,11 @@ export default function Terminal({
             pushes the top up into the message area. */}
         <div className="relative flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
           {/* The send box's own boundary chip — top-right of its SOLID 1px border
-              (everything else uses the dashed Boundary). Shows the component name,
-              copies the full openable path. */}
+              (everything else uses the dashed Boundary). Anticipatory name
+              (send-box.tsx, pending the To Do extraction) but copies the path the
+              code lives at TODAY — app/ui/terminal.tsx. */}
           <span className="absolute -top-2.5 right-3 z-10">
-            <BoundaryChip label="Terminal" copyText="app/ui/terminal.tsx" />
+            <BoundaryChip label="send-box.tsx" copyText="app/ui/terminal.tsx" />
           </span>
           <textarea
             ref={taRef}

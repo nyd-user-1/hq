@@ -34,10 +34,11 @@ export default function PanelMenu() {
       <summary
         title="open a panel"
         // a BoundaryChip VARIANT: the shared chip shell + a ▾ marking the menu.
-        // Shows the component name (PanelMenu), true-cased like every other chip.
+        // Labelled with its file name (panel-menu.tsx), consistent with the
+        // other boundary chips.
         className={`${CHIP_CLASS} flex list-none items-center gap-1 marker:content-none [&::-webkit-details-marker]:hidden`}
       >
-        PanelMenu <span className="text-[7px]">▼</span>
+        panel-menu <span className="text-[7px]">▼</span>
       </summary>
       <div className="absolute left-0 top-full z-20 mt-3 flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
         {/* info-circle chip on the top-right corner — same pattern as the app
