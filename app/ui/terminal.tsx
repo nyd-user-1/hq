@@ -324,6 +324,7 @@ export default function Terminal({
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [project, setProject] = useState("");
   const [resolvedId, setResolvedId] = useState<string | null>(null);
+  const [customTitle, setCustomTitle] = useState(""); // HQ rename (sidecar); shown in the header instead of the id
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
@@ -386,6 +387,7 @@ export default function Terminal({
         setItems(d.items ?? []);
         setProject(d.project ?? "");
         setResolvedId(d.id ?? null);
+        setCustomTitle(d.customTitle ?? "");
         setResume(d.resume ?? null);
         setLineage(d.lineage ?? null);
         setPredecessorCtx(d.predecessorCtx ?? 0);
@@ -424,6 +426,7 @@ export default function Terminal({
     setItems([]);
     setProject("");
     setResolvedId(null);
+    setCustomTitle("");
     setLineage(null);
     setStatus(null);
     setContextTokens(0);
@@ -820,13 +823,16 @@ export default function Terminal({
               setIdCopied(true);
               setTimeout(() => setIdCopied(false), 1200);
             }}
+            title={
+              idCopied ? "copied" : `copy session id · ${resolvedId.slice(0, 8)}`
+            }
             className={`cursor-pointer rounded px-1 py-0.5 font-mono text-[11px] transition-colors ${
               idCopied
                 ? "bg-emerald-500/15 text-emerald-300"
                 : "text-green-400 hover:text-green-300"
             }`}
           >
-            {resolvedId.slice(0, 8)}
+            {customTitle || resolvedId.slice(0, 8)}
           </button>
         ) : (
           <span className="font-mono text-[11px] text-zinc-600">—</span>
