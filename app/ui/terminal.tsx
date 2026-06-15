@@ -606,7 +606,9 @@ export default function Terminal({
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    // grow with content up to ~8 lines, then scroll (it's bottom-anchored, so it
+    // grows upward into the message area)
+    ta.style.height = `${Math.min(ta.scrollHeight, 176)}px`;
   }, [draft]);
 
   // The send goes to the session ON SCREEN — its id is snapshotted here, at
@@ -1240,7 +1242,10 @@ export default function Terminal({
         )}
         {/* textarea + controls; ↵ sends / ⇧↵ newline. Drops are caught at the
             pane root (the whole basin); paste + 📎 still funnel through addFiles. */}
-        <div className="flex items-end gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
+        {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
+            scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
+            pushes the top up into the message area. */}
+        <div className="flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
           <textarea
             ref={taRef}
             value={draft}
@@ -1270,7 +1275,7 @@ export default function Terminal({
                 ? "no session yet — start one in your terminal first"
                 : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
-            className="max-h-[200px] min-h-[64px] flex-1 resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+            className="max-h-[176px] min-h-[72px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <input
             ref={fileInputRef}
@@ -1283,27 +1288,29 @@ export default function Terminal({
               e.currentTarget.value = "";
             }}
           />
-          <ButtonChipAction
-            label="attach"
-            ariaLabel="Attach"
-            title="attach a screenshot — pasting or dropping an image works too"
-            onClick={() => fileInputRef.current?.click()}
-          />
-          <ButtonChipAction
-            label="todo"
-            accent="text-violet-300"
-            title="add this as a to-do on your HQ list"
-            onClick={todoDraft}
-          />
-          {sending && (
-            <button
-              onClick={stopSend}
-              title="kill the HQ-spawned headless run"
-              className="shrink-0 rounded-md border border-red-500/50 px-2.5 py-1 text-xs text-red-400 transition-colors hover:border-red-400 hover:text-red-300"
-            >
-              stop
-            </button>
-          )}
+          <div className="flex w-full items-center gap-2">
+            <ButtonChipAction
+              label="attach"
+              ariaLabel="Attach"
+              title="attach a screenshot — pasting or dropping an image works too"
+              onClick={() => fileInputRef.current?.click()}
+            />
+            <ButtonChipAction
+              label="todo"
+              accent="text-violet-300"
+              title="add this as a to-do on your HQ list"
+              onClick={todoDraft}
+            />
+            {sending && (
+              <button
+                onClick={stopSend}
+                title="kill the HQ-spawned headless run"
+                className="ml-auto shrink-0 rounded-md border border-red-500/50 px-2.5 py-1 text-xs text-red-400 transition-colors hover:border-red-400 hover:text-red-300"
+              >
+                stop
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

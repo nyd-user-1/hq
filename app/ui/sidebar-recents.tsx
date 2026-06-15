@@ -389,10 +389,10 @@ export default function SidebarRecents() {
                           : "text-zinc-400 group-hover:text-zinc-200"
                       }`}
                     >
-                      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                         {s.customTitle ? (
                           // Renamed → the name IS the label (id moves to the ⋮ menu).
-                          <span className="min-w-0 truncate font-mono text-xs text-zinc-200">
+                          <span className="min-w-0 break-words font-mono text-xs text-zinc-200">
                             {s.customTitle}
                           </span>
                         ) : (
@@ -400,7 +400,7 @@ export default function SidebarRecents() {
                             <span className="shrink-0 font-mono text-xs">
                               {s.id.slice(0, 8)}
                             </span>
-                            <span className="min-w-0 truncate text-xs text-zinc-600">
+                            <span className="min-w-0 break-words text-xs text-zinc-600">
                               {s.project}
                             </span>
                           </>
