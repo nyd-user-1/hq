@@ -18,7 +18,10 @@ export const PANELS: { title: string; href: string; routes: string[] }[] = [
 ];
 
 // Routes that open the right panel (terminal stays mounted underneath).
+// "/projects" is opened from the sidebar's Projects item, not the panels
+// dropdown, so it's listed here explicitly rather than via PANELS.
 export const PANEL_ROUTES = [
   SEARCH_ITEM.href,
+  "/projects",
   ...PANELS.flatMap((p) => p.routes),
 ];

@@ -13,7 +13,7 @@ export default function NewSessionItem() {
   return (
     <button
       onClick={() => router.push(`${pathname}?session=new`, { scroll: false })}
-      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
+      className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
         staged
           ? "bg-blue-600 text-white"
           : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
@@ -21,8 +21,8 @@ export default function NewSessionItem() {
     >
       {/* lucide Plus */}
       <svg
-        width="16"
-        height="16"
+        width="14"
+        height="14"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
