@@ -11,11 +11,14 @@ import {
   recent,
   getMemoryFile,
   memoryFilePath,
+  getScriptFile,
+  scriptFilePath,
   queryTokens,
   type SearchScope,
   type SortDir,
 } from "@/lib/search";
 import { getNoteFile } from "@/lib/notes";
+import DraggableCard from "@/app/ui/draggable-card";
 
 export const dynamic = "force-dynamic";
 
@@ -113,14 +116,27 @@ export default async function Search({
     open?: string;
     openSession?: string;
     openNote?: string;
+    openScript?: string;
     session?: string;
     pair?: string;
   }>;
 }) {
-  const { q = "", scope: rawScope, sort: rawSort, open, openSession, openNote, session, pair } =
-    await searchParams;
+  const {
+    q = "",
+    scope: rawScope,
+    sort: rawSort,
+    open,
+    openSession,
+    openNote,
+    openScript,
+    session,
+    pair,
+  } = await searchParams;
   const scope: SearchScope =
-    rawScope === "transcripts" || rawScope === "memory" || rawScope === "notes"
+    rawScope === "transcripts" ||
+    rawScope === "memory" ||
+    rawScope === "notes" ||
+    rawScope === "scripts"
       ? rawScope
       : "all";
   const sortDir: SortDir = rawSort === "old" ? "old" : "new";
@@ -239,6 +255,37 @@ export default async function Search({
     );
   }
 
+  // ── opened script ─────────────────────────────────────────────────────────
+  if (openScript) {
+    const content = getScriptFile(openScript);
+    return (
+      <Boundary label="@panel/search/page.tsx">
+        <div className="flex items-baseline gap-3">
+          <Link
+            href={back}
+            scroll={false}
+            className="shrink-0 font-mono text-xs text-blue-400 hover:text-blue-300"
+          >
+            ← results
+          </Link>
+          <CopyText
+            text={scriptFilePath(openScript)}
+            className="min-w-0 truncate font-mono text-xs text-zinc-500 hover:text-zinc-300"
+          >
+            scripts/{openScript}
+          </CopyText>
+        </div>
+        <div className="scrollbar-none min-h-0 flex-1 overflow-auto font-mono text-[11px] leading-relaxed text-zinc-300">
+          {content ? (
+            <pre className="whitespace-pre-wrap break-words">{content}</pre>
+          ) : (
+            <p className="text-xs text-zinc-600">script not found</p>
+          )}
+        </div>
+      </Boundary>
+    );
+  }
+
   // ── query + results ─────────────────────────────────────────────────────
   // No query → browse the most-recent transcripts + memory as cards (honors the
   // scope chips + sort toggle). With a query → ranked search hits.
@@ -269,6 +316,7 @@ export default async function Search({
           {scopeChip("Transcripts", "transcripts")}
           {scopeChip("Memory", "memory")}
           {scopeChip("Notes", "notes")}
+          {scopeChip("Scripts", "scripts")}
           <Link
             href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
               sortDir === "new" ? "old" : "new"
@@ -295,19 +343,19 @@ export default async function Search({
       )}
 
       <ul className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
-        {hits.map((h) => (
-          <li key={`${h.kind}:${h.ref}`}>
-            <Link
-              href={
-                h.kind === "transcript"
-                  ? `${back}&openSession=${h.ref}`
-                  : h.kind === "note"
-                    ? `${back}&openNote=${encodeURIComponent(h.ref)}`
-                    : `${back}&open=${encodeURIComponent(h.ref)}`
-              }
-              scroll={false}
-              className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
-            >
+        {hits.map((h) => {
+          const href =
+            h.kind === "transcript"
+              ? `${back}&openSession=${h.ref}`
+              : h.kind === "note"
+                ? `${back}&openNote=${encodeURIComponent(h.ref)}`
+                : h.kind === "script"
+                  ? `${back}&openScript=${encodeURIComponent(h.ref)}`
+                  : `${back}&open=${encodeURIComponent(h.ref)}`;
+          const cardCls =
+            "flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50";
+          const inner = (
+            <>
               <div className="flex items-center gap-2.5">
                 <span className="min-w-0 truncate text-sm font-medium text-zinc-200">
                   {h.title}
@@ -321,7 +369,9 @@ export default async function Search({
                       ? "bg-violet-500/15 text-violet-300"
                       : h.kind === "note"
                         ? "bg-blue-500/15 text-blue-300"
-                        : "bg-emerald-500/15 text-emerald-300"
+                        : h.kind === "script"
+                          ? "bg-amber-500/15 text-amber-300"
+                          : "bg-emerald-500/15 text-emerald-300"
                   }`}
                 >
                   {h.kind}
@@ -332,9 +382,27 @@ export default async function Search({
                   {highlight(h.snippet, q)}
                 </p>
               )}
-            </Link>
-          </li>
-        ))}
+            </>
+          );
+          return (
+            <li key={`${h.kind}:${h.ref}`}>
+              {h.kind === "script" ? (
+                // draggable into a terminal (drops the path) + click-to-open source
+                <DraggableCard
+                  href={href}
+                  drag={scriptFilePath(h.ref)}
+                  className={cardCls}
+                >
+                  {inner}
+                </DraggableCard>
+              ) : (
+                <Link href={href} scroll={false} className={cardCls}>
+                  {inner}
+                </Link>
+              )}
+            </li>
+          );
+        })}
         {hits.length === 0 && (
           <li className="text-xs text-zinc-600">
             {building
