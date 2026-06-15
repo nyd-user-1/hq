@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { PANELS } from "@/app/ui/sidebar-nav";
@@ -19,19 +19,28 @@ export default function PanelsMenu() {
   const close = () => {
     if (ref.current) ref.current.open = false;
   };
+  // Native <details> doesn't close on an outside click — wire that up.
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const el = ref.current;
+      if (el?.open && !el.contains(e.target as Node)) el.open = false;
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
   const anyActive = PANELS.some((p) => p.routes.includes(pathname ?? ""));
 
   return (
     <details ref={ref} className="relative shrink-0">
       <summary
         title="open a panel"
-        className={`flex cursor-pointer list-none items-center gap-1 bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors marker:content-none [&::-webkit-details-marker]:hidden ${
+        className={`flex w-[133px] cursor-pointer list-none items-center justify-between bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors marker:content-none [&::-webkit-details-marker]:hidden ${
           anyActive ? "text-zinc-200" : "text-zinc-400 hover:text-zinc-200"
         }`}
       >
         panels <span className="text-[8px] tracking-normal">▼</span>
       </summary>
-      <div className="absolute left-0 top-full z-20 mt-3 flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
+      <div className="absolute left-0 top-full z-20 mt-3 flex w-[133px] flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
         {/* info-circle chip on the top-right corner — same pattern as the app
             panel's ✕, straddling the dashed top border */}
         <div className="absolute -top-2.5 right-2 z-10">
