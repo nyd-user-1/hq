@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { createHash } from "node:crypto";
 
 // The HQ component registry — hand-curated (approval is a human judgment, not
 // something you can derive from disk). APPROVED = reviewed, named per the
@@ -57,6 +58,18 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "SidebarToggle", file: "app/ui/sidebar-toggle.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — the boundary sidebar toggle." },
   { name: "SearchTrigger", file: "app/ui/search-trigger.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — opens/closes the Search panel (active state)." },
 ];
+
+// Registry provenance — like a to-do, each entry records the session that added
+// it and when. This whole registry was authored in one session, so they share
+// these (honest registry-add provenance, not original file authorship).
+export const REGISTRY_SESSION = "e47af370-918d-4e9b-919d-936eb99b9ce5";
+export const REGISTRY_CREATED_AT = 1781482600000;
+
+// A stable c_ id derived from the component name (the c_ analogue of a to-do's
+// t_ id) — deterministic, so it never shifts between renders.
+export function componentId(name: string): string {
+  return "c_" + createHash("sha1").update(name).digest("hex").slice(0, 10);
+}
 
 // The source of a registered component, read from disk (the file lives in the
 // repo; HQ is localhost). Every registered component lives under app/ui, so the

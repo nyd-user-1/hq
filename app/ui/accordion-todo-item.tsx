@@ -43,7 +43,9 @@ export default function AccordionTodoItem({
   const t = item;
   const sess =
     t.fromSession || (t.addedBy && t.addedBy !== "you" ? t.addedBy : null);
-  const expandable = !!t.body || !!sess;
+  // Every to-do now has body content — at minimum the "at <time>" meta row — so
+  // they're all expandable.
+  const expandable = true;
   const isSession = !!t.addedBy && t.addedBy !== "you";
   const who = t.addedBy === "you" ? "you" : isSession ? "claude" : "added";
   const dotClass =

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
+import MetaChipRow from "@/app/ui/meta-chip-row";
 
 type Item = {
   name: string;
@@ -10,6 +11,9 @@ type Item = {
   status: "approved" | "review";
   desc: string;
   code: string;
+  id: string;
+  session: string;
+  createdAt: number;
 };
 
 // Kind → the colored pill, reusing the To Do category-chip palette.
@@ -71,7 +75,6 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
       key={c.name}
       who="claude"
       dotClass="text-orange-500"
-      meta={c.file}
       tag={KIND_TAG[c.kind]}
       label={c.name}
       fillLabel
@@ -116,6 +119,15 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
           {c.code || "— source unavailable —"}
         </pre>
       </div>
+      <MetaChipRow
+        divider
+        items={[
+          { label: "Component", value: c.id },
+          { label: "via session", value: c.session.slice(0, 8), copyText: c.session },
+          { label: "at", value: new Date(c.createdAt).toLocaleTimeString() },
+          { label: "Path:", value: c.file },
+        ]}
+      />
     </AccordionItem>
   );
 
