@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# hq — open the HQ dashboard in the browser, pinned to the Claude Code session
+# that launched it.
+#
+# Run it from inside a Claude Code session (via the /hq command, or `!hq` if it's
+# on your PATH). CLAUDE_CODE_SESSION_ID is read straight from the environment, so
+# HQ shows *this* session as Terminal 1 the moment it opens — no disk guessing,
+# works even though the transcript is only one message old.
+#
+# If the dev server is already running it just opens the browser; otherwise it
+# starts `npm run dev` detached and waits for it. (A packaged HQ would start its
+# bundled server here instead — everything else is identical.)
+
+set -uo pipefail
+
+HQ_DIR="${HQ_DIR:-$HOME/code/hq}"
+HQ_PORT="${HQ_PORT:-3002}"
+BASE="http://localhost:${HQ_PORT}"
+
+# Pin to the launching session when we have its id (we always do under Claude).
+sid="${CLAUDE_CODE_SESSION_ID:-}"
+url="$BASE/"
+[ -n "$sid" ] && url="$BASE/?session=$sid"
+
+up() { curl -sf -o /dev/null --max-time 2 "$BASE/"; }
+
+ready=1
+if ! up; then
+  echo "Starting HQ on $BASE ..."
+  ( cd "$HQ_DIR" && nohup npm run dev >/tmp/hq-dev.log 2>&1 & ) >/dev/null 2>&1
+  ready=0
+  for _ in $(seq 1 120); do        # tolerate a cold first compile after a reboot
+    if up; then ready=1; break; fi
+    sleep 0.5
+  done
+fi
+
+if command -v open >/dev/null 2>&1; then
+  open "$url"
+elif command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$url"
+fi
+
+if [ "$ready" = 1 ]; then
+  printf '\nHQ is now open on %s\n' "$BASE"
+else
+  printf '\nHQ is starting on %s — give it a few seconds and refresh if the page is blank.\n' "$BASE"
+fi
+printf 'Minimize this terminal and head over to HQ. When you are done, end this terminal session.\n'
