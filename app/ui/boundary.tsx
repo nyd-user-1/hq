@@ -10,6 +10,7 @@ export default function Boundary({
   lead,
   trail,
   topOnly = false,
+  bleedX = false,
   padX,
   children,
 }: {
@@ -21,13 +22,21 @@ export default function Boundary({
   // Used by the inner panel pages, which already sit inside their group layout's
   // full box — the outer box keeps the content off the panel edge.
   topOnly?: boolean;
+  // `bleedX` (topOnly only): pull the line out by the group layout's px-4/px-5
+  // so the dashed top border reaches the layout box's side borders, then re-pad
+  // the content by the same amount — the layout's content padding is untouched,
+  // only the line extends. Opt-in: standalone pages (search/compose) aren't in a
+  // padded layout box, so they must NOT set this.
+  bleedX?: boolean;
   // Override the horizontal padding (default `px-4 sm:px-5`); the sidebar runs
   // tighter at `px-2.5`. Top/bottom padding is unchanged.
   padX?: string;
   children: React.ReactNode;
 }) {
   const frame = topOnly
-    ? "border-t border-dashed border-zinc-700 pt-7"
+    ? `border-t border-dashed border-zinc-700 pt-7${
+        bleedX ? " -mx-4 px-4 sm:-mx-5 sm:px-5" : ""
+      }`
     : `rounded-lg border border-dashed border-zinc-700 pt-7 pb-4 sm:pb-5 ${padX ?? "px-4 sm:px-5"}`;
   return (
     <div

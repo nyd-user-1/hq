@@ -24,7 +24,7 @@ export default function Components() {
     createdAt: REGISTRY_CREATED_AT,
   }));
   return (
-    <Boundary topOnly label="@panel/(activity)/components/page.tsx">
+    <Boundary topOnly bleedX label="@panel/(activity)/components/page.tsx">
       <ComponentsList items={items} />
     </Boundary>
   );

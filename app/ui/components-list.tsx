@@ -147,7 +147,7 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
           onChange={setQuery}
           placeholder="Search components…"
         />
-        <p className="text-[11px] text-zinc-600">
+        <p className="text-[11px] text-zinc-500">
           *Drag cards to chat or reorder.
         </p>
       </div>

@@ -15,7 +15,7 @@ export default function TabNav({ tabs }: { tabs: Tab[] }) {
   const router = useRouter();
   const active = useSelectedLayoutSegment();
   return (
-    <nav className="mb-2 flex flex-wrap gap-2">
+    <nav className="flex flex-wrap gap-2 pb-3.5">
       {tabs.map((tab) => {
         const isActive = active === tab.segment;
         return (
