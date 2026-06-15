@@ -138,7 +138,7 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
           Cards
         </h3>
         <p className="text-xs text-zinc-600">
-          Drag into chat or drag to reorder.
+          Drag to chat or reorder.
         </p>
       </div>
 
