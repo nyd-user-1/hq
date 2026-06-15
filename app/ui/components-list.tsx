@@ -133,17 +133,9 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
 
   return (
     <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-      <div className="flex flex-col gap-1 text-xs text-zinc-600">
-        <p>
-          <span className="text-blue-400/80">Approved</span> Reviewed, named, and
-          reusable components.
-        </p>
-        <p>
-          <span className="text-red-400/80">Review</span> Unaudited components
-          that exist in app/ui.
-        </p>
-        <p>*Cards: Drag into chat or drag to reorder.</p>
-      </div>
+      <p className="text-xs text-zinc-600">
+        *Cards: Drag into chat or drag to reorder.
+      </p>
 
       <section className="flex flex-col gap-1">
         <h2 className="font-mono text-[10px] uppercase tracking-widest text-blue-400">
