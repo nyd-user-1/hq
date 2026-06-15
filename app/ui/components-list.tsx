@@ -133,9 +133,14 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
 
   return (
     <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-      <p className="text-xs text-zinc-600">
-        *Cards: Drag into chat or drag to reorder.
-      </p>
+      <div className="flex flex-col gap-1">
+        <h3 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          Cards
+        </h3>
+        <p className="text-xs text-zinc-600">
+          Drag into chat or drag to reorder.
+        </p>
+      </div>
 
       <section className="flex flex-col gap-1">
         <h2 className="font-mono text-[10px] uppercase tracking-widest text-blue-400">
