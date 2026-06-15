@@ -48,6 +48,8 @@ export default function ProjectsView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <SearchField value={q} onChange={setQ} placeholder="Search projects…" />
+
       <div className="flex items-center gap-2">
         <button
           onClick={() => setDir((d) => (d === "new" ? "old" : "new"))}
@@ -81,8 +83,6 @@ export default function ProjectsView({
           </svg>
         </button>
       </div>
-
-      <SearchField value={q} onChange={setQ} placeholder="Search projects…" />
 
       {shown.length === 0 ? (
         <p className="text-xs text-zinc-600">

@@ -338,7 +338,7 @@ export default async function Search({
 
       {!q && (
         <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-          recent · newest first
+          recent
         </p>
       )}
 
