@@ -13,7 +13,17 @@
 
 set -uo pipefail
 
-HQ_DIR="${HQ_DIR:-$HOME/code/hq}"
+# Resolve our own location (following npm's bin symlink) so we find the app
+# wherever it's installed — the repo in dev, npm's global dir once published.
+# Override with HQ_DIR=... if you keep the app somewhere unusual.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  dir="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [ "${SOURCE#/}" = "$SOURCE" ] && SOURCE="$dir/$SOURCE"
+done
+SELF_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+HQ_DIR="${HQ_DIR:-$(cd "$SELF_DIR/.." && pwd)}"
 HQ_PORT="${HQ_PORT:-3002}"
 BASE="http://localhost:${HQ_PORT}"
 
