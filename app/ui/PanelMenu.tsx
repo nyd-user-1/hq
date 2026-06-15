@@ -12,7 +12,7 @@ import ButtonChipIcon from "@/app/ui/button-chip-icon";
 // Not click-to-copy — a ▾ marks it as a menu. The menu echoes the boundary
 // aesthetic: a dashed border + an info-circle chip on its top-right corner (same
 // pattern as the app panel's ✕).
-export default function PanelsMenu() {
+export default function PanelMenu() {
   const params = useSearchParams();
   const pathname = usePathname();
   const ref = useRef<HTMLDetailsElement>(null);

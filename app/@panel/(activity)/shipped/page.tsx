@@ -55,9 +55,21 @@ function DiffLine({ line }: { line: string }) {
 export default async function Shipped({
   searchParams,
 }: {
-  searchParams: Promise<{ repo?: string; commit?: string }>;
+  searchParams: Promise<{
+    repo?: string;
+    commit?: string;
+    session?: string;
+    pair?: string;
+  }>;
 }) {
-  const { repo, commit } = await searchParams;
+  const { repo, commit, session, pair } = await searchParams;
+  // Carry the terminal pins on in-panel nav — without them the terminal goes
+  // unpinned, re-pins via router.replace, and wipes ?commit (the card "snaps
+  // back to the list" bug).
+  const pins = [session && `session=${session}`, pair && `pair=${pair}`]
+    .filter(Boolean)
+    .join("&");
+  const pinTail = pins ? `&${pins}` : "";
 
   // ── opened commit ────────────────────────────────────────────────────────
   if (commit) {
@@ -68,7 +80,7 @@ export default async function Shipped({
       <Boundary topOnly bleedX label="@panel/shipped/page.tsx">
         <div className="flex items-center gap-3">
           <BackLink
-            href="/shipped"
+            href={`/shipped${pins ? `?${pins}` : ""}`}
             className="shrink-0 cursor-pointer font-mono text-xs text-blue-400 hover:text-blue-300"
           >
             ← shipped
@@ -121,7 +133,7 @@ export default async function Shipped({
           {ships.map((s) => (
             <li key={`${s.repo}:${s.sha}`}>
               <Link
-                href={`/shipped?repo=${s.repo}&commit=${s.sha}`}
+                href={`/shipped?repo=${s.repo}&commit=${s.sha}${pinTail}`}
                 scroll={false}
                 className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
               >

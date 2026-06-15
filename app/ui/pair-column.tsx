@@ -37,7 +37,7 @@ function PairPane() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <Boundary label="terminal.tsx · 2">
+      <Boundary label="terminal2.tsx">
         {/* close — matches the app panel's ✕: a clean button on the boundary
             line, top-right (not a cramped chip beside the path label) */}
         <Link
