@@ -285,6 +285,14 @@ export default function SidebarRecents() {
   const openMenu = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
+    // Toggle: clicking the ⋮ of the already-open row closes it. (stopPropagation
+    // above means the window outside-click listener never fires for the kebab, so
+    // the close has to happen here.)
+    if (menuFor === id) {
+      setMenuFor(null);
+      setMenuPos(null);
+      return;
+    }
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     // Right-align the menu to the kebab and open leftward so its w-52 body stays
     // inside the sidebar column instead of overflowing (and being clipped) at the
