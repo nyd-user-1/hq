@@ -30,7 +30,7 @@ export default async function Audit({
     const home = os.homedir();
     const shown = open.startsWith(home) ? `~${open.slice(home.length)}` : open;
     return (
-      <Boundary topOnly label="@panel/(metrics)/audit/page.tsx">
+      <Boundary topOnly bleedX label="@panel/(metrics)/audit/page.tsx">
         <div className="flex items-baseline gap-3">
           <BackLink
             href="/audit"
@@ -76,7 +76,7 @@ export default async function Audit({
   );
 
   return (
-    <Boundary topOnly label="@panel/(metrics)/audit/page.tsx">
+    <Boundary topOnly bleedX label="@panel/(metrics)/audit/page.tsx">
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
         <section className="flex flex-col gap-1">
           <h2 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">

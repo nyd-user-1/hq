@@ -18,7 +18,7 @@ export default function Calls() {
   const calls = getCalls();
   const spend = getSpend();
   return (
-    <Boundary topOnly label="@panel/calls/page.tsx">
+    <Boundary topOnly bleedX label="@panel/calls/page.tsx">
       <div className="flex shrink-0 flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-xs">
         <span className="uppercase tracking-wide text-zinc-600">spend</span>
         <span className="text-emerald-300">

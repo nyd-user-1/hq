@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // sit at the top.
 export default function Metrics() {
   return (
-    <Boundary topOnly label="@panel/(metrics)/metrics/page.tsx">
+    <Boundary topOnly bleedX label="@panel/(metrics)/metrics/page.tsx">
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
         <TokenMeter />
         <div className="border-t border-zinc-800 pt-4">

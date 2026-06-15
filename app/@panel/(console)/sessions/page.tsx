@@ -56,7 +56,7 @@ export default async function Sessions({
   const keep = session ? `session=${session}&` : "";
 
   return (
-    <Boundary topOnly label="@panel/sessions/page.tsx">
+    <Boundary topOnly bleedX label="@panel/sessions/page.tsx">
       <div className="flex gap-2">
         {chip("Live", `/sessions?${keep}filter=live`, !showAll)}
         {chip("All", `/sessions?${keep}filter=all`, showAll)}

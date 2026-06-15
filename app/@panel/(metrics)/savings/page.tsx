@@ -57,7 +57,7 @@ export default function Savings() {
     (cacheRead / 1e6) * (INPUT_PER_M - CACHE_READ_PER_M);
 
   return (
-    <Boundary topOnly label="@panel/(metrics)/savings/page.tsx">
+    <Boundary topOnly bleedX label="@panel/(metrics)/savings/page.tsx">
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
         <section className="flex flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
           <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">

@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default function Sdk() {
   const sessions = getSdkSessions();
   return (
-    <Boundary topOnly label="@panel/(console)/sdk/page.tsx">
+    <Boundary topOnly bleedX label="@panel/(console)/sdk/page.tsx">
       <ul className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
         {sessions.map((s) => (
           <li key={s.id}>

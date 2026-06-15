@@ -82,7 +82,7 @@ const COMMANDS: { cmd: string; desc: string }[] = [
 
 export default function Cmd() {
   return (
-    <Boundary topOnly label="@panel/(console)/cmd/page.tsx">
+    <Boundary topOnly bleedX label="@panel/(console)/cmd/page.tsx">
       <p className="text-xs text-zinc-400">
         CLI utilities that control the live session or open a TUI — they can't run
         via <code className="font-mono text-zinc-300">claude -p</code>. Click to

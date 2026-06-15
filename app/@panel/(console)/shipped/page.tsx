@@ -65,7 +65,7 @@ export default async function Shipped({
     // then search every repo for it.
     const c = repo ? getCommit(repo, commit) : findCommit(commit);
     return (
-      <Boundary topOnly label="@panel/shipped/page.tsx">
+      <Boundary topOnly bleedX label="@panel/shipped/page.tsx">
         <div className="flex items-center gap-3">
           <BackLink
             href="/shipped"
@@ -109,7 +109,7 @@ export default async function Shipped({
   // ── feed ─────────────────────────────────────────────────────────────────
   const ships = getShipped();
   return (
-    <Boundary topOnly label="@panel/shipped/page.tsx">
+    <Boundary topOnly bleedX label="@panel/shipped/page.tsx">
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-semibold text-zinc-300">Shipped</h3>
         <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">

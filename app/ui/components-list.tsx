@@ -141,7 +141,7 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
 
   return (
     <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-      <div className="flex flex-col gap-1.5">
+      <div className="sticky top-0 z-10 flex flex-col gap-1.5 bg-zinc-950 pb-3">
         <SearchField
           value={query}
           onChange={setQuery}

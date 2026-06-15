@@ -30,7 +30,7 @@ export default async function Skills({
     const home = os.homedir();
     const shown = open.startsWith(home) ? `~${open.slice(home.length)}` : open;
     return (
-      <Boundary topOnly label="@panel/(console)/skills/page.tsx">
+      <Boundary topOnly bleedX label="@panel/(console)/skills/page.tsx">
         <div className="flex items-baseline gap-3">
           <BackLink
             href={tail ? `/skills?${tail}` : "/skills"}
@@ -59,7 +59,7 @@ export default async function Skills({
   // ── browser + launcher ────────────────────────────────────────────────────
   const runs = recentCommands(8);
   return (
-    <Boundary topOnly label="@panel/(console)/skills/page.tsx">
+    <Boundary topOnly bleedX label="@panel/(console)/skills/page.tsx">
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
         <SkillLauncher skills={getSkills()} session={session} pair={pair} />
 
