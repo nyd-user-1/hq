@@ -45,9 +45,13 @@ function DiffLine({ line }: { line: string }) {
   )
     cls = "text-zinc-600";
   else if (line.startsWith("@@")) cls = "text-cyan-400";
-  else if (line.startsWith("+")) cls = "text-emerald-300";
-  else if (line.startsWith("-")) cls = "text-red-300";
-  return <div className={`whitespace-pre ${cls}`}>{line || " "}</div>;
+  else if (line.startsWith("+")) cls = "bg-emerald-500/15 text-emerald-300";
+  else if (line.startsWith("-")) cls = "bg-red-500/15 text-red-300";
+  return (
+    <div className={`whitespace-pre-wrap break-words px-1 ${cls}`}>
+      {line || " "}
+    </div>
+  );
 }
 
 // Shipped: cross-project commit feed. A row opens that commit's diff IN the
@@ -107,7 +111,7 @@ export default async function Shipped({
             </span>
           )}
         </div>
-        <div className="scrollbar-none min-h-0 flex-1 overflow-auto font-mono text-[11px] leading-relaxed">
+        <div className="scrollbar-none min-h-0 flex-1 overflow-auto border-t border-zinc-800 pt-3 font-mono text-[11px] leading-relaxed">
           {c ? (
             c.text.split("\n").map((l, i) => <DiffLine key={i} line={l} />)
           ) : (
