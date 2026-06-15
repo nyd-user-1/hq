@@ -45,10 +45,16 @@ function DiffLine({ line }: { line: string }) {
   )
     cls = "text-zinc-600";
   else if (line.startsWith("@@")) cls = "text-cyan-400";
+  // red reads fainter than green at the same opacity on a dark bg, so removed
+  // lines get a touch more tint to match the added ones' weight.
   else if (line.startsWith("+")) cls = "bg-emerald-500/15 text-emerald-300";
-  else if (line.startsWith("-")) cls = "bg-red-500/15 text-red-300";
+  else if (line.startsWith("-")) cls = "bg-red-500/20 text-red-300";
+  // hanging indent: the +/- marker sits in the gutter, wrapped continuations
+  // indent past it so a wrap never reads as a new line.
   return (
-    <div className={`whitespace-pre-wrap break-words px-1 ${cls}`}>
+    <div
+      className={`whitespace-pre-wrap break-words pl-[2ch] pr-1 [text-indent:-2ch] ${cls}`}
+    >
       {line || " "}
     </div>
   );
