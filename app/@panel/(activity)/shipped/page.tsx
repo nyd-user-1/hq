@@ -31,6 +31,9 @@ function CopyIcon() {
 // Color a `git show` line by its diff role.
 function DiffLine({ line }: { line: string }) {
   let cls = "text-zinc-400";
+  // 2px left accent edge: colored on +/- change lines, transparent on every
+  // other line so the gutter stays vertically aligned (no 2px jog).
+  let edge = "border-transparent";
   if (
     line.startsWith("commit ") ||
     line.startsWith("Author:") ||
@@ -45,15 +48,24 @@ function DiffLine({ line }: { line: string }) {
   )
     cls = "text-zinc-600";
   else if (line.startsWith("@@")) cls = "text-cyan-400";
-  // Claude-dark diff: a clearly-visible colored line bg with bright neutral
-  // text. Red reads fainter than green on dark, so it carries more tint.
-  else if (line.startsWith("+")) cls = "bg-emerald-500/25 text-zinc-100";
-  else if (line.startsWith("-")) cls = "bg-red-500/30 text-zinc-100";
+  // Diff +/- ride the design system, not a GitHub stoplight: green bg is the
+  // exact CopyCode "copied" flash (emerald-500/15); red bg is its PERCEPTUAL
+  // mirror — red carries 0.21 luminance weight vs green's 0.72, so at equal
+  // opacity red reads ~1.7× fainter and vanishes on dark, hence /30 ≈ green /15
+  // to the eye. Text is -200 (one stop brighter than a chip needs) for legibility
+  // over long wrapped lines; a 2px left edge anchors the +/- gutter.
+  else if (line.startsWith("+")) {
+    cls = "bg-emerald-500/15 text-emerald-200";
+    edge = "border-emerald-400/70";
+  } else if (line.startsWith("-")) {
+    cls = "bg-red-500/30 text-red-200";
+    edge = "border-red-400/70";
+  }
   // hanging indent: the +/- marker sits in the gutter, wrapped continuations
   // indent past it so a wrap never reads as a new line.
   return (
     <div
-      className={`whitespace-pre-wrap break-words pl-[2ch] pr-1 [text-indent:-2ch] ${cls}`}
+      className={`whitespace-pre-wrap break-words border-l-2 ${edge} py-0.5 pl-[2ch] pr-1 [text-indent:-2ch] ${cls}`}
     >
       {line || " "}
     </div>
@@ -117,7 +129,7 @@ export default async function Shipped({
             </span>
           )}
         </div>
-        <div className="scrollbar-none min-h-0 flex-1 overflow-auto border-t border-zinc-800 pt-3 font-mono text-[11px] leading-relaxed">
+        <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-auto border-t border-zinc-800 pt-3 font-mono text-[11px] leading-snug">
           {c ? (
             c.text.split("\n").map((l, i) => <DiffLine key={i} line={l} />)
           ) : (
