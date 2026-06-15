@@ -34,13 +34,13 @@ export default function PanelsMenu() {
     <details ref={ref} className="relative shrink-0">
       <summary
         title="open a panel"
-        className={`flex w-[133px] cursor-pointer list-none items-center justify-between bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors marker:content-none [&::-webkit-details-marker]:hidden ${
+        className={`flex cursor-pointer list-none items-center gap-1 bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors marker:content-none [&::-webkit-details-marker]:hidden ${
           anyActive ? "text-zinc-200" : "text-zinc-400 hover:text-zinc-200"
         }`}
       >
-        panels <span className="text-[8px] tracking-normal">▼</span>
+        panels <span className="text-[7px] tracking-normal">▼</span>
       </summary>
-      <div className="absolute left-0 top-full z-20 mt-3 flex w-[133px] flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
+      <div className="absolute left-0 top-full z-20 mt-3 flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
         {/* info-circle chip on the top-right corner — same pattern as the app
             panel's ✕, straddling the dashed top border */}
         <div className="absolute -top-2.5 right-2 z-10">
