@@ -45,10 +45,10 @@ function DiffLine({ line }: { line: string }) {
   )
     cls = "text-zinc-600";
   else if (line.startsWith("@@")) cls = "text-cyan-400";
-  // red reads fainter than green at the same opacity on a dark bg, so removed
-  // lines get a touch more tint to match the added ones' weight.
-  else if (line.startsWith("+")) cls = "bg-emerald-500/15 text-emerald-300";
-  else if (line.startsWith("-")) cls = "bg-red-500/20 text-red-300";
+  // Claude-dark diff: a clearly-visible colored line bg with bright neutral
+  // text. Red reads fainter than green on dark, so it carries more tint.
+  else if (line.startsWith("+")) cls = "bg-emerald-500/25 text-zinc-100";
+  else if (line.startsWith("-")) cls = "bg-red-500/30 text-zinc-100";
   // hanging indent: the +/- marker sits in the gutter, wrapped continuations
   // indent past it so a wrap never reads as a new line.
   return (
