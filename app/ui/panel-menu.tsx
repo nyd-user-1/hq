@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { PANELS } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
+import { CHIP_CLASS } from "@/app/ui/boundary-chip";
 
 // The "panels" dropdown, restyled as a boundary chip so it sits on the terminal
 // boundary line (just after the terminal.tsx path chip, before the search icon).
@@ -32,10 +33,11 @@ export default function PanelMenu() {
     <details ref={ref} className="relative shrink-0">
       <summary
         title="open a panel"
-        // matches the terminal.tsx boundary chip's color (zinc-400 / hover-200)
-        className="flex cursor-pointer list-none items-center gap-1 bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-400 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:text-zinc-200"
+        // a BoundaryChip VARIANT: the shared chip shell + a ▾ marking the menu.
+        // Shows the component name (PanelMenu), true-cased like every other chip.
+        className={`${CHIP_CLASS} flex list-none items-center gap-1 marker:content-none [&::-webkit-details-marker]:hidden`}
       >
-        panels <span className="text-[7px] tracking-normal">▼</span>
+        PanelMenu <span className="text-[7px]">▼</span>
       </summary>
       <div className="absolute left-0 top-full z-20 mt-3 flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
         {/* info-circle chip on the top-right corner — same pattern as the app

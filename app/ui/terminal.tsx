@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
 import ButtonChipAction from "@/app/ui/button-chip-action";
+import BoundaryChip from "@/app/ui/boundary-chip";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
 
@@ -1142,43 +1143,48 @@ export default function Terminal({
             {resume && <RecentSessions sessions={resume.sessions} now={now} />}
           </div>
         )}
-        {status ? (
-          <div className="flex flex-col gap-0.5">
-            <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
-              <span className="text-orange-400">✶ {mood}…</span>
-              <span className="text-zinc-500">
-                ({fmtElapsed(elapsed)} · ↑ {fmtTokens(status.outputTokens)} tokens
-                {status.phase ? ` · ${status.phase}` : ""})
-              </span>
-            </p>
-            {status.phases.length > 1 && (
-              <p className="font-mono text-[11px] text-zinc-600">
-                phases · {status.phases.slice(-6).join(" → ")}
-              </p>
-            )}
-          </div>
-        ) : sending ? (
-          <p className="font-mono text-xs text-zinc-500">starting…</p>
-        ) : !loading && lastWrite && now > 0 ? (
-          <p className="font-mono text-xs text-zinc-600">
-            ◦ idle — nothing running
-            {now > lastWrite && ` · last activity ${fmtAgo(now - lastWrite)}`}
-          </p>
-        ) : null}
-        {escArmed && (
-          <p className="font-mono text-[11px] text-zinc-500">
-            press esc again to interrupt
-          </p>
-        )}
-        {escNote && (
-          <p className="font-mono text-[11px] text-zinc-500">{escNote}</p>
-        )}
-        {error && (
-          <p className="whitespace-pre-wrap font-mono text-xs text-red-400">
-            {error}
-          </p>
-        )}
       </div>
+
+      {/* Status / live-working indicator — decoupled from the message scroll so
+          it sits as a bar DIRECTLY above the send box: always visible (never
+          scrolls away) and it frees the send box's top-right corner for its
+          chip. esc/error feedback rides here too. */}
+      {status ? (
+        <div className="flex flex-col gap-0.5">
+          <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
+            <span className="text-orange-400">✶ {mood}…</span>
+            <span className="text-zinc-500">
+              ({fmtElapsed(elapsed)} · ↑ {fmtTokens(status.outputTokens)} tokens
+              {status.phase ? ` · ${status.phase}` : ""})
+            </span>
+          </p>
+          {status.phases.length > 1 && (
+            <p className="font-mono text-[11px] text-zinc-600">
+              phases · {status.phases.slice(-6).join(" → ")}
+            </p>
+          )}
+        </div>
+      ) : sending ? (
+        <p className="font-mono text-xs text-zinc-500">starting…</p>
+      ) : !loading && lastWrite && now > 0 ? (
+        <p className="font-mono text-xs text-zinc-600">
+          ◦ idle — nothing running
+          {now > lastWrite && ` · last activity ${fmtAgo(now - lastWrite)}`}
+        </p>
+      ) : null}
+      {escArmed && (
+        <p className="font-mono text-[11px] text-zinc-500">
+          press esc again to interrupt
+        </p>
+      )}
+      {escNote && (
+        <p className="font-mono text-[11px] text-zinc-500">{escNote}</p>
+      )}
+      {error && (
+        <p className="whitespace-pre-wrap font-mono text-xs text-red-400">
+          {error}
+        </p>
+      )}
 
       <div className="flex flex-col gap-1.5">
         {attachments.length > 0 && (
@@ -1213,7 +1219,13 @@ export default function Terminal({
         {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
             scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
             pushes the top up into the message area. */}
-        <div className="flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
+        <div className="relative flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
+          {/* The send box's own boundary chip — top-right of its SOLID 1px border
+              (everything else uses the dashed Boundary). Shows the component name,
+              copies the full openable path. */}
+          <span className="absolute -top-2.5 right-3 z-10">
+            <BoundaryChip label="Terminal" copyText="app/ui/terminal.tsx" />
+          </span>
           <textarea
             ref={taRef}
             value={draft}

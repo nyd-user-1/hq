@@ -7,7 +7,7 @@ import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import Terminal from "@/app/ui/terminal";
 import SearchTrigger from "@/app/ui/search-trigger";
-import PanelMenu from "@/app/ui/PanelMenu";
+import PanelMenu from "@/app/ui/panel-menu";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import PairColumn from "@/app/ui/pair-column";
 

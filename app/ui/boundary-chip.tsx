@@ -2,19 +2,34 @@
 
 import { useState } from "react";
 
-// The file-path chip, clickable: one click copies the path verbatim — handy
-// for pasting straight into a Claude prompt or an editor's open-file box.
-export default function BoundaryChip({ label }: { label: string }) {
+// Shared chip shell — the boundary-line chip look. BoundaryChip (click-to-copy a
+// path), PanelMenu (the ▾ menu variant) and SearchTrigger (the 🔍 variant) all
+// wear this so every chip sitting on a boundary line is visually identical.
+export const CHIP_CLASS =
+  "boundary-flash-chip cursor-pointer bg-zinc-800 px-2 py-0.5 font-mono text-[10px] text-zinc-400 transition-colors hover:text-zinc-200";
+
+// The file chip, clickable: one click copies a path verbatim — paste it straight
+// into a Claude prompt or an editor's open-file box. `label` is what SHOWS (a
+// filename or, for a component, its name, true-cased — no UPPERCASE transform);
+// `copyText` is what's COPIED (the full repo-relative path) when it must differ
+// from the display, so a chip can read `Terminal` yet copy `app/ui/terminal.tsx`.
+export default function BoundaryChip({
+  label,
+  copyText,
+}: {
+  label: string;
+  copyText?: string;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       onClick={() => {
-        navigator.clipboard.writeText(label);
+        navigator.clipboard.writeText(copyText ?? label);
         setCopied(true);
         setTimeout(() => setCopied(false), 1200);
       }}
-      title="click to copy path"
-      className="boundary-flash-chip min-w-0 cursor-pointer truncate bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-400 transition-colors hover:text-zinc-200"
+      title={copyText ? `click to copy ${copyText}` : "click to copy path"}
+      className={`${CHIP_CLASS} min-w-0 truncate`}
     >
       {copied ? "copied ✓" : label}
     </button>
