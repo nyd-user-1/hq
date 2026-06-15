@@ -11,17 +11,16 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 // The "panels" dropdown. `href` = the first tab (where the panel opens);
 // `routes` = every tab under it, for active-state + the open-panel test.
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
-  { title: "Activity", href: "/todo", routes: ["/todo", "/components", "/shipped"] },
+  { title: "Activity", href: "/projects", routes: ["/projects", "/todo", "/components", "/shipped"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/calls", "/savings", "/audit"] },
   { title: "Console", href: "/sessions", routes: ["/sessions", "/sdk", "/skills", "/cmd", "/routines", "/firehose"] },
   { title: "Compose", href: "/compose", routes: ["/compose"] },
 ];
 
 // Routes that open the right panel (terminal stays mounted underneath).
-// "/projects" is opened from the sidebar's Projects item, not the panels
-// dropdown, so it's listed here explicitly rather than via PANELS.
+// "/projects" is now the Activity panel's first tab (see PANELS above), so it
+// comes in via the flatMap; the sidebar's Projects item still links to it.
 export const PANEL_ROUTES = [
   SEARCH_ITEM.href,
-  "/projects",
   ...PANELS.flatMap((p) => p.routes),
 ];

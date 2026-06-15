@@ -4,10 +4,11 @@ import TabNav from "@/app/ui/tab-nav";
 
 export const dynamic = "force-dynamic";
 
-// Activity panel: To Do · Components · Shipped tabs at the top (To Do first —
-// the "panels" button lands here). Components = the HQ component registry;
-// Shipped = the cross-project commit feed. Sessions + SDK live in Console; Calls
-// (the $/call Ledger) in Metrics.
+// Activity panel: Projects · To Do · Components · Shipped tabs at the top
+// (Projects first — the "panels" button lands here). Projects = the per-project
+// session grid (moved in from its own group); Components = the HQ component
+// registry; Shipped = the cross-project commit feed. Sessions + SDK live in
+// Console; Calls (the $/call Ledger) in Metrics.
 export default function ActivityLayout({
   children,
 }: {
@@ -17,6 +18,7 @@ export default function ActivityLayout({
     <Boundary label="@panel/(activity)/layout.tsx">
       <TabNav
         tabs={[
+          { title: "Projects", href: "/projects", segment: "projects" },
           { title: "To Do", href: "/todo", segment: "todo" },
           { title: "Components", href: "/components", segment: "components" },
           { title: "Shipped", href: "/shipped", segment: "shipped" },
