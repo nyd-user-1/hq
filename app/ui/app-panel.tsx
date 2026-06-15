@@ -29,10 +29,14 @@ export default function AppPanel({
 
   if (!root) return null;
 
-  // Narrower on smaller viewports (360px) so the panel never out-widths the
-  // terminal; the roomier 420px only kicks in on large (xl) screens. Expanded
-  // is the user's explicit "make it big" toggle, so it keeps its 46vw.
-  const w = expanded ? "sm:w-[46vw]" : "sm:w-[360px] xl:w-[420px]";
+  // The panel is complementary to the terminal, never dominant: widths are
+  // capped by viewport so the main container stays the larger half. Collapsed
+  // ≈ a third on desktop (360/420px) but shrinks to 40vw on narrow screens;
+  // expanded ≈ half but held at 42vw so the container keeps >50% (container =
+  // 58vw − chrome > 42vw for any real viewport).
+  const w = expanded
+    ? "sm:w-[42vw]"
+    : "sm:w-[min(360px,40vw)] xl:w-[min(420px,40vw)]";
 
   return createPortal(
     <div

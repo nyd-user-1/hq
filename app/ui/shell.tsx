@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import Boundary from "@/app/ui/boundary";
 import Sidebar from "@/app/ui/sidebar";
 import SidebarColumn from "@/app/ui/sidebar-column";
@@ -15,18 +16,21 @@ import PairColumn from "@/app/ui/pair-column";
 // navigates the panel. No outer layout.tsx boundary: its dashed box + chip +
 // padding were removed so the three columns reclaim that space; the inner
 // boundary chips poke into the root padding (p-3/lg:p-4).
-export default function Shell({
+export default async function Shell({
   children,
   panel,
 }: {
   children: React.ReactNode;
   panel: React.ReactNode;
 }) {
+  // Seed the sidebar from its cookie so a refresh keeps the last open/closed
+  // state (default open on a first visit). Read on the server → no flash.
+  const sidebarOpen = (await cookies()).get("hq-sidebar")?.value !== "0";
   return (
     <div className="flex h-dvh flex-col bg-zinc-950 p-6 text-zinc-100">
       {/* no row gap — the sidebar carries mr-4 while open (collapses with it)
           and the app panel brings its own ml-4, so closed = truly full width */}
-      <SidebarProvider>
+      <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
           <SidebarColumn>
             <Boundary label="sidebar.tsx" padX="px-2.5">

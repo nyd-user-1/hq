@@ -133,14 +133,17 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
 
   return (
     <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-      <p className="text-xs text-zinc-600">
-        HQ component registry —{" "}
-        <span className="text-blue-400/80">Approved</span> are design-system
-        components (reviewed, named, reusable);{" "}
-        <span className="text-red-400/80">Review</span> exist in app/ui but
-        aren&apos;t audited in yet. Drag a card into a terminal, or reorder by
-        dragging.
-      </p>
+      <div className="flex flex-col gap-1 text-xs text-zinc-600">
+        <p>
+          <span className="text-blue-400/80">Approved</span> Reviewed, named, and
+          reusable components.
+        </p>
+        <p>
+          <span className="text-red-400/80">Review</span> Unaudited components
+          that exist in app/ui.
+        </p>
+        <p>*Cards: Drag into chat or drag to reorder.</p>
+      </div>
 
       <section className="flex flex-col gap-1">
         <h2 className="font-mono text-[10px] uppercase tracking-widest text-blue-400">

@@ -88,7 +88,7 @@ export default function AccordionTodoItem({
       onDragEnd={onDragEnd}
       onDragOverEdge={onDragOverEdge}
       onDropEdge={onDropEdge}
-      trailing={
+      leading={
         t.done ? (
           <button
             onClick={(e) => {
@@ -97,7 +97,7 @@ export default function AccordionTodoItem({
             }}
             title="mark not done"
             aria-label="Mark not done"
-            className="ml-auto flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-green-600/70 bg-green-600/30 text-[10px] leading-none text-green-400 transition-colors hover:bg-green-600/40"
+            className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-green-600/70 bg-green-600/30 text-[10px] leading-none text-green-400 transition-colors hover:bg-green-600/40"
           >
             ✓
           </button>
@@ -109,7 +109,7 @@ export default function AccordionTodoItem({
             }}
             title="mark done"
             aria-label="Mark done"
-            className="ml-auto size-4 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
+            className="size-4 shrink-0 rounded-[3px] border border-zinc-600 transition-colors hover:border-green-500 hover:bg-green-500/20"
           />
         )
       }

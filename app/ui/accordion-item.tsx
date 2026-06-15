@@ -49,6 +49,7 @@ export default function AccordionItem({
   onToggleExpand,
   copied = false,
   onCopy,
+  leading,
   trailing,
   children,
   dragText,
@@ -77,7 +78,8 @@ export default function AccordionItem({
   onToggleExpand: () => void;
   copied?: boolean; // header copy button only renders when onCopy is given
   onCopy?: () => void;
-  trailing?: ReactNode; // e.g. a checkbox; position it with ml-auto
+  leading?: ReactNode; // sits before the triangle (e.g. a checkbox)
+  trailing?: ReactNode; // sits at the end; position it with ml-auto
   children?: ReactNode; // body, shown when open
   // drag-to-terminal + reorder
   dragText: string;
@@ -151,6 +153,7 @@ export default function AccordionItem({
           }`}
           onClick={expandable ? onToggleExpand : undefined}
         >
+          {leading}
           <span
             className={`shrink-0 select-none text-[10px] text-zinc-100 transition-transform ${
               open ? "rotate-90" : ""
