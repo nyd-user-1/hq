@@ -45,10 +45,8 @@ function DiffLine({ line }: { line: string }) {
   )
     cls = "text-zinc-600";
   else if (line.startsWith("@@")) cls = "text-cyan-400";
-  // the LINE bg carries the add/remove signal; near-white text (a whisper of
-  // color) stays high-contrast/legible — readable without GitHub-light loudness.
-  else if (line.startsWith("+")) cls = "bg-emerald-500/15 text-emerald-100";
-  else if (line.startsWith("-")) cls = "bg-red-500/15 text-red-100";
+  else if (line.startsWith("+")) cls = "bg-emerald-500/15 text-emerald-300";
+  else if (line.startsWith("-")) cls = "bg-red-500/15 text-red-300";
   return (
     <div className={`whitespace-pre-wrap break-words px-1 ${cls}`}>
       {line || " "}
