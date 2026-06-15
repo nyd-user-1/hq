@@ -3,6 +3,7 @@
 import { useState } from "react";
 import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
 import MetaChipRow from "@/app/ui/meta-chip-row";
+import SearchField from "@/app/ui/search-field";
 
 type Item = {
   name: string;
@@ -29,6 +30,7 @@ const KIND_TAG: Record<Item["kind"], { label: string; chipClass: string }> = {
 // (persisted via /api/components). Approved (blue) sits above Review (red).
 export default function ComponentsList({ items: initial }: { items: Item[] }) {
   const [items, setItems] = useState<Item[]>(initial);
+  const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -37,8 +39,14 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
     pos: "before" | "after";
   } | null>(null);
 
-  const approved = items.filter((c) => c.status === "approved");
-  const review = items.filter((c) => c.status === "review");
+  const q = query.trim().toLowerCase();
+  const match = (c: Item) =>
+    !q ||
+    c.name.toLowerCase().includes(q) ||
+    c.desc.toLowerCase().includes(q) ||
+    c.file.toLowerCase().includes(q);
+  const approved = items.filter((c) => c.status === "approved" && match(c));
+  const review = items.filter((c) => c.status === "review" && match(c));
 
   function toggleExpand(name: string) {
     setExpanded((s) => {
@@ -133,28 +141,38 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
 
   return (
     <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-      <div className="flex flex-col gap-1">
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-          Cards
-        </h3>
-        <p className="text-xs text-zinc-600">
-          Drag to chat or reorder.
+      <div className="flex flex-col gap-1.5">
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search components…"
+        />
+        <p className="text-[11px] text-zinc-600">
+          *Drag cards to chat or reorder.
         </p>
       </div>
 
-      <section className="flex flex-col gap-1">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest text-blue-400">
-          Approved
-        </h2>
-        <ol className="flex list-none flex-col gap-3">{approved.map(card)}</ol>
-      </section>
+      {approved.length > 0 && (
+        <section className="flex flex-col gap-1">
+          <h2 className="font-mono text-[10px] uppercase tracking-widest text-blue-400">
+            Approved
+          </h2>
+          <ol className="flex list-none flex-col gap-3">{approved.map(card)}</ol>
+        </section>
+      )}
 
-      <section className="flex flex-col gap-1">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest text-red-400">
-          Review
-        </h2>
-        <ol className="flex list-none flex-col gap-3">{review.map(card)}</ol>
-      </section>
+      {review.length > 0 && (
+        <section className="flex flex-col gap-1">
+          <h2 className="font-mono text-[10px] uppercase tracking-widest text-red-400">
+            Review
+          </h2>
+          <ol className="flex list-none flex-col gap-3">{review.map(card)}</ol>
+        </section>
+      )}
+
+      {approved.length === 0 && review.length === 0 && (
+        <p className="text-sm text-zinc-600">no components match “{query}”.</p>
+      )}
     </div>
   );
 }
