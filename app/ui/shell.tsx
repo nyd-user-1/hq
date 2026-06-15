@@ -7,6 +7,7 @@ import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import Terminal from "@/app/ui/terminal";
 import SearchTrigger from "@/app/ui/search-trigger";
+import PanelsMenu from "@/app/ui/panels-menu";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import PairColumn from "@/app/ui/pair-column";
 
@@ -47,7 +48,12 @@ export default async function Shell({
               <Boundary
                 label="terminal.tsx"
                 lead={<SidebarToggle />}
-                trail={<SearchTrigger />}
+                trail={
+                  <>
+                    <PanelsMenu />
+                    <SearchTrigger />
+                  </>
+                }
               >
                 <Suspense
                   fallback={
