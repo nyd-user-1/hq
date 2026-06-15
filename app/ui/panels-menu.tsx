@@ -28,15 +28,12 @@ export default function PanelsMenu() {
     document.addEventListener("click", onDocClick);
     return () => document.removeEventListener("click", onDocClick);
   }, []);
-  const anyActive = PANELS.some((p) => p.routes.includes(pathname ?? ""));
-
   return (
     <details ref={ref} className="relative shrink-0">
       <summary
         title="open a panel"
-        className={`flex cursor-pointer list-none items-center gap-1 bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest transition-colors marker:content-none [&::-webkit-details-marker]:hidden ${
-          anyActive ? "text-zinc-200" : "text-zinc-400 hover:text-zinc-200"
-        }`}
+        // matches the terminal.tsx boundary chip's color (zinc-400 / hover-200)
+        className="flex cursor-pointer list-none items-center gap-1 bg-zinc-800 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-400 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:text-zinc-200"
       >
         panels <span className="text-[7px] tracking-normal">▼</span>
       </summary>
