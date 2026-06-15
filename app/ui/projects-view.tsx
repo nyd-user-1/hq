@@ -49,21 +49,22 @@ export default function ProjectsView({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2">
-        <h2 className="mr-auto font-mono text-sm font-semibold uppercase tracking-wide text-zinc-200">
-          Projects
-        </h2>
         <button
           onClick={() => setDir((d) => (d === "new" ? "old" : "new"))}
-          title={dir === "new" ? "Sort: newest first" : "Sort: oldest first"}
+          title={
+            dir === "new"
+              ? "Newest first — click for oldest"
+              : "Oldest first — click for newest"
+          }
           aria-label="Toggle sort order"
-          className="flex items-center rounded-md border border-zinc-800 px-2 py-1 text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+          className="ml-auto flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
         >
           <SortIcon dir={dir} />
         </button>
         <button
           title="New project — curated projects coming next"
           aria-label="New project"
-          className="flex size-7 items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+          className="flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
         >
           <svg
             width="14"
