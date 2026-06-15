@@ -45,7 +45,10 @@ export default function AppPanel({
       // poke up onto the line and the box top sits FLUSH with the sidebar/
       // terminal boxes. Same trick SidebarColumn uses; overflow-hidden + pt-3
       // was what dropped this column 12px below the other two.
-      className={`h-full shrink-0 [clip-path:inset(-12px_0px_0px_0px)] transition-all duration-300 ease-in-out ${
+      // min-w-0 (not shrink-0): the w-[…] is the TARGET width, but the panel can
+      // shrink below it when the row is tight (sidebar open) so the terminal's
+      // min-width is protected and the panel yields instead.
+      className={`h-full min-w-0 [clip-path:inset(-12px_0px_0px_0px)] transition-all duration-300 ease-in-out ${
         open ? `w-full ${w} sm:ml-4` : "w-0"
       }`}
     >

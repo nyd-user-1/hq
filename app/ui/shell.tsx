@@ -38,7 +38,9 @@ export default async function Shell({
             </Boundary>
           </SidebarColumn>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-4">
+          {/* The protected column: a min-width floor so opening the sidebar
+              squeezes the PANEL (which can shrink), not the terminal. */}
+          <div className="flex min-w-[380px] flex-1 flex-col gap-4">
             {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
                 remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
             <PairColumn>
@@ -59,7 +61,9 @@ export default async function Shell({
             {children}
           </div>
 
-          <div id="app-panel-root" className="flex h-full shrink-0" />
+          {/* min-w-0 (not shrink-0) so the panel yields when the row is tight —
+              the terminal's min-width holds, the panel shrinks. */}
+          <div id="app-panel-root" className="flex h-full min-w-0" />
         </div>
       </SidebarProvider>
 
