@@ -32,6 +32,7 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "ButtonChipAction", file: "app/ui/button-chip-action.tsx", kind: "presentational", status: "approved", desc: "“+ label” action chip with an accent — the send box's + attach / + todo." },
   { name: "SearchField", file: "app/ui/search-field.tsx", kind: "presentational", status: "approved", desc: "Generic controlled search box (value/onChange) — the Components filter uses it." },
   { name: "PanelMenu", file: "app/ui/PanelMenu.tsx", kind: "presentational", status: "approved", desc: "Boundary-chip dropdown (▼) opening Activity/Metrics/Console/Compose; dashed menu + info-circle chip." },
+  { name: "CommitLink", file: "app/ui/commit-link.tsx", kind: "presentational", status: "approved", desc: "Chat-reply sha chip → opens the diff in Shipped, carrying the terminal pins (withPins)." },
 
   // ── Review ────────────────────────────────────────────────────────────────
   { name: "Terminal", file: "app/ui/terminal.tsx", kind: "container", status: "review", desc: "The persistent center pane — stream, send box, header, panels dropdown. Huge; ripe for sub-extraction." },

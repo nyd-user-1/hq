@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import AppPanel from "@/app/ui/app-panel";
-import { PANEL_ROUTES } from "@/app/ui/sidebar-nav";
+import { PANEL_ROUTES } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 
 // Reads the URL to decide whether the right panel is open, and renders the

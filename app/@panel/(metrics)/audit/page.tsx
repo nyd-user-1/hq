@@ -20,9 +20,15 @@ function fmt(n: number): string {
 export default async function Audit({
   searchParams,
 }: {
-  searchParams: Promise<{ open?: string }>;
+  searchParams: Promise<{ open?: string; session?: string; pair?: string }>;
 }) {
-  const { open } = await searchParams;
+  const { open, session, pair } = await searchParams;
+  // Carry the terminal pins on in-panel nav, or the terminal re-pins and wipes
+  // ?open (the "opens then snaps back to the list" bug).
+  const pins = [session && `session=${session}`, pair && `pair=${pair}`]
+    .filter(Boolean)
+    .join("&");
+  const pinTail = pins ? `&${pins}` : "";
 
   // ── opened .md ──────────────────────────────────────────────────────────
   if (open) {
@@ -33,7 +39,7 @@ export default async function Audit({
       <Boundary topOnly bleedX label="@panel/(metrics)/audit/page.tsx">
         <div className="flex items-baseline gap-3">
           <BackLink
-            href="/audit"
+            href={`/audit${pins ? `?${pins}` : ""}`}
             className="shrink-0 cursor-pointer font-mono text-xs text-blue-400 hover:text-blue-300"
           >
             ← audit
@@ -65,7 +71,7 @@ export default async function Audit({
   const row = (label: string, tokens: number, mtime: number, path: string) => (
     <Link
       key={label}
-      href={`/audit?open=${encodeURIComponent(path)}`}
+      href={`/audit?open=${encodeURIComponent(path)}${pinTail}`}
       scroll={false}
       className="flex items-baseline gap-3 border-b border-zinc-800/60 py-1.5 font-mono text-xs transition-colors hover:bg-zinc-800/30"
     >
@@ -114,7 +120,7 @@ export default async function Audit({
             {memory.map((m) => (
               <Link
                 key={m.name}
-                href={`/audit?open=${encodeURIComponent(m.path)}`}
+                href={`/audit?open=${encodeURIComponent(m.path)}${pinTail}`}
                 scroll={false}
                 className="flex flex-col gap-0.5 border-b border-zinc-800/60 py-1.5 transition-colors hover:bg-zinc-800/30"
               >

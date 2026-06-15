@@ -10,7 +10,12 @@ export const dynamic = "force-dynamic";
 // the SDK spawns. Kept out of Recents so they don't flood it; surfaced here
 // instead. Each row opens the run's full transcript in the Firehose
 // everything-view (the right inspector for a finished, non-interactive run).
-export default function Sdk() {
+export default async function Sdk({
+  searchParams,
+}: {
+  searchParams: Promise<{ pair?: string }>;
+}) {
+  const { pair } = await searchParams;
   const sessions = getSdkSessions();
   return (
     <Boundary topOnly bleedX label="@panel/(console)/sdk/page.tsx">
@@ -18,7 +23,7 @@ export default function Sdk() {
         {sessions.map((s) => (
           <li key={s.id}>
             <Link
-              href={`/firehose?session=${s.id}`}
+              href={`/firehose?session=${s.id}${pair ? `&pair=${pair}` : ""}`}
               scroll={false}
               className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50"
             >

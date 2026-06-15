@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { PANELS } from "@/app/ui/sidebar-nav";
+import { PANELS } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 

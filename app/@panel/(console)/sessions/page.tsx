@@ -30,9 +30,9 @@ function fmt(n: number): string {
 export default async function Sessions({
   searchParams,
 }: {
-  searchParams: Promise<{ session?: string; filter?: string }>;
+  searchParams: Promise<{ session?: string; filter?: string; pair?: string }>;
 }) {
-  const { session, filter } = await searchParams;
+  const { session, filter, pair } = await searchParams;
   const showAll = filter === "all";
   const sessions = getSessions();
   const selectedId = session ?? sessions[0]?.id;
@@ -53,7 +53,11 @@ export default async function Sessions({
       {label}
     </Link>
   );
-  const keep = session ? `session=${session}&` : "";
+  // keep both terminal pins so the filter chips / rows never close Terminal 2
+  const pinKeep = [session && `session=${session}`, pair && `pair=${pair}`]
+    .filter(Boolean)
+    .join("&");
+  const keep = pinKeep ? `${pinKeep}&` : "";
 
   return (
     <Boundary topOnly bleedX label="@panel/sessions/page.tsx">
@@ -70,7 +74,7 @@ export default async function Sessions({
           return (
             <li key={s.id}>
               <Link
-                href={`/sessions?session=${s.id}${showAll ? "&filter=all" : ""}`}
+                href={`/sessions?session=${s.id}${pair ? `&pair=${pair}` : ""}${showAll ? "&filter=all" : ""}`}
                 scroll={false}
                 className={`flex flex-col gap-1 rounded-md border px-3 py-2 transition-colors ${
                   selected

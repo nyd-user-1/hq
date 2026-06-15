@@ -50,7 +50,15 @@ const IDEAS: { title: string; where: string; how: string }[] = [
   },
 ];
 
-export default function Savings() {
+export default async function Savings({
+  searchParams,
+}: {
+  searchParams: Promise<{ session?: string; pair?: string }>;
+}) {
+  const { session, pair } = await searchParams;
+  const pins = [session && `session=${session}`, pair && `pair=${pair}`]
+    .filter(Boolean)
+    .join("&");
   const week = getUsage().windows.find((w) => w.label.startsWith("Week"));
   const cacheRead = week?.totals.cacheRead ?? 0;
   const savedDollars =
@@ -118,7 +126,7 @@ export default function Savings() {
               pretty number
             </li>
             <li>
-              tie into <Link href="/audit" className="text-blue-400 hover:text-blue-300">Memory Audit</Link>:
+              tie into <Link href={`/audit${pins ? `?${pins}` : ""}`} className="text-blue-400 hover:text-blue-300">Memory Audit</Link>:
               standing-tax tokens × sessions started = the prune payoff, in $
             </li>
           </ul>
