@@ -264,7 +264,7 @@ export default async function Search({
   return (
     <Boundary label="@panel/search/page.tsx">
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {scopeChip("All", "all")}
           {scopeChip("Transcripts", "transcripts")}
           {scopeChip("Memory", "memory")}
