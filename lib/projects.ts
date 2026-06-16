@@ -2,7 +2,7 @@ import { getRecentSessions, type RecentSession } from "./sessions";
 
 // Projects = interactive sessions grouped by their derived `project` — the SAME
 // field the Recents "Project" group-by uses (launch folder `/code/<slug>`, else an
-// early `code/<slug>` text reference, else "~ (home)"; see lib/sessions.ts). This
+// early `code/<slug>` text reference, else "Unassigned"; see lib/sessions.ts). This
 // is the read-only, auto-derived layer. Curated projects ("Add to project",
 // named containers via a ~/.claude/hq sidecar) are a later step.
 
@@ -19,7 +19,7 @@ export function getProjects(): ProjectSummary[] {
   const recents = getRecentSessions(1000);
   const map = new Map<string, ProjectSummary>();
   for (const s of recents) {
-    const name = s.project || "~ (home)";
+    const name = s.project || "Unassigned";
     const cur = map.get(name);
     if (cur) {
       cur.sessions += 1;
@@ -41,6 +41,6 @@ export function getProjects(): ProjectSummary[] {
 // the drill-down when you click a project card.
 export function getProjectSessions(name: string): RecentSession[] {
   return getRecentSessions(1000).filter(
-    (s) => (s.project || "~ (home)") === name
+    (s) => (s.project || "Unassigned") === name
   );
 }

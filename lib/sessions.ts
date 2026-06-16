@@ -99,6 +99,7 @@ export type RecentSession = {
   customTitle: string; // HQ rename (sidecar); "" when not renamed
   favorite: boolean; // pinned to the top of Recents
   hidden: boolean; // soft-deleted from Recents (toggle to reveal)
+  related: string[]; // cross-link tags (sidecar); [] when none
 };
 
 // THE PROJECT RULE: Brendan launches most sessions from ~, so cwd is useless for
@@ -118,11 +119,13 @@ function codeSlug(p: string): string | null {
 }
 
 // Last-resort project from the transcript's projects-dir name (cwd "/"→"-"),
-// e.g. "-Users-brendanstanton-code-44b" → "44b"; plain home dir → "~ (home)".
+// e.g. "-Users-brendanstanton-code-44b" → "44b"; a plain home-dir session has
+// no project signal on disk to recover, so it falls into "Unassigned" — a
+// visible backlog of sessions that should be re-homed (set a project override).
 function dirProject(file: string): string {
   const d = path.basename(path.dirname(file));
   const i = d.indexOf("-code-");
-  return i >= 0 ? d.slice(i + 6) : "~ (home)";
+  return i >= 0 ? d.slice(i + 6) : "Unassigned";
 }
 
 // Project + title for one transcript (head read), shared by Recents and the
@@ -134,11 +137,14 @@ export function sessionMeta(
 ): RecentSession {
   const { cwd, title, ref, entrypoint, branch } = headInfo(file);
   const id = path.basename(file, ".jsonl");
-  const project =
+  const m = meta[id] ?? {};
+  const derived =
     (cwd ? codeSlug(cwd) : null) ??
     ref ??
     (cwd && cwd !== os.homedir() ? path.basename(cwd) : dirProject(file));
-  const m = meta[id] ?? {};
+  // A stored project override (sidecar) wins over derivation — the only way to
+  // re-home a session launched from ~ that would otherwise derive to Unassigned.
+  const project = m.project || derived;
   return {
     id,
     project,
@@ -152,6 +158,7 @@ export function sessionMeta(
     customTitle: m.title ?? "",
     favorite: !!m.favorite,
     hidden: !!m.hidden,
+    related: m.related ?? [],
   };
 }
 
@@ -300,6 +307,7 @@ export function listCodeProjects(): string[] {
 export function getSessions(limit = 12): SessionInfo[] {
   getUsage(); // refresh the meter's per-file cache
   const totals = perFileTotals();
+  const meta = getSessionsMeta(); // honor the same project override as Recents
   const now = Date.now();
 
   const files: { file: string; mtime: number }[] = [];
@@ -328,14 +336,16 @@ export function getSessions(limit = 12): SessionInfo[] {
   return files.slice(0, limit).map(({ file, mtime }) => {
     const { cwd, snippet, contextTokens } = tailInfo(file);
     const t = totals.get(file);
+    const id = path.basename(file, ".jsonl");
+    const derived =
+      cwd === os.homedir()
+        ? "Unassigned"
+        : cwd
+          ? path.basename(cwd)
+          : path.basename(path.dirname(file));
     return {
-      id: path.basename(file, ".jsonl"),
-      project:
-        cwd === os.homedir()
-          ? "~ (home)"
-          : cwd
-            ? path.basename(cwd)
-            : path.basename(path.dirname(file)),
+      id,
+      project: meta[id]?.project || derived,
       lastActive: mtime,
       active: now - mtime < ACTIVE_MS,
       messages: t?.messages ?? 0,

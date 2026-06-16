@@ -13,7 +13,13 @@ import os from "node:os";
 const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
 const STORE = path.join(STORE_DIR, "sessions-meta.json");
 
-export type SessionMeta = { favorite?: boolean; hidden?: boolean; title?: string };
+export type SessionMeta = {
+  favorite?: boolean;
+  hidden?: boolean;
+  title?: string;
+  project?: string; // overrides the DERIVED project (re-homes ~ / Unassigned sessions)
+  related?: string[]; // cross-link tags — "this session also relates to <project>"
+};
 export type SessionsMeta = Record<string, SessionMeta>;
 
 type Store = { version: number; sessions: SessionsMeta };
@@ -58,6 +64,18 @@ export function setSessionMeta(id: string, patch: SessionMeta): SessionMeta {
     const t = patch.title.trim();
     if (t) next.title = t;
     else delete next.title;
+  }
+  if (typeof patch.project === "string") {
+    const p = patch.project.trim();
+    if (p) next.project = p;
+    else delete next.project;
+  }
+  if (Array.isArray(patch.related)) {
+    const r = [
+      ...new Set(patch.related.map((x) => String(x).trim()).filter(Boolean)),
+    ];
+    if (r.length) next.related = r;
+    else delete next.related;
   }
 
   if (Object.keys(next).length === 0) delete store.sessions[id];

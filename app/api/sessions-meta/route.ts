@@ -11,13 +11,23 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { id, favorite, hidden, title } = await req.json().catch(() => ({}));
+  const { id, favorite, hidden, title, project, related } = await req
+    .json()
+    .catch(() => ({}));
   if (typeof id !== "string" || !id) {
     return new NextResponse("id required", { status: 400 });
   }
-  const patch: { favorite?: boolean; hidden?: boolean; title?: string } = {};
+  const patch: {
+    favorite?: boolean;
+    hidden?: boolean;
+    title?: string;
+    project?: string;
+    related?: string[];
+  } = {};
   if (typeof favorite === "boolean") patch.favorite = favorite;
   if (typeof hidden === "boolean") patch.hidden = hidden;
   if (typeof title === "string") patch.title = title;
+  if (typeof project === "string") patch.project = project;
+  if (Array.isArray(related)) patch.related = related;
   return NextResponse.json({ meta: setSessionMeta(id, patch) });
 }

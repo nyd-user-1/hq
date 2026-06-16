@@ -8,10 +8,12 @@ import { useEffect, useRef, useState } from "react";
 // first, labelled by the short session id (+ a dim project suffix, or a custom
 // name once renamed). Clicking a row pins the center terminal to it
 // (?session=<id>). Per-row actions live behind a ⋮ kebab menu (Star / Rename /
-// Open beside Terminal 1 / Add to project / Hide) — like the Claude.ai chat row,
-// NOT a cramped strip of inline icons. View metadata (favorite/hidden/rename)
-// lives in an HQ sidecar (~/.claude/hq/sessions-meta.json), never in the
-// transcripts. A Group-by control (None/Date/Project) buckets the list.
+// Set project / Related… / Terminal 2 / Hide) — like the Claude.ai chat row,
+// NOT a cramped strip of inline icons. View metadata (favorite/hidden/rename/
+// project override/related tags) lives in an HQ sidecar
+// (~/.claude/hq/sessions-meta.json), never in the transcripts. A Group-by
+// control (None/Date/Project) buckets the list; home-dir sessions with no
+// project signal land in "Unassigned" until re-homed via Set project.
 type Recent = {
   id: string;
   project: string;
@@ -22,6 +24,7 @@ type Recent = {
   customTitle: string;
   favorite: boolean;
   hidden: boolean;
+  related: string[];
 };
 
 type GroupBy = "none" | "date" | "project";
@@ -135,6 +138,15 @@ function ArchiveIcon() {
   );
 }
 
+function LinkIcon() {
+  return (
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
 function BranchIcon() {
   return (
     <svg className="size-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -182,7 +194,8 @@ export default function SidebarRecents() {
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
   const [showHidden, setShowHidden] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null); // session id being renamed
+  const [editing, setEditing] = useState<string | null>(null); // session id being edited inline
+  const [editField, setEditField] = useState<"title" | "project" | "related">("title");
   const [editValue, setEditValue] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null); // row whose ⋮ menu is open
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -271,14 +284,35 @@ export default function SidebarRecents() {
     patchLocal(s.id, { hidden });
     postMeta(s.id, { hidden });
   };
-  const startEdit = (s: Recent) => {
+  // One inline editor, three fields: the session title (rename), the project
+  // override (re-home an Unassigned session), or the related cross-link tags.
+  const startEdit = (s: Recent, field: "title" | "project" | "related") => {
+    setEditField(field);
+    setEditValue(
+      field === "title"
+        ? s.customTitle
+        : field === "project"
+          ? s.project
+          : s.related.join(", ")
+    );
     setEditing(s.id);
-    setEditValue(s.customTitle);
   };
   const commitEdit = (s: Recent) => {
-    const title = editValue.trim();
-    patchLocal(s.id, { customTitle: title });
-    postMeta(s.id, { title });
+    if (editField === "project") {
+      const project = editValue.trim();
+      if (project) patchLocal(s.id, { project }); // blank → poll re-derives
+      postMeta(s.id, { project });
+    } else if (editField === "related") {
+      const related = [
+        ...new Set(editValue.split(",").map((x) => x.trim()).filter(Boolean)),
+      ];
+      patchLocal(s.id, { related });
+      postMeta(s.id, { related });
+    } else {
+      const title = editValue.trim();
+      patchLocal(s.id, { customTitle: title });
+      postMeta(s.id, { title });
+    }
     setEditing(null);
   };
 
@@ -351,8 +385,9 @@ export default function SidebarRecents() {
           {groups.map((g) => (
             <div key={g.label || "all"} className="flex flex-col gap-0.5">
               {g.label && (
-                <span className="px-2.5 pb-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600/80">
+                <span className="flex items-baseline gap-1.5 px-2.5 pb-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600/80">
                   {g.label}
+                  <span className="text-zinc-700">{g.sessions.length}</span>
                 </span>
               )}
               {g.sessions.map((s) => {
@@ -373,7 +408,13 @@ export default function SidebarRecents() {
                           if (e.key === "Escape") setEditing(null);
                         }}
                         onBlur={() => setEditing(null)}
-                        placeholder="name this session — ↵ save · esc cancel"
+                        placeholder={
+                          editField === "project"
+                            ? "set project — ↵ save · esc cancel"
+                            : editField === "related"
+                              ? "related, comma-separated — ↵ save · esc cancel"
+                              : "name this session — ↵ save · esc cancel"
+                        }
                         className="min-w-0 flex-1 bg-transparent px-2.5 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
                       />
                     </div>
@@ -412,6 +453,14 @@ export default function SidebarRecents() {
                               {s.project}
                             </span>
                           </>
+                        )}
+                        {s.related?.length > 0 && (
+                          <span
+                            title={`related: ${s.related.join(", ")}`}
+                            className="shrink-0 rounded bg-zinc-800/70 px-1 py-px font-mono text-[9px] uppercase tracking-wide text-zinc-500"
+                          >
+                            rel: {s.related.join(" · ")}
+                          </span>
                         )}
                       </span>
                       {s.branch && (
@@ -487,13 +536,37 @@ export default function SidebarRecents() {
           <button
             role="menuitem"
             onClick={() => {
-              startEdit(menuSession);
+              startEdit(menuSession, "title");
               closeMenu();
             }}
             className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
           >
             <PencilIcon />
             Rename
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              startEdit(menuSession, "project");
+              closeMenu();
+            }}
+            title="re-home this session under a project (overrides the derived label)"
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <ArchiveIcon />
+            Set project
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              startEdit(menuSession, "related");
+              closeMenu();
+            }}
+            title="tag other projects this session relates to (comma-separated)"
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <LinkIcon />
+            Related…
           </button>
           <button
             role="menuitem"
@@ -519,15 +592,6 @@ export default function SidebarRecents() {
           >
             {menuSession.hidden ? <EyeIcon /> : <EyeOffIcon />}
             {menuSession.hidden ? "Unhide" : "Hide"}
-          </button>
-          <button
-            role="menuitem"
-            disabled
-            title="coming soon — needs the project view"
-            className="flex cursor-default items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-600"
-          >
-            <ArchiveIcon />
-            Add to project
           </button>
           <div className="my-1 h-px bg-zinc-800" />
           <button

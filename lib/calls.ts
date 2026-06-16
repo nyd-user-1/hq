@@ -64,7 +64,7 @@ export function getCalls(limit = 25): Call[] {
       }
       if (!project && typeof e.cwd === "string")
         project =
-          e.cwd === os.homedir() ? "~ (home)" : path.basename(e.cwd);
+          e.cwd === os.homedir() ? "Unassigned" : path.basename(e.cwd);
       const u = e?.message?.usage;
       if (!u || !e.timestamp) continue;
       const t = {
