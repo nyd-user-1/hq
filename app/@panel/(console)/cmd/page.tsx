@@ -84,9 +84,10 @@ export default function Cmd() {
   return (
     <Boundary topOnly bleedX label="@panel/(console)/cmd/page.tsx">
       <p className="text-xs text-zinc-400">
-        CLI utilities that control the live session or open a TUI — they can't run
-        via <code className="font-mono text-zinc-300">claude -p</code>. Click to
-        copy, then paste into your terminal. ({COMMANDS.length} commands)
+        Claude Code's built-in slash commands. They act on your live session (or
+        open a TUI), so — unlike Skills — they can't run via{" "}
+        <code className="font-mono text-zinc-300">claude -p</code>. Copy one, paste
+        into your terminal. ({COMMANDS.length} commands)
       </p>
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
         {COMMANDS.map((c) => (

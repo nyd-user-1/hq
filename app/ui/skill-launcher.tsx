@@ -151,8 +151,10 @@ export default function SkillLauncher({
           </p>
         ) : (
           <p className="text-xs text-zinc-600">
-            fires into Terminal 1 via{" "}
-            <code className="font-mono text-zinc-400">claude -p</code>
+            Reusable tasks you summon by name — user-invoked, run once, fired into
+            Terminal 1 via{" "}
+            <code className="font-mono text-zinc-400">claude -p</code>. (Unlike CMD,
+            no live session needed.)
           </p>
         )}
         {error && (
