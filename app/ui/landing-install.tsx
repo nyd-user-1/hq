@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Markdown from "@/app/ui/md";
 
 // The DEPLOYED face of HQ. HQ reads the local machine's disk (~/.claude, ~/code),
 // so a Vercel deploy has no data to show — instead it becomes the install /
@@ -8,8 +9,11 @@ import { useState } from "react";
 // this page just tells you how to get it.
 //   • LandingInstall — the full standalone page (rendered at /install, and, once
 //     wired, in place of the shell on a deploy).
-//   • InstallCard — a compact, tabbed version rendered inside the terminal's
-//     empty-state (the "no session" pane).
+//   • OnboardingConversation — the terminal's not-connected empty state: a
+//     seeded, claude.ai-style chat (the "no session" pane). Renders inside
+//     terminal.tsx's centered "conversation shell".
+//   • InstallCard — a compact, tabbed install card (currently unused; kept as a
+//     ready alternative embed).
 
 const PKG = "@nysgpt/hq";
 const REPO = "https://github.com/nyd-user-1/hq";
@@ -135,6 +139,62 @@ export function InstallCard() {
         Full guide &amp; quickstart →
       </a>
     </div>
+  );
+}
+
+// A seeded, claude.ai-style onboarding "conversation" — the not-connected
+// terminal's empty state (deploy, or a local HQ with no session yet). HQ greets
+// you in Claude Code's own visual language, using the SAME turn bubbles the live
+// transcript renders, then shows how to run it locally. Static content: the live
+// transcript and focus mode render REAL turns through the same centered shell in
+// terminal.tsx.
+const SEED: { role: "user" | "assistant"; text: string }[] = [
+  {
+    role: "assistant",
+    text:
+      "Welcome to HQ — the observability and control layer over Claude Code. I read the files Claude Code already writes to disk: transcripts, token usage, memory, skills, and your git history. No database, no auth, no telemetry.\n\nTo run me on your own machine:\n```bash\nnpm i -g @nysgpt/hq\n```",
+  },
+  { role: "user", text: "how do I open it?" },
+  {
+    role: "assistant",
+    text:
+      "From inside any Claude Code session, run:\n```bash\nhq\n```\nI'll open at localhost:3002, pinned to that session as Terminal 1 — then I mirror the transcript live, as Claude writes to disk.",
+  },
+];
+
+export function OnboardingConversation() {
+  return (
+    <>
+      {SEED.map((t, i) => (
+        <div key={i} className="flex flex-col gap-1">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+            <span
+              className={`mr-1.5 normal-case ${
+                t.role === "user" ? "text-blue-500" : "text-orange-500"
+              }`}
+            >
+              ●
+            </span>
+            {t.role === "user" ? "you" : "claude"}
+          </span>
+          <div
+            className={`break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
+              t.role === "user"
+                ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
+                : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
+            }`}
+          >
+            {t.role === "assistant" ? <Markdown text={t.text} /> : t.text}
+          </div>
+        </div>
+      ))}
+      <a
+        href="/install"
+        className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-600 transition-colors hover:text-zinc-300"
+      >
+        full quickstart &amp; install guide →
+      </a>
+    </>
   );
 }
 

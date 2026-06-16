@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Markdown from "@/app/ui/md";
 import ButtonChipAction from "@/app/ui/button-chip-action";
 import BoundaryChip from "@/app/ui/boundary-chip";
-import LandingInstall from "@/app/ui/landing-install";
+import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
 
@@ -343,6 +343,7 @@ export default function Terminal({
   const [contextTokens, setContextTokens] = useState(0);
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
+  const [focusMode, setFocusMode] = useState(false); // centered "conversation shell" toggle for a live session (the not-connected state forces it on)
   const stoppedRef = useRef(false); // true when the user killed the run via stop
   const sendTargetRef = useRef<string | null>(null); // session the in-flight send went to
   const [escArmed, setEscArmed] = useState(false); // first Esc pressed, waiting for the second
@@ -801,6 +802,20 @@ export default function Terminal({
   const cliffPct = (PRICING_CLIFF / CONTEXT_LIMIT) * 100; // 200k tick on the bar
   const cacheWarm = cacheLeft !== null && cacheLeft > 0;
 
+  // Centered "conversation shell" (claude.ai shape). `centered` is auto-on when
+  // this terminal isn't bound to a live session — the deploy / empty state
+  // (notConnected) — and toggleable for a LIVE local session via the header
+  // `focus` chip. One flag, two consumers: the not-connected onboarding and
+  // focus mode render through the exact SAME layout. When off, the scroll + dock
+  // wrappers collapse to `display:contents`, so the full-width transcript is
+  // byte-for-byte unchanged.
+  const notConnected =
+    !staged && (previewInstall || (!loading && items.length === 0));
+  const centered = notConnected || focusMode;
+  const colWrap = centered
+    ? "mx-auto flex w-full max-w-3xl flex-col gap-4 px-4"
+    : "contents";
+
   return (
     <div
       className="relative flex h-full min-h-0 flex-col gap-3"
@@ -939,6 +954,26 @@ export default function Terminal({
         )}
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+          {/* Focus — flip this live session into the centered conversation shell
+              (the same layout the not-connected state uses). Only offered when a
+              real session is pinned; the empty state is already centered. */}
+          {resolvedId && !notConnected && (
+            <button
+              onClick={() => setFocusMode((f) => !f)}
+              title={
+                focusMode
+                  ? "exit focus — back to the full-width terminal"
+                  : "focus — read this session in a centered, distraction-free column"
+              }
+              className={`rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors ${
+                focusMode
+                  ? "border-emerald-500/40 text-emerald-300"
+                  : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+              }`}
+            >
+              focus{focusMode ? " ✓" : ""}
+            </button>
+          )}
           {cacheLeft !== null &&
             (cacheLeft > 0 ? (
               <span
@@ -998,6 +1033,9 @@ export default function Terminal({
         }}
         className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
       >
+        {/* Centered column when `centered`; `display:contents` (a no-op) when not,
+            so the full-width transcript is unchanged. */}
+        <div className={colWrap}>
         {/* The "+" staging view: nothing exists yet — say how a session is
             born, offer the recent list, and auto-flip when one appears. No
             handoff kickoff here: that belongs to /clear-born continuations. */}
@@ -1039,9 +1077,7 @@ export default function Terminal({
         {!staged && !previewInstall && loading && items.length === 0 && (
           <p className="text-sm text-zinc-600">loading session…</p>
         )}
-        {!staged && (previewInstall || (!loading && items.length === 0)) && (
-          <LandingInstall embedded />
-        )}
+        {notConnected && <OnboardingConversation />}
         {!previewInstall && items.map((it, i) =>
           it.kind === "command" ? (
             <div
@@ -1215,6 +1251,7 @@ export default function Terminal({
             {resume && <RecentSessions sessions={resume.sessions} now={now} />}
           </div>
         )}
+        </div>
       </div>
 
         {showJump && (
@@ -1249,6 +1286,9 @@ export default function Terminal({
         )}
       </div>
 
+      {/* Bottom dock — status + composer, centered to the conversation column
+          when `centered` (else `display:contents`, unchanged). */}
+      <div className={colWrap}>
       {/* Status / live-working indicator — decoupled from the message scroll so
           it sits as a bar DIRECTLY above the send box: always visible (never
           scrolls away) and it frees the send box's top-right corner for its
@@ -1357,11 +1397,13 @@ export default function Terminal({
               }
             }}
             rows={1}
-            disabled={staged}
+            disabled={staged || notConnected}
             placeholder={
-              staged
-                ? "no session yet — start one in your terminal first"
-                : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
+              notConnected
+                ? "run HQ locally and open a session to chat here"
+                : staged
+                  ? "no session yet — start one in your terminal first"
+                  : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
             className="max-h-[176px] min-h-[72px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
@@ -1400,6 +1442,14 @@ export default function Terminal({
             )}
           </div>
         </div>
+      </div>
+      {/* Tagline footer — HQ's analog to claude.ai's disclaimer line, shown
+          whenever the centered shell is on (not-connected onboarding + focus). */}
+      {centered && (
+        <p className="text-center font-mono text-[11px] text-zinc-600">
+          Your disk is a database. HQ helps you read it.
+        </p>
+      )}
       </div>
     </div>
   );
