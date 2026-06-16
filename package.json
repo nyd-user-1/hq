@@ -1,7 +1,10 @@
 {
-  "name": "hq",
+  "name": "@nysgpt/hq",
   "version": "0.1.0",
   "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "hq": "bin/hq"
   },

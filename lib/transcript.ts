@@ -7,7 +7,11 @@ import os from "node:os";
 // keep only real user/assistant text (no tool calls, no command wrappers).
 
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
-const SESSIONS_DIR = path.join(PROJECTS_ROOT, "-Users-brendanstanton");
+// Last-resort path for a session id not found on disk. Claude Code encodes a
+// cwd into its project-dir name by replacing path separators with "-"
+// (/Users/jane → -Users-jane), so derive the current user's home slug instead
+// of hardcoding one — otherwise HQ only works on the machine it was built on.
+const SESSIONS_DIR = path.join(PROJECTS_ROOT, os.homedir().replace(/[/.]/g, "-"));
 const TAIL_BYTES = 8 * 1024 * 1024;
 
 export type Turn = { role: "user" | "assistant"; text: string; at: string };

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Markdown from "@/app/ui/md";
 import ButtonChipAction from "@/app/ui/button-chip-action";
 import BoundaryChip from "@/app/ui/boundary-chip";
+import { InstallCard } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
 
@@ -322,6 +323,9 @@ export default function Terminal({
   // runs unpinned so the pane can flip to the newborn the moment it appears.
   const staged = sessionParam === "new";
   const pinned = staged ? null : sessionParam; // null = newest session
+  // ?install=1 = preview the deployed install card locally (the empty-state the
+  // terminal shows when there's no session — i.e. on a Vercel deploy).
+  const previewInstall = params.get("install") === "1";
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [project, setProject] = useState("");
   const [resolvedId, setResolvedId] = useState<string | null>(null);
@@ -1032,13 +1036,13 @@ export default function Terminal({
             {resume && <RecentSessions sessions={resume.sessions} now={now} />}
           </div>
         )}
-        {!staged && loading && items.length === 0 && (
+        {!staged && !previewInstall && loading && items.length === 0 && (
           <p className="text-sm text-zinc-600">loading session…</p>
         )}
-        {!staged && !loading && items.length === 0 && (
-          <p className="text-sm text-zinc-600">no session transcript found</p>
+        {!staged && (previewInstall || (!loading && items.length === 0)) && (
+          <InstallCard />
         )}
-        {items.map((it, i) =>
+        {!previewInstall && items.map((it, i) =>
           it.kind === "command" ? (
             <div
               key={i}
@@ -1067,7 +1071,7 @@ export default function Terminal({
                 >
                   ●
                 </span>
-                {it.role === "user" ? "brendan" : "claude"}
+                {it.role === "user" ? "you" : "claude"}
                 {it.at && (
                   <span className="ml-2 normal-case tracking-normal text-zinc-600">
                     {new Date(it.at).toLocaleTimeString()}

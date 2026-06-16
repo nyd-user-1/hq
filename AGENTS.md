@@ -6,16 +6,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # HQ — "Agentic OS"
 
-Product #9. A **localhost-only** observability + control layer over **Claude Code**. No DB, no auth, no deploy, no external services. Three runtime deps total: `next`, `react`, `react-dom`.
+A **localhost-only** observability + control layer over **Claude Code**. No DB, no auth, no deploy, no external services. Three runtime deps total: `next`, `react`, `react-dom`.
 
-The whole idea: **HQ reads the files Claude Code already writes to disk.** Every feature is `node:fs` over `~/.claude/projects/**/*.jsonl` (transcripts), `~/.claude/projects/-Users-…/memory/*.md` (memory notes), `~/vaults/hq/` (the Obsidian vault), and `git log` across `~/code/*`. Claude Code is the writer; HQ is the reader. The disk is the database.
+The whole idea: **HQ reads the files Claude Code already writes to disk.** Every feature is `node:fs` over `~/.claude/projects/**/*.jsonl` (transcripts), `~/.claude/projects/<home-slug>/memory/*.md` (memory notes), an optional Obsidian vault (`~/vaults/hq/`), and `git log` across `~/code/*`. Claude Code is the writer; HQ is the reader. The disk is the database.
 
 ## Run / build / ship
 
 - **Dev:** `npm run dev` → pinned to **:3002**.
 - **Build:** `npm run build` before pushing (not `tsc`). If it fails with a `/_global-error` "useContext is null" error or a "non-standard NODE_ENV" warning, the shell has `NODE_ENV=development` set — rebuild with `env -u NODE_ENV npm run build` to strip it. That var is NOT always present, so the `env -u` prefix is a conditional fix — `echo $NODE_ENV` to check.
 - **Don't `next build` against a LIVE `next dev`.** They share `.next`, so a build clobbers the dev server's compiled cache → the dev server then serves STALE output even though the source is already fixed ("I changed X but the browser still shows the old X"). After any build, reset dev: `pkill -f "next dev"; rm -rf .next; npm run dev`. (Also note: a dev-server restart doesn't reload the user's open tab — they must HARD-refresh ⌘⇧R.)
-- **Rhythm:** build → commit → push after each change. Remote is `github.com/nyd-user-1/hq` (`main`). Brendan reviews on the live dev server — **don't take verification screenshots while he's watching** (token cost); describe what to look for and he eyeballs.
+- **Rhythm:** build → commit → push to `origin/main` after each change. Review happens on the live dev server — **avoid spending tokens on verification screenshots**; describe what changed and what to look for instead.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ The whole idea: **HQ reads the files Claude Code already writes to disk.** Every
 
 ## Components / design system
 
-This session HQ grew a real component library. Naming taxonomy: **`[Category][Descriptor][Element]`** (e.g. `ButtonChipIcon`, `ButtonChipAction`); presentational components stay generic, containers get a `Container`-ish role (`TodoList`/`AppPanel` hold the state). **Files are kebab-case** (`button-chip-icon.tsx`) **and components PascalCase** — no exceptions (the former `PanelMenu.tsx` was renamed to `panel-menu.tsx`).
+HQ has a real component library. Naming taxonomy: **`[Category][Descriptor][Element]`** (e.g. `ButtonChipIcon`, `ButtonChipAction`); presentational components stay generic, containers get a `Container`-ish role (`TodoList`/`AppPanel` hold the state). **Files are kebab-case** (`button-chip-icon.tsx`) **and components PascalCase** — no exceptions (the former `PanelMenu.tsx` was renamed to `panel-menu.tsx`).
 
 - **Registry:** `lib/components.ts` — a hand-curated list (`{name,file,kind,status,desc}`); `status` is APPROVED (design-system) vs REVIEW (exists, unaudited). `orderedComponents()` applies a saved order from `~/.claude/hq/components-order.json`; `readComponentSource()` reads each file's source (scoped to `app/ui`).
 - **Components panel** (`/components`, Activity) — `ComponentsList`: a search box (`SearchField`) + "Approved" (blue) / "Review" (red) sections of **accordion cards** (`AccordionItem`). Each card: provenance `● claude · file · kind pill`, the name as a draggable label, the component's **source as the body**, a `MetaChipRow` footer (`Component c_… · via session … · at … · Path: …`), a hover copy in the body. Drag a card into a terminal (drops the file path) or onto a sibling to reorder (persists via `PUT /api/components`).
@@ -82,8 +82,8 @@ This session HQ grew a real component library. Naming taxonomy: **`[Category][De
 - **Context tier:** Opus 1M tier; `CONTEXT_LIMIT = 1_000_000`. 200k = the price cliff marker, not a wall.
 - **`useSearchParams` needs a Suspense boundary** or `/_not-found` prerender fails.
 - **HQ-native sidecars live under `~/.claude/hq/`**: `todo.json`, `sessions-meta.json`, `components-order.json`, `notes/*.md`. NOT the agent's memory dir.
-- **Two terminals share one working tree.** Coordinate via the To Do `claimedBy` field; `git fetch` + `git status` first, **stage only your own files** (never `git add -A`); build before push.
+- **Multiple agents may share one working tree.** When they do, coordinate via the To Do `claimedBy` field; `git fetch` + `git status` first, **stage only your own files** (never `git add -A`); build before push.
 
-## Vault join
+## Obsidian vault (optional)
 
-This repo (`~/code/hq`) ↔ `~/vaults/hq/!hq/`. Design decisions + thread notes live there (`*launchpad/` spine). The To Do panel is HQ-native (`~/.claude/hq/todo.json`) — vault optional. Read the latest launchpad note before resuming bigger work.
+HQ can read an Obsidian vault at `~/vaults/hq/` (`lib/vault.ts`) as an **optional** data source — a legacy integration from HQ's origins as a vault reader. It is **not required**: the To Do panel and every core feature are HQ-native (`~/.claude/hq/`, `~/.claude/**`), and when no vault exists those reads simply return empty. (Roadmap: promote this into a first-class, configurable, opt-in connector.)
