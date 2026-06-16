@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
-import { sessionMeta, type RecentSession } from "./sessions";
+import { sessionMeta, cleanText, type RecentSession } from "./sessions";
 import { scoreNorm, snippetAround, normalize } from "./text-search";
 
 // Index format version — bump to force a clean full rebuild when the stored
@@ -170,12 +170,47 @@ export function warmIndex(): void {
 
 export type TranscriptHit = { id: string; score: number; phrase: boolean; snippet: string };
 
-// Synchronous: full-text search EVERY session's text via the loaded index,
-// returning a score (occurrence count, all tokens required) and a readable
-// snippet per match. `building` true → no index yet (first run) or a refresh is
-// in flight; the caller shows an "indexing" state and retries. The existing
-// index still serves results during a refresh — only a never-built index is
-// truly empty.
+// Live-scan extraction — the SAME cleaning as the index builder
+// (scripts/build-search-index.mjs `extract`) so a freshly-read session matches
+// identically. Cached by (file, mtime) and pre-normalized, so repeated searches
+// of an unchanged active session never re-read or re-normalize.
+const liveCache = new Map<string, { mtime: number; text: string; norm: string }>();
+function liveEntry(file: string, mtime: number): { text: string; norm: string } {
+  const c = liveCache.get(file);
+  if (c && c.mtime === mtime) return c;
+  let out = "";
+  let raw = "";
+  try {
+    raw = fs.readFileSync(file, "utf8");
+  } catch {
+    // unreadable / vanished mid-read
+  }
+  for (const line of raw.split("\n")) {
+    if (!line || line[0] !== "{") continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e.type !== "user" && e.type !== "assistant") continue;
+    const content = e.message?.content;
+    if (typeof content === "string") out += cleanText(content) + "\n";
+    else if (Array.isArray(content))
+      for (const b of content)
+        if (b?.type === "text" && b.text) out += cleanText(b.text) + "\n";
+  }
+  const entry = { mtime, text: out, norm: normalize(out) };
+  liveCache.set(file, entry);
+  return entry;
+}
+
+// Synchronous full-text search over EVERY session's text. The 2GB archive comes
+// from the prebuilt index; sessions NEWER than the index snapshot — the one you're
+// typing in, mid-conversation — are LIVE-SCANNED fresh and merged ON TOP, so the
+// active session is instantly searchable with no rebuild lag (the same read-per-
+// query idea notes/memory use). Zero extra work when the index is current.
+// `building` true → no index yet (first run); the caller shows an "indexing" state.
 export function searchTranscriptIndex(tokens: string[]): {
   hits: TranscriptHit[];
   building: boolean;
@@ -186,11 +221,29 @@ export function searchTranscriptIndex(tokens: string[]): {
     triggerBuild();
     return { hits: [], building: true };
   }
-  const hits: TranscriptHit[] = [];
+  // Keyed by id so a live re-scan can override a stale index entry.
+  const byId = new Map<string, TranscriptHit>();
   for (const e of idx.entries) {
     const m = scoreNorm(e.norm, tokens);
     if (m.score === 0) continue;
-    hits.push({ id: e.id, score: m.score, phrase: m.phrase, snippet: snippetAround(e.text, tokens[0]) });
+    byId.set(e.id, {
+      id: e.id,
+      score: m.score,
+      phrase: m.phrase,
+      snippet: snippetAround(e.text, tokens[0]),
+    });
   }
-  return { hits, building };
+  // Bridge the staleness window: any session modified since the index was built
+  // (usually just the active one) is read fresh and merged. Only OVERRIDES on a
+  // live hit — never deletes — so a slight extraction diff can't drop a valid
+  // index hit (and transcripts are append-only, so that hit stays valid anyway).
+  eachSessionFile((full, st) => {
+    if (st.mtimeMs <= idx.builtMaxMtime + 1) return; // index already covers it
+    const { text, norm } = liveEntry(full, st.mtimeMs);
+    const m = scoreNorm(norm, tokens);
+    if (m.score === 0) return;
+    const id = path.basename(full, ".jsonl");
+    byId.set(id, { id, score: m.score, phrase: m.phrase, snippet: snippetAround(text, tokens[0]) });
+  });
+  return { hits: [...byId.values()], building };
 }
