@@ -980,6 +980,7 @@ export default function Terminal({
           )}
         </span>
       </div>
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
         onScroll={(e) => {
@@ -1210,19 +1211,20 @@ export default function Terminal({
         )}
       </div>
 
-      {showJump && (
-        <button
-          onClick={() => {
-            const el = scrollRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
-            atBottomRef.current = true;
-            setShowJump(false);
-          }}
-          className="mx-auto -mt-1 flex shrink-0 items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-300 shadow-lg transition-colors hover:border-zinc-500 hover:text-zinc-100"
-        >
-          ↓ jump to latest
-        </button>
-      )}
+        {showJump && (
+          <button
+            onClick={() => {
+              const el = scrollRef.current;
+              if (el) el.scrollTop = el.scrollHeight;
+              atBottomRef.current = true;
+              setShowJump(false);
+            }}
+            className="absolute bottom-[30px] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-300 shadow-lg transition-colors hover:border-zinc-500 hover:text-zinc-100"
+          >
+            ↓ jump to latest
+          </button>
+        )}
+      </div>
 
       {/* Status / live-working indicator — decoupled from the message scroll so
           it sits as a bar DIRECTLY above the send box: always visible (never
