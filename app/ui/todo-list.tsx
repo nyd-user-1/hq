@@ -109,25 +109,22 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") add();
-        }}
-        placeholder="Add todo, hit enter"
-        className="rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
-      />
-
-      <div className="flex min-h-[1.125rem] items-center">
-        {doneCount > 0 && (
-          <button
-            onClick={clearCompleted}
-            className="text-xs text-zinc-600 transition-colors hover:text-zinc-300"
-          >
-            Clear completed tasks ({doneCount})
-          </button>
-        )}
+      <div className="flex flex-col gap-1.5">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") add();
+          }}
+          placeholder="Add todo, hit enter"
+          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+        />
+        <button
+          onClick={clearCompleted}
+          className="self-start text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
+        >
+          *Clear completed tasks ({doneCount})
+        </button>
       </div>
 
       {present.length > 0 && (
