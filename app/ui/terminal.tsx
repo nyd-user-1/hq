@@ -361,6 +361,16 @@ export default function Terminal({
     console.log(`[terminal] mounted — count=${mountCount}`);
   }, []);
 
+  // Latest pathname in a ref so loadTurns can build re-pin URLs WITHOUT listing
+  // `pathname` as a dependency. Otherwise a panel-route change (tabbing through
+  // Activity/Metrics/Console, which swaps the @panel route segment) recreates
+  // loadTurns → re-fires the backfill → the terminal flashes/jumps even though
+  // its session never changed. Search's scope chips don't jump because they keep
+  // the same pathname (only ?scope changes); this gives the route-group panels
+  // that same stability — the terminal only re-fetches when ITS session changes.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
   const loadTurns = useCallback(async function load() {
     const q = staged
       ? "?staged=1"
@@ -379,7 +389,7 @@ export default function Terminal({
         setProjects(d.projects ?? []);
         setNow(Date.now());
         if (d.id && (d.bornAt ?? 0) > stagedAtRef.current)
-          router.replace(`${pathname}?session=${d.id}`, { scroll: false });
+          router.replace(`${pathnameRef.current}?session=${d.id}`, { scroll: false });
         return;
       }
       // Mid-send, the optimistic items own the view — but always refresh status
@@ -400,7 +410,7 @@ export default function Terminal({
           sp.set(paramKey, d.id);
           const sibKey = paramKey === "session" ? "pair" : "session";
           if (sibling) sp.set(sibKey, sibling);
-          router.replace(`${pathname ?? "/"}?${sp.toString()}`, { scroll: false });
+          router.replace(`${pathnameRef.current ?? "/"}?${sp.toString()}`, { scroll: false });
         }
       }
       setStatus(d.status ?? null);
@@ -417,7 +427,7 @@ export default function Terminal({
           load();
         }, 2000);
     }
-  }, [pinned, staged, router, pathname, sibling, paramKey]);
+  }, [pinned, staged, router, sibling, paramKey]);
 
   // Entering the staging view: clear the display (nothing is being shown) and
   // stamp the moment — only sessions born after it count as the newborn.
