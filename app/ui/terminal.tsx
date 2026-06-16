@@ -1219,7 +1219,16 @@ export default function Terminal({
               atBottomRef.current = true;
               setShowJump(false);
             }}
-            className="absolute bottom-[30px] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-300 shadow-lg transition-colors hover:border-zinc-500 hover:text-zinc-100"
+            // Inline position/z so it can't be broken by a flaky CSS regen (z-20
+            // was dropping out); floats centered, 30px above the scroll bottom.
+            style={{
+              position: "absolute",
+              bottom: 30,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 20,
+            }}
+            className="flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-300 shadow-lg transition-colors hover:border-zinc-500 hover:text-zinc-100"
           >
             ↓ jump to latest
           </button>
