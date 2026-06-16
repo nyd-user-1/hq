@@ -356,6 +356,7 @@ export default function Terminal({
   // expandedRef: full history loaded (lazy, on scroll-to-top). anchorRef:
   // scrollHeight captured before a prepend, to restore your position after it.
   const atBottomRef = useRef(true);
+  const suppressJumpRef = useRef(false); // keep the arrow hidden during a smooth scroll-to-bottom
   const expandedRef = useRef(false);
   const loadingOlderRef = useRef(false);
   const anchorRef = useRef(0); // scrollHeight captured before a prepend
@@ -985,9 +986,10 @@ export default function Terminal({
         ref={scrollRef}
         onScroll={(e) => {
           const el = e.currentTarget;
-          atBottomRef.current =
-            el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          setShowJump(!atBottomRef.current);
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          atBottomRef.current = atBottom;
+          if (atBottom) suppressJumpRef.current = false; // the glide landed
+          setShowJump(!atBottom && !suppressJumpRef.current);
           if (el.scrollTop < 120) loadOlder();
         }}
         className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
@@ -1215,9 +1217,15 @@ export default function Terminal({
           <button
             onClick={() => {
               const el = scrollRef.current;
-              if (el) el.scrollTop = el.scrollHeight;
+              if (!el) return;
+              suppressJumpRef.current = true; // hide the arrow for the whole glide
+              el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
               atBottomRef.current = true;
               setShowJump(false);
+              // backstop in case scroll settles without an at-bottom onScroll tick
+              setTimeout(() => {
+                suppressJumpRef.current = false;
+              }, 700);
             }}
             // Inline position/z so it can't be broken by a flaky CSS regen (z-20
             // was dropping out); floats centered, 30px above the scroll bottom.
