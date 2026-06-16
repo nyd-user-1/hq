@@ -157,15 +157,23 @@ export default async function Shipped({
               <Link
                 href={`/shipped?repo=${s.repo}&commit=${s.sha}${pinTail}`}
                 scroll={false}
-                className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-3 transition-colors hover:bg-zinc-800/30"
+                className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-3 text-left transition-colors hover:bg-zinc-800/30"
               >
-                <span className="shrink-0 font-mono text-xs text-blue-400">
-                  {s.sha}
+                <span className="flex shrink-0 items-baseline gap-1.5">
+                  <span
+                    className="text-[10px] leading-none text-green-500"
+                    aria-hidden
+                  >
+                    ●
+                  </span>
+                  <span className="font-mono text-xs text-zinc-200">
+                    {s.sha}
+                  </span>
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
                   {s.subject}
                 </span>
-                <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-blue-400/70">
+                <span className="shrink-0 font-mono text-[11px] text-zinc-600">
                   {s.repo}
                 </span>
               </Link>
