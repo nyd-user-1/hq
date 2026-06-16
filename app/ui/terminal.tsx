@@ -1254,8 +1254,11 @@ export default function Terminal({
           <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
             <span className="text-orange-400">✶ {mood}…</span>
             <span className="text-zinc-500">
-              ({fmtElapsed(elapsed)} · ↑ {fmtTokens(status.outputTokens)} tokens
-              {status.phase ? ` · ${status.phase}` : ""})
+              {`(${fmtElapsed(elapsed)}${
+                status.outputTokens > 0
+                  ? ` · ↑ ${fmtTokens(status.outputTokens)} tokens`
+                  : ""
+              }${status.phase ? ` · ${status.phase}` : ""})`}
             </span>
           </p>
           {status.phases.length > 1 && (

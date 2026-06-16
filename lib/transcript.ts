@@ -483,6 +483,7 @@ export function workingStatus(id: string | null): WorkingStatus | null {
     ts: number;
     isUserPrompt: boolean;
     isToolResult: boolean; // mid-turn tool result — proof a turn is in flight
+    isInterrupt: boolean; // "[Request interrupted by user]" — ENDS a turn, doesn't start one
     stop: string | null;
     out: number;
     mid: string | null; // API message id — output_tokens accumulates per id
@@ -511,12 +512,20 @@ export function workingStatus(id: string | null): WorkingStatus | null {
       (c.includes("<command-name>") ||
         c.includes("<local-command-stdout>") ||
         c.includes("<local-command-caveat>"));
+    const flatText =
+      typeof c === "string"
+        ? c
+        : blocks
+            .filter((b) => b?.type === "text")
+            .map((b) => b.text ?? "")
+            .join(" ");
     const ts = Date.parse(e.timestamp);
     entries.push({
       role: e.type,
       ts: Number.isNaN(ts) ? 0 : ts,
       isUserPrompt: e.type === "user" && !isToolResult && hasText && !isMeta,
       isToolResult,
+      isInterrupt: flatText.includes("[Request interrupted by user]"),
       stop: e.message?.stop_reason ?? null,
       out: e.message?.usage?.output_tokens ?? 0,
       mid: e.message?.id ?? null,
@@ -557,11 +566,13 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   let working: boolean;
   let phase = "thinking";
   if (last.role === "user") {
-    // Only a mid-turn tool result PROVES a turn is in flight. A plain trailing
-    // prompt may never run (interrupt, /clear record, abandoned message) —
-    // claiming "thinking" for it is a lie the user can't disprove. Stay idle
-    // until assistant blocks actually appear in the transcript.
-    working = last.isToolResult;
+    // A mid-turn tool result OR a real trailing prompt = a turn in flight. The CLI
+    // does NOT flush the assistant entry (thinking blocks + tokens) until thinking
+    // ENDS — often 30s–2min on high effort — so during thinking the last entry IS
+    // the prompt. Treat that as "thinking" so HQ mirrors the CLI's spinner instead
+    // of falsely reading "idle". The interrupt marker ENDS a turn (excluded), and a
+    // genuinely abandoned/dead prompt is dropped by the 5-min staleness backstop.
+    working = last.isToolResult || (last.isUserPrompt && !last.isInterrupt);
   } else if (
     last.stop === "end_turn" ||
     last.stop === "stop_sequence" ||
