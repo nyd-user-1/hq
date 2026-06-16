@@ -1228,9 +1228,11 @@ export default function Terminal({
               transform: "translateX(-50%)",
               zIndex: 20,
             }}
-            className="flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-300 shadow-lg transition-colors hover:border-zinc-500 hover:text-zinc-100"
+            title="jump to latest"
+            aria-label="Jump to latest"
+            className="flex size-8 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-base leading-none text-zinc-300 shadow-lg transition-colors hover:border-zinc-500 hover:text-zinc-100"
           >
-            ↓ jump to latest
+            ↓
           </button>
         )}
       </div>
