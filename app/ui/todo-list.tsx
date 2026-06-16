@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AccordionTodoItem from "@/app/ui/accordion-todo-item";
+import SearchField from "@/app/ui/search-field";
 import { CATEGORIES } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
 
@@ -13,6 +14,7 @@ import type { TodoItem } from "@/lib/todo";
 export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [items, setItems] = useState<TodoItem[]>(initial);
   const [draft, setDraft] = useState("");
+  const [query, setQuery] = useState(""); // search box over the list
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -24,7 +26,15 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   } | null>(null);
 
   const all = items.filter((t) => !t.parentId);
-  const list = cat ? all.filter((t) => t.category === cat) : all;
+  const byCat = cat ? all.filter((t) => t.category === cat) : all;
+  const needle = query.trim().toLowerCase();
+  const list = needle
+    ? byCat.filter(
+        (t) =>
+          t.text.toLowerCase().includes(needle) ||
+          (t.body ?? "").toLowerCase().includes(needle)
+      )
+    : byCat;
   const doneCount = items.filter((t) => t.done).length;
   // Only show filter chips for categories that actually have items.
   const present = CATEGORIES.filter((c) =>
@@ -109,23 +119,34 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
+      {/* Search header — faithfully ported from Components/Shipped (SearchField
+          + a left-aligned caption). The caption doubles as the clear-completed
+          link. The add-todo input below is left untouched (owned elsewhere). */}
       <div className="flex flex-col gap-1.5">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") add();
-          }}
-          placeholder="Add todo, hit enter"
-          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search to-dos…"
         />
-        <button
-          onClick={clearCompleted}
-          className="self-start text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
-        >
-          *Clear completed tasks ({doneCount})
-        </button>
+        <p className="text-[11px] text-zinc-500">
+          <button
+            onClick={clearCompleted}
+            className="transition-colors hover:text-zinc-300"
+          >
+            *Clear completed tasks ({doneCount})
+          </button>
+        </p>
       </div>
+
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") add();
+        }}
+        placeholder="Add todo, hit enter"
+        className="rounded-md border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
+      />
 
       {present.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -188,7 +209,9 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
           ))}
         </ol>
       ) : (
-        <p className="text-sm text-zinc-600">no to-do items yet</p>
+        <p className="text-sm text-zinc-600">
+          {query ? `no to-dos matching “${query}”` : "no to-do items yet"}
+        </p>
       )}
     </div>
   );
