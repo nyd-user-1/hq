@@ -156,13 +156,29 @@ const STEPS: [string, React.ReactNode][] = [
   ["Keep working", <>HQ mirrors the transcript, tallies tokens &amp; cost, and indexes everything — live, as Claude writes to disk</>],
 ];
 
-export default function LandingInstall() {
+export default function LandingInstall({ embedded = false }: { embedded?: boolean }) {
   return (
-    <div className="relative min-h-full w-full overflow-y-auto bg-zinc-950 text-zinc-100">
-      {/* soft emerald glow bleeding down from the top */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(16,185,129,0.09),transparent)]" />
+    <div
+      className={
+        embedded
+          ? "w-full text-zinc-100"
+          : "relative min-h-full w-full overflow-y-auto bg-zinc-950 text-zinc-100"
+      }
+    >
+      {/* soft emerald glow bleeding down from the top (full page only) */}
+      {!embedded && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(16,185,129,0.09),transparent)]" />
+      )}
 
-      <div className="relative mx-auto max-w-3xl px-6 py-16 sm:py-24">
+      {/* embedded: left-aligned (no mx-auto), no page padding — reads like a
+          terminal transcript and rides the terminal's own scroll. */}
+      <div
+        className={
+          embedded
+            ? "max-w-2xl pb-6"
+            : "relative mx-auto max-w-3xl px-6 py-16 sm:py-24"
+        }
+      >
         {/* hero */}
         <div className="flex items-center gap-2.5 font-mono text-sm tracking-wide text-zinc-400">
           <LiveDot />

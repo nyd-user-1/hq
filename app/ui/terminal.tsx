@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Markdown from "@/app/ui/md";
 import ButtonChipAction from "@/app/ui/button-chip-action";
 import BoundaryChip from "@/app/ui/boundary-chip";
-import { InstallCard } from "@/app/ui/landing-install";
+import LandingInstall from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
 
@@ -1040,7 +1040,7 @@ export default function Terminal({
           <p className="text-sm text-zinc-600">loading session…</p>
         )}
         {!staged && (previewInstall || (!loading && items.length === 0)) && (
-          <InstallCard />
+          <LandingInstall embedded />
         )}
         {!previewInstall && items.map((it, i) =>
           it.kind === "command" ? (
