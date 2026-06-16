@@ -1,9 +1,8 @@
 import Boundary from "@/app/ui/boundary";
-import Link from "next/link";
+import ShippedFeed from "@/app/ui/shipped-feed";
 import CopyText from "@/app/ui/copy-text";
 import BackLink from "@/app/ui/back-link";
 import { getShipped, getCommit, findCommit } from "@/lib/shipped";
-import { ago } from "@/lib/ago";
 
 export const dynamic = "force-dynamic";
 
@@ -144,48 +143,9 @@ export default async function Shipped({
   const ships = getShipped();
   return (
     <Boundary topOnly bleedX label="@panel/shipped/page.tsx">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-zinc-300">Shipped</h3>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-          {ships.length} commits · all projects
-        </span>
-      </div>
-      {ships.length > 0 ? (
-        <ul className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {ships.map((s) => (
-            <li key={`${s.repo}:${s.sha}`}>
-              <Link
-                href={`/shipped?repo=${s.repo}&commit=${s.sha}${pinTail}`}
-                scroll={false}
-                className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-3 text-left transition-colors hover:bg-zinc-800/30"
-              >
-                <span className="flex shrink-0 items-baseline gap-1.5">
-                  <span
-                    className="text-[10px] leading-none text-green-500"
-                    aria-hidden
-                  >
-                    ●
-                  </span>
-                  <span className="font-mono text-xs text-zinc-200">
-                    {s.sha}
-                  </span>
-                </span>
-                <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
-                  {s.subject}
-                </span>
-                <span className="shrink-0 font-mono text-[11px] text-zinc-600">
-                  {s.repo}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-zinc-600">no git repos under ~/code</p>
-      )}
+      <ShippedFeed ships={ships} pinTail={pinTail} />
       <p className="text-xs text-zinc-600">
-        every ~/code repo · newest first (each repo&apos;s latest always shown) ·
-        click a commit to read its diff here
+        every ~/code repo · newest first (each repo&apos;s latest always shown)
       </p>
     </Boundary>
   );
