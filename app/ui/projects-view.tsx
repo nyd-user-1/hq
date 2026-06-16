@@ -48,9 +48,10 @@ export default function ProjectsView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <SearchField value={q} onChange={setQ} placeholder="Search projects…" />
-
       <div className="flex items-center gap-2">
+        <div className="w-[325px] min-w-0">
+          <SearchField value={q} onChange={setQ} placeholder="Search projects…" />
+        </div>
         <button
           onClick={() => setDir((d) => (d === "new" ? "old" : "new"))}
           title={
@@ -59,7 +60,7 @@ export default function ProjectsView({
               : "Oldest first — click for newest"
           }
           aria-label="Toggle sort order"
-          className="ml-auto flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
+          className="flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
         >
           <SortIcon dir={dir} />
         </button>
