@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
 import ButtonChipAction from "@/app/ui/button-chip-action";
 import BoundaryChip from "@/app/ui/boundary-chip";
@@ -351,10 +351,23 @@ export default function Terminal({
   const [predecessorCtx, setPredecessorCtx] = useState(0); // continued session's ctx size (fresh pane)
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Scrollback + bottom-follow. atBottomRef: is the view parked at the bottom (so
+  // live turns only auto-scroll then, never yanking you while you read up top).
+  // expandedRef: full history loaded (lazy, on scroll-to-top). anchorRef:
+  // scrollHeight captured before a prepend, to restore your position after it.
+  const atBottomRef = useRef(true);
+  const expandedRef = useRef(false);
+  const loadingOlderRef = useRef(false);
+  const anchorRef = useRef(0); // scrollHeight captured before a prepend
+  const anchorLenRef = useRef(0); // item count when the prepend was requested
+  const itemsLenRef = useRef(0);
+  const [showJump, setShowJump] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // pending refetch retry
   const stagedAtRef = useRef(0); // when the "+" staging view was entered
   const working = status !== null;
+  itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
 
   useEffect(() => {
     mountCount += 1;
@@ -379,8 +392,11 @@ export default function Terminal({
         : sibling
           ? `?exclude=${encodeURIComponent(sibling)}` // unpinned: newest, but not Terminal 2's
           : "";
+    // Once you've scrolled back to load full history, keep polling the full list
+    // (cached by mtime) so live turns merge onto it instead of snapping to a tail.
+    const fullQ = expandedRef.current ? (q ? "&full=1" : "?full=1") : "";
     try {
-      const d = await (await fetch(`/api/terminal/turns${q}`)).json();
+      const d = await (await fetch(`/api/terminal/turns${q}${fullQ}`)).json();
       if (staged) {
         // Staging view: don't display the newest session — just keep the
         // recent-sessions list fresh and watch for a newborn (a session born
@@ -396,6 +412,7 @@ export default function Terminal({
       // so the live "working" line shows even while a send is in flight.
       if (!busyRef.current) {
         setItems(d.items ?? []);
+        setHasMore(d.more ?? false);
         setProject(d.project ?? "");
         setResolvedId(d.id ?? null);
         setCustomTitle(d.customTitle ?? "");
@@ -429,6 +446,20 @@ export default function Terminal({
     }
   }, [pinned, staged, router, sibling, paramKey]);
 
+  // Lazy scrollback: at the top, load the FULL transcript once and prepend it.
+  // anchorRef (set here, applied in the layout effect below) keeps your reading
+  // position fixed as older content slots in above.
+  const loadOlder = useCallback(() => {
+    if (expandedRef.current || loadingOlderRef.current || !hasMore) return;
+    loadingOlderRef.current = true;
+    anchorRef.current = scrollRef.current?.scrollHeight ?? 0;
+    anchorLenRef.current = itemsLenRef.current;
+    expandedRef.current = true;
+    loadTurns().finally(() => {
+      loadingOlderRef.current = false;
+    });
+  }, [hasMore, loadTurns]);
+
   // Entering the staging view: clear the display (nothing is being shown) and
   // stamp the moment — only sessions born after it count as the newborn.
   useEffect(() => {
@@ -450,6 +481,9 @@ export default function Terminal({
   useEffect(() => {
     setLoading(true);
     setError(null);
+    expandedRef.current = false; // new session → start at the tail, not full history
+    atBottomRef.current = true;
+    setShowJump(false);
     loadTurns().finally(() => setLoading(false));
   }, [loadTurns]);
 
@@ -505,10 +539,24 @@ export default function Terminal({
     return () => clearInterval(t);
   }, [working, lastWrite]);
 
+  // Bottom-follow: only auto-scroll when you're already at the bottom — a live turn
+  // lands in view if you're watching, but never yanks you down while you read up top.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [items, sending, status]);
+
+  // After a scroll-to-top prepend (loadOlder), restore the prior scroll position so
+  // older content slots in above without the view jumping.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    // Only the actual prepend (item count grew past the request-time count) consumes
+    // the anchor — a concurrent tail-poll landing mid-expand won't steal it.
+    if (el && anchorRef.current > 0 && items.length > anchorLenRef.current) {
+      el.scrollTop += el.scrollHeight - anchorRef.current;
+      anchorRef.current = 0;
+    }
+  });
 
   // Esc parity with the real CLI: first Esc arms ("press esc again to
   // interrupt"), second Esc within 2s interrupts. HQ can only kill runs it
@@ -934,6 +982,13 @@ export default function Terminal({
       </div>
       <div
         ref={scrollRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          atBottomRef.current =
+            el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          setShowJump(!atBottomRef.current);
+          if (el.scrollTop < 120) loadOlder();
+        }}
         className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
       >
         {/* The "+" staging view: nothing exists yet — say how a session is
@@ -1154,6 +1209,20 @@ export default function Terminal({
           </div>
         )}
       </div>
+
+      {showJump && (
+        <button
+          onClick={() => {
+            const el = scrollRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+            atBottomRef.current = true;
+            setShowJump(false);
+          }}
+          className="mx-auto -mt-1 flex shrink-0 items-center gap-1 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[11px] text-zinc-300 shadow-lg transition-colors hover:border-zinc-500 hover:text-zinc-100"
+        >
+          ↓ jump to latest
+        </button>
+      )}
 
       {/* Status / live-working indicator — decoupled from the message scroll so
           it sits as a bar DIRECTLY above the send box: always visible (never

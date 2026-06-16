@@ -26,8 +26,10 @@ export async function GET(req: Request) {
   if (!id && !staged) {
     target = getRecentSessions(5).find((s) => s.id !== exclude)?.id ?? null;
   }
-  const { id: resolved, items, project, contextTokens, lastWrite } =
-    timelineFor(target, 24);
+  // ?full=1 = scrollback: the whole transcript (cached) instead of the last-24 tail.
+  const full = url.searchParams.get("full") === "1";
+  const { id: resolved, items, project, contextTokens, lastWrite, more } =
+    timelineFor(target, 24, full);
   const status = workingStatus(resolved);
   // A fresh session (only local-command records, e.g. right after /clear) gets
   // resume options: recent sessions to follow, the latest handoff memo to copy.
@@ -62,6 +64,7 @@ export async function GET(req: Request) {
     status,
     contextTokens,
     lastWrite,
+    more,
     resume,
     lineage,
     predecessorCtx,

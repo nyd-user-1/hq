@@ -253,19 +253,28 @@ function inputDetail(name: string, input: any): string {
 const trimDetail = (s: string) =>
   s.length > 4000 ? s.slice(0, 4000) + "\n…(truncated)" : s;
 
-export function timelineFor(
-  id: string | null,
-  count: number
-): {
+// Full-file parse is cached by (file, mtime) so scrollback (full=true) doesn't
+// re-read the whole transcript on every poll — only when it actually changed.
+type Timeline = {
   id: string | null;
   items: TimelineItem[];
   project: string;
   contextTokens: number; // current context size = the last assistant entry's full usage
   lastWrite: number; // transcript mtime ms — drives the cache-warm countdown
-} {
+  more: boolean; // older items exist beyond what's returned (the tail was capped)
+};
+const fullTimelineCache = new Map<string, { mtime: number; result: Timeline }>();
+
+export function timelineFor(
+  id: string | null,
+  count: number,
+  // full → read the WHOLE file (scrollback) instead of the last TAIL_BYTES and
+  // return every item; cached by mtime so repeated/polled reads cost nothing.
+  full = false
+): Timeline {
   const sid = id ?? latestSessionId();
   if (!sid)
-    return { id: null, items: [], project: "", contextTokens: 0, lastWrite: 0 };
+    return { id: null, items: [], project: "", contextTokens: 0, lastWrite: 0, more: false };
   let text: string;
   let partial = false;
   let lastWrite = 0;
@@ -273,7 +282,11 @@ export function timelineFor(
     const file = sessionFilePath(sid);
     const st = fs.statSync(file);
     lastWrite = st.mtimeMs;
-    const startAt = Math.max(0, st.size - TAIL_BYTES);
+    if (full) {
+      const cached = fullTimelineCache.get(file);
+      if (cached && cached.mtime === st.mtimeMs) return cached.result;
+    }
+    const startAt = full ? 0 : Math.max(0, st.size - TAIL_BYTES);
     partial = startAt > 0;
     const fd = fs.openSync(file, "r");
     const buf = Buffer.alloc(st.size - startAt);
@@ -281,7 +294,7 @@ export function timelineFor(
     fs.closeSync(fd);
     text = buf.toString("utf8");
   } catch {
-    return { id: sid, items: [], project: "", contextTokens: 0, lastWrite: 0 };
+    return { id: sid, items: [], project: "", contextTokens: 0, lastWrite: 0, more: false };
   }
 
   const lines = text.split("\n");
@@ -406,7 +419,17 @@ export function timelineFor(
   }
 
   closeBlock(); // stamp the final (possibly in-flight) block
-  return { id: sid, items: items.slice(-count), project, contextTokens, lastWrite };
+  const result: Timeline = {
+    id: sid,
+    items: full ? items : items.slice(-count),
+    project,
+    contextTokens,
+    lastWrite,
+    more: !full && (partial || items.length > count),
+  };
+  if (full && lastWrite)
+    fullTimelineCache.set(sessionFilePath(sid), { mtime: lastWrite, result });
+  return result;
 }
 
 export type WorkingStatus = {
