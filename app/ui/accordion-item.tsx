@@ -42,6 +42,7 @@ export default function AccordionItem({
   claimedBy,
   index,
   label,
+  labelEditor,
   done = false,
   fillLabel = false,
   expandable,
@@ -71,6 +72,7 @@ export default function AccordionItem({
   // disclosure
   index?: number; // optional leading number; omit to hide
   label: string; // the draggable title
+  labelEditor?: ReactNode; // when set, replaces the title span (inline rename input)
   done?: boolean; // strike-through styling
   fillLabel?: boolean; // label flex-grows (no trailing control → copy sits right)
   expandable: boolean;
@@ -166,25 +168,27 @@ export default function AccordionItem({
               {index}.
             </span>
           )}
-          <span
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData(DND_TYPE, dragText);
-              e.dataTransfer.setData("text/plain", dragText);
-              e.dataTransfer.setData(DND_ID_TYPE, dragId);
-              e.dataTransfer.effectAllowed = "copyMove";
-              onDragStart();
-            }}
-            onDragEnd={onDragEnd}
-            title={label}
-            className={`min-w-0 ${
-              fillLabel ? "flex-1 " : ""
-            }cursor-grab truncate text-xs active:cursor-grabbing ${
-              done ? "text-zinc-600 line-through" : "text-zinc-200"
-            }`}
-          >
-            {label}
-          </span>
+          {labelEditor ?? (
+            <span
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(DND_TYPE, dragText);
+                e.dataTransfer.setData("text/plain", dragText);
+                e.dataTransfer.setData(DND_ID_TYPE, dragId);
+                e.dataTransfer.effectAllowed = "copyMove";
+                onDragStart();
+              }}
+              onDragEnd={onDragEnd}
+              title={label}
+              className={`min-w-0 ${
+                fillLabel ? "flex-1 " : ""
+              }cursor-grab truncate text-xs active:cursor-grabbing ${
+                done ? "text-zinc-600 line-through" : "text-zinc-200"
+              }`}
+            >
+              {label}
+            </span>
+          )}
           {onCopy && (
             <button
               onClick={(e) => {

@@ -15,10 +15,11 @@ function ago(ms: number): string {
   return `${Math.round(s / 86400)}d ago`;
 }
 
-// Projects landing, claude.ai-style: a header (title · sort · new), a search box,
-// then a card grid of sessions grouped by their derived project. Search + sort are
-// client-side over the server-provided list. "New project" is a placeholder until
-// curated projects (the ~/.claude/hq sidecar) land.
+// Projects landing, claude.ai-style (Components-page layout): a full-width search
+// box, then a hint row — "*Sessions grouped by project." left, the sort + new
+// buttons grouped right — then a card grid of sessions grouped by their derived
+// project. Search + sort are client-side over the server-provided list. "New
+// project" is a placeholder until curated projects (the ~/.claude/hq sidecar) land.
 export default function ProjectsView({
   projects,
 }: {
@@ -47,42 +48,49 @@ export default function ProjectsView({
   }, [projects, q, dir]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <div className="w-[325px] min-w-0">
-          <SearchField value={q} onChange={setQ} placeholder="Search projects…" />
+    <div className="@container flex min-h-0 flex-1 flex-col gap-3">
+      {/* Search header, components-page layout: full-width search, then a hint
+          row — text left, the sort + new buttons grouped on the right. */}
+      <div className="flex flex-col gap-1.5">
+        <SearchField value={q} onChange={setQ} placeholder="Search projects…" />
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] text-zinc-500">
+            *Sessions grouped by project.
+          </p>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              onClick={() => setDir((d) => (d === "new" ? "old" : "new"))}
+              title={
+                dir === "new"
+                  ? "Newest first — click for oldest"
+                  : "Oldest first — click for newest"
+              }
+              aria-label="Toggle sort order"
+              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <SortIcon dir={dir} />
+            </button>
+            <button
+              title="New project — curated projects coming next"
+              aria-label="New project"
+              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setDir((d) => (d === "new" ? "old" : "new"))}
-          title={
-            dir === "new"
-              ? "Newest first — click for oldest"
-              : "Oldest first — click for newest"
-          }
-          aria-label="Toggle sort order"
-          className="flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
-        >
-          <SortIcon dir={dir} />
-        </button>
-        <button
-          title="New project — curated projects coming next"
-          aria-label="New project"
-          className="flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </button>
       </div>
 
       {shown.length === 0 ? (
@@ -92,7 +100,7 @@ export default function ProjectsView({
             : "no projects yet — no sessions in the last 7 days"}
         </p>
       ) : (
-        <ul className="scrollbar-none grid min-h-0 flex-1 grid-cols-1 content-start gap-2 overflow-y-auto sm:grid-cols-2">
+        <ul className="scrollbar-none grid min-h-0 flex-1 grid-cols-1 content-start gap-2 overflow-y-auto @md:grid-cols-2">
           {shown.map((p) => (
             <li key={p.name}>
               <Link
@@ -100,13 +108,13 @@ export default function ProjectsView({
                 scroll={false}
                 className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2.5 transition-colors hover:border-zinc-600 hover:bg-zinc-900/40"
               >
-                <div className="flex items-baseline gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span
-                    className={`size-2 self-center rounded-full ${
+                    className={`size-2 shrink-0 rounded-full ${
                       p.active ? "bg-green-500" : "bg-zinc-700"
                     }`}
                   />
-                  <span className="truncate text-sm font-medium text-zinc-200">
+                  <span className="break-words text-sm font-medium text-zinc-200">
                     {p.name}
                   </span>
                   <span className="ml-auto shrink-0 font-mono text-[11px] text-zinc-600">
@@ -121,11 +129,6 @@ export default function ProjectsView({
           ))}
         </ul>
       )}
-
-      <p className="text-xs text-zinc-600">
-        sessions grouped by project — launch folder or an early code/&lt;slug&gt;
-        reference, last 7 days · auto-derived · green dot = active now
-      </p>
     </div>
   );
 }

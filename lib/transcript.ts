@@ -264,6 +264,7 @@ type Timeline = {
   items: TimelineItem[];
   project: string;
   contextTokens: number; // current context size = the last assistant entry's full usage
+  model: string; // raw model id of the latest assistant entry ("" if unknown)
   lastWrite: number; // transcript mtime ms — drives the cache-warm countdown
   more: boolean; // older items exist beyond what's returned (the tail was capped)
 };
@@ -278,7 +279,7 @@ export function timelineFor(
 ): Timeline {
   const sid = id ?? latestSessionId();
   if (!sid)
-    return { id: null, items: [], project: "", contextTokens: 0, lastWrite: 0, more: false };
+    return { id: null, items: [], project: "", contextTokens: 0, model: "", lastWrite: 0, more: false };
   let text: string;
   let partial = false;
   let lastWrite = 0;
@@ -298,7 +299,7 @@ export function timelineFor(
     fs.closeSync(fd);
     text = buf.toString("utf8");
   } catch {
-    return { id: sid, items: [], project: "", contextTokens: 0, lastWrite: 0, more: false };
+    return { id: sid, items: [], project: "", contextTokens: 0, model: "", lastWrite: 0, more: false };
   }
 
   const lines = text.split("\n");
@@ -310,6 +311,7 @@ export function timelineFor(
   const toolById = new Map<string, ToolItem>();
   let project = "";
   let contextTokens = 0;
+  let model = ""; // raw model id — last assistant entry wins (current model)
 
   // Per-block token burn: a block runs from one user prompt to the next. Output
   // tokens accumulate per API message id (max per id, summed — same math as
@@ -342,6 +344,7 @@ export function timelineFor(
     const at = e.timestamp ?? "";
 
     if (e.type === "assistant") {
+      if (typeof e.message?.model === "string") model = e.message.model;
       const u = e.message?.usage;
       if (u)
         contextTokens =
@@ -428,6 +431,7 @@ export function timelineFor(
     items: full ? items : items.slice(-count),
     project,
     contextTokens,
+    model,
     lastWrite,
     more: !full && (partial || items.length > count),
   };

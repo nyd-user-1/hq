@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
-import ButtonChipAction from "@/app/ui/button-chip-action";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
@@ -64,6 +63,35 @@ function fmtTokens(n: number): string {
 function fmtElapsed(s: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
+// Raw transcript model id → friendly send-box label. The transcript records ids
+// like "claude-opus-4-8" / "claude-sonnet-4-6" / "claude-haiku-4-5-20251001"
+// (the [1m] tier is a CLI launch flag, not in the data). Falls back to a cleaned id.
+function modelLabel(id: string): string {
+  if (!id) return "";
+  const m = id.toLowerCase();
+  const fam = m.includes("opus")
+    ? "Opus"
+    : m.includes("sonnet")
+      ? "Sonnet"
+      : m.includes("haiku")
+        ? "Haiku"
+        : m.includes("fable")
+          ? "Fable"
+          : "";
+  const two = m.match(/(\d+)[-.](\d+)/); // 4-8 → 4.8
+  const one = m.match(/(?:fable|opus|sonnet|haiku)-(\d+)\b/); // fable-5 → 5
+  if (fam && two) return `${fam} ${two[1]}.${two[2]}`;
+  if (fam && one) return `${fam} ${one[1]}`;
+  if (fam) return fam;
+  return id.replace(/^claude-/, "").replace(/-\d{8}$/, "").replace(/-/g, " ");
+}
+// Models offered by the send-box picker. The chosen id rides along on the send
+// as `claude --model <id>`, which sets the resumed session's model. Add more here.
+const MODELS: { id: string; desc: string }[] = [
+  { id: "claude-opus-4-8", desc: "most capable" },
+  { id: "claude-sonnet-4-6", desc: "balanced — fast everyday" },
+  { id: "claude-haiku-4-5-20251001", desc: "fastest, cheapest" },
+];
 function fmtAgo(ms: number): string {
   const m = Math.floor(ms / 60000);
   if (m < 1) return "just now";
@@ -341,6 +369,10 @@ export default function Terminal({
   const fileInputRef = useRef<HTMLInputElement>(null); // hidden picker behind the 📎 button
   const [error, setError] = useState<string | null>(null);
   const [contextTokens, setContextTokens] = useState(0);
+  const [model, setModel] = useState(""); // raw model id of the session's latest reply
+  const [chosenModel, setChosenModel] = useState<string | null>(null); // picker override → --model on sends
+  const [modelOpen, setModelOpen] = useState(false); // model dropdown open?
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const [focusMode, setFocusMode] = useState(false); // centered "conversation shell" toggle for a live session (the not-connected state forces it on)
@@ -438,6 +470,7 @@ export default function Terminal({
       }
       setStatus(d.status ?? null);
       setContextTokens(d.contextTokens ?? 0);
+      setModel(d.model ?? "");
       setLastWrite(d.lastWrite || null);
       setNow(Date.now());
     } catch {
@@ -478,10 +511,27 @@ export default function Terminal({
     setLineage(null);
     setStatus(null);
     setContextTokens(0);
+    setModel("");
     setLastWrite(null);
     setResume(null);
     setPredecessorCtx(0);
   }, [staged]);
+
+  // The model picker override is per-session — clear it when the pin changes.
+  useEffect(() => {
+    setChosenModel(null);
+  }, [pinned]);
+
+  // Close the model dropdown on an outside click.
+  useEffect(() => {
+    if (!modelOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node))
+        setModelOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [modelOpen]);
 
   // Backfill on mount and whenever the pinned session changes.
   useEffect(() => {
@@ -730,6 +780,7 @@ export default function Terminal({
         body: JSON.stringify({
           prompt,
           sessionId: target,
+          model: chosenModel ?? undefined, // picker override → claude --model
           images: imgs.map(({ data, mime }) => ({ data, mime })),
         }),
       });
@@ -815,6 +866,61 @@ export default function Terminal({
   const colWrap = centered
     ? "mx-auto flex w-full max-w-3xl flex-col gap-4 px-4"
     : "contents";
+  // The send (↑) button is live only when there's something to send to a real
+  // session; while a run is in flight it morphs into the red stop button.
+  const canSend =
+    !staged && !notConnected && (draft.trim() !== "" || attachments.length > 0);
+
+  // The cache + ctx meter. Lives top-right in the header normally; in the
+  // centered shell it drops to the footer row under the composer (right side).
+  const meter = (
+    <>
+      {cacheLeft !== null &&
+        (cacheLeft > 0 ? (
+          <span
+            className="font-mono text-[11px] text-amber-400"
+            title="prompt cache is warm — replying now reads history at ~10% price"
+          >
+            cache {Math.floor(cacheLeft / 60000)}:
+            {String(Math.floor((cacheLeft % 60000) / 1000)).padStart(2, "0")}
+          </span>
+        ) : (
+          <span
+            className="font-mono text-[11px] text-zinc-600"
+            title="prompt cache expired — the next message re-reads the full history"
+          >
+            cache cold
+          </span>
+        ))}
+      {contextTokens > 0 && (
+        <span
+          className="font-mono text-[11px] text-zinc-500"
+          title={`~${ctxLeftPct}% of your 1M window left — ${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} used (mirrors the CLI's ctx %)`}
+        >
+          ctx {ctxLeftPct}%
+        </span>
+      )}
+      {/* ctx bar (hidden until 75% — near-empty most of a 1M session); the
+          ctx number itself sits just left of it. */}
+      {contextTokens > 0 && ctxPct >= 75 && (
+        <span
+          className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800"
+          title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} · the tick at ${fmtTokens(PRICING_CLIFF)} is the long-context pricing cliff (~2× input)`}
+        >
+          <span
+            className={`absolute inset-y-0 left-0 ${
+              ctxPct >= 80 ? "bg-red-500" : "bg-amber-500"
+            }`}
+            style={{ width: `${Math.min(100, ctxPct)}%` }}
+          />
+          <span
+            className="absolute inset-y-0 w-px bg-amber-400/60"
+            style={{ left: `${cliffPct}%` }}
+          />
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -974,50 +1080,9 @@ export default function Terminal({
               focus{focusMode ? " ✓" : ""}
             </button>
           )}
-          {cacheLeft !== null &&
-            (cacheLeft > 0 ? (
-              <span
-                className="font-mono text-[11px] text-amber-400"
-                title="prompt cache is warm — replying now reads history at ~10% price"
-              >
-                cache {Math.floor(cacheLeft / 60000)}:
-                {String(Math.floor((cacheLeft % 60000) / 1000)).padStart(2, "0")}
-              </span>
-            ) : (
-              <span
-                className="font-mono text-[11px] text-zinc-600"
-                title="prompt cache expired — the next message re-reads the full history"
-              >
-                cache cold
-              </span>
-            ))}
-          {contextTokens > 0 && (
-            <span
-              className="font-mono text-[11px] text-zinc-500"
-              title={`~${ctxLeftPct}% of your 1M window left — ${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} used (mirrors the CLI's ctx %)`}
-            >
-              ctx {ctxLeftPct}%
-            </span>
-          )}
-          {/* ctx bar (hidden until 75% — near-empty most of a 1M session); the
-              ctx number itself sits just left of it. */}
-          {contextTokens > 0 && ctxPct >= 75 && (
-            <span
-              className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800"
-              title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} · the tick at ${fmtTokens(PRICING_CLIFF)} is the long-context pricing cliff (~2× input)`}
-            >
-              <span
-                className={`absolute inset-y-0 left-0 ${
-                  ctxPct >= 80 ? "bg-red-500" : "bg-amber-500"
-                }`}
-                style={{ width: `${Math.min(100, ctxPct)}%` }}
-              />
-              <span
-                className="absolute inset-y-0 w-px bg-amber-400/60"
-                style={{ left: `${cliffPct}%` }}
-              />
-            </span>
-          )}
+          {/* meter rides here normally; in the centered shell it moves to the
+              footer under the composer (right-aligned). */}
+          {!centered && meter}
         </span>
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -1419,36 +1484,160 @@ export default function Terminal({
             }}
           />
           <div className="flex w-full items-center gap-2">
-            <ButtonChipAction
-              label="attach"
-              ariaLabel="Attach"
-              title="attach a screenshot — pasting or dropping an image works too"
+            {/* attach — the Projects panel's bare-icon (+) button, reused for a
+                consistent design; keeps its attach-a-screenshot function. */}
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-            />
-            <ButtonChipAction
-              label="todo"
-              accent="text-violet-300"
-              title="add this as a to-do on your HQ list"
-              onClick={todoDraft}
-            />
-            {sending && (
-              <button
-                onClick={stopSend}
-                title="kill the HQ-spawned headless run"
-                className="ml-auto shrink-0 rounded-md border border-red-500/50 px-2.5 py-1 text-xs text-red-400 transition-colors hover:border-red-400 hover:text-red-300"
+              aria-label="Attach"
+              title="attach a screenshot — pasting or dropping an image works too"
+              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                stop
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+            {/* right cluster, bottom-right: model + todo + send (send morphs to stop). */}
+            <div className="ml-auto flex items-center gap-1">
+              {/* model picker — defaults to the model read from the transcript;
+                  your pick rides on the send as `claude --model <id>`, which sets
+                  the resumed session's model. Dropdown opens up-and-right. */}
+              {!staged && !notConnected && (
+                <div ref={modelMenuRef} className="relative min-w-0 shrink">
+                  <button
+                    type="button"
+                    onClick={() => setModelOpen((o) => !o)}
+                    title="model for this session — applied via claude --model on your next send"
+                    className="flex max-w-full items-center rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                  >
+                    <span className="truncate">
+                      {modelLabel(chosenModel ?? model) || "model"}
+                    </span>
+                  </button>
+                  {modelOpen && (
+                    <div className="absolute bottom-full right-0 z-30 mb-1 w-60 whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-950 py-1 shadow-xl">
+                      {MODELS.map((m) => {
+                        const active =
+                          modelLabel(m.id) === modelLabel(chosenModel ?? model);
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              setChosenModel(m.id);
+                              setModelOpen(false);
+                            }}
+                            className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left transition-colors hover:bg-zinc-900"
+                          >
+                            <span className="flex flex-col">
+                              <span
+                                className={`font-mono text-xs ${
+                                  active ? "text-zinc-100" : "text-zinc-300"
+                                }`}
+                              >
+                                {modelLabel(m.id)}
+                              </span>
+                              <span className="font-mono text-[10px] text-zinc-600">
+                                {m.desc}
+                              </span>
+                            </span>
+                            {active && <span className="shrink-0 text-blue-400">✓</span>}
+                          </button>
+                        );
+                      })}
+                      <p className="mt-1 border-t border-zinc-800 px-3 pb-0.5 pt-1.5 font-mono text-[10px] text-zinc-600">
+                        applied on your next send
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* todo — same icon-button standard, lucide list-todo glyph. */}
+              <button
+                type="button"
+                onClick={todoDraft}
+                aria-label="Add to-do"
+                title="add this as a to-do on your HQ list"
+                className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="5" width="6" height="6" rx="1" />
+                  <path d="m3 17 2 2 4-4" />
+                  <path d="M13 6h8" />
+                  <path d="M13 12h8" />
+                  <path d="M13 18h8" />
+                </svg>
               </button>
-            )}
+              {/* send (↑) → while a run is in flight, becomes the red stop button
+                  with the traditional white square. */}
+              {sending ? (
+                <button
+                  type="button"
+                  onClick={stopSend}
+                  aria-label="Stop"
+                  title="stop — kill the HQ-spawned run"
+                  className="flex shrink-0 items-center rounded-md border border-red-500/70 bg-red-500/20 p-1.5 text-red-50 transition-colors hover:bg-red-500/30"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={doSend}
+                  disabled={!canSend}
+                  aria-label="Send"
+                  title="send (↵)"
+                  className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m5 12 7-7 7 7" />
+                    <path d="M12 19V5" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
-      {/* Tagline footer — HQ's analog to claude.ai's disclaimer line, shown
-          whenever the centered shell is on (not-connected onboarding + focus). */}
+      {/* Footer row under the composer (centered shell only): the tagline,
+          left-aligned, with the cache/ctx meter inline on the right. */}
       {centered && (
-        <p className="text-center font-mono text-[11px] text-zinc-600">
-          Your disk is a database. HQ helps you read it.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-mono text-[11px] text-zinc-600">
+          <span>HQ: The disk is the database.</span>
+          <span className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {meter}
+          </span>
+        </div>
       )}
       </div>
     </div>

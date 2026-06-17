@@ -18,6 +18,11 @@ export default function AccordionTodoItem({
   reorderEnabled,
   dragSourceId,
   dropEdge,
+  editing = false,
+  editValue = "",
+  onEditChange,
+  onEditCommit,
+  onEditCancel,
   onToggleExpand,
   onToggleDone,
   onCopy,
@@ -32,6 +37,11 @@ export default function AccordionTodoItem({
   reorderEnabled: boolean;
   dragSourceId: string | null;
   dropEdge: "before" | "after" | null;
+  editing?: boolean; // inline title edit (freshly added "+" todo)
+  editValue?: string;
+  onEditChange?: (v: string) => void;
+  onEditCommit?: () => void;
+  onEditCancel?: () => void;
   onToggleExpand: () => void;
   onToggleDone: () => void;
   onCopy: () => void;
@@ -75,6 +85,23 @@ export default function AccordionTodoItem({
       tag={cat ? { label: cat.label, chipClass: cat.chip } : undefined}
       claimedBy={t.claimedBy}
       label={t.text}
+      labelEditor={
+        editing ? (
+          <input
+            autoFocus
+            value={editValue}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onEditChange?.(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onEditCommit?.();
+              if (e.key === "Escape") onEditCancel?.();
+            }}
+            onBlur={() => onEditCommit?.()}
+            placeholder="name this to-do — ↵ save · esc cancel"
+            className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+          />
+        ) : undefined
+      }
       done={t.done}
       expandable={expandable}
       open={open}

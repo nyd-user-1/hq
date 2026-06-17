@@ -74,7 +74,12 @@ async function writeImages(images: InboundImage[]): Promise<string[]> {
 // `@<path>` mentions so Claude reads them as vision, all on the same one-shot
 // `-p` path (no stream-json, no extra deps).
 export async function POST(req: Request) {
-  const { prompt, sessionId, images } = await req.json();
+  const { prompt, sessionId, images, model } = await req.json();
+  // Optional model override for this send → `claude --model <m>`. The CLI docs
+  // it as "model for the current session", so it sets the resumed session's
+  // model. Validated to a safe token (execFile is shell-free, but reject junk).
+  const useModel =
+    typeof model === "string" && /^[a-z0-9.\-]{1,64}$/i.test(model) ? model : "";
   const imgs: InboundImage[] = Array.isArray(images)
     ? images.filter(
         (i) => i && typeof i.data === "string" && typeof i.mime === "string"
@@ -113,7 +118,13 @@ export async function POST(req: Request) {
     const out = await new Promise<string>((resolve, reject) => {
       const child = execFile(
         "claude",
-        ["--resume", sessionId, "-p", finalPrompt],
+        [
+          "--resume",
+          sessionId,
+          ...(useModel ? ["--model", useModel] : []),
+          "-p",
+          finalPrompt,
+        ],
         {
           cwd: process.env.HOME,
           timeout: 590_000,

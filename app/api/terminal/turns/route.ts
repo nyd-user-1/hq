@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   }
   // ?full=1 = scrollback: the whole transcript (cached) instead of the last-24 tail.
   const full = url.searchParams.get("full") === "1";
-  const { id: resolved, items, project, contextTokens, lastWrite, more } =
+  const { id: resolved, items, project, contextTokens, model, lastWrite, more } =
     timelineFor(target, 24, full);
   const status = workingStatus(resolved);
   // A fresh session (only local-command records, e.g. right after /clear) gets
@@ -63,6 +63,7 @@ export async function GET(req: Request) {
     project,
     status,
     contextTokens,
+    model,
     lastWrite,
     more,
     resume,
