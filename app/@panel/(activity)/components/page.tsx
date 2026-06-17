@@ -4,6 +4,7 @@ import {
   orderedComponents,
   readComponentSource,
   componentId,
+  undiscoveredComponents,
   REGISTRY_SESSION,
   REGISTRY_CREATED_AT,
 } from "@/lib/components";
@@ -25,7 +26,7 @@ export default function Components() {
   }));
   return (
     <Boundary topOnly bleedX label="@panel/(activity)/components/page.tsx">
-      <ComponentsList items={items} />
+      <ComponentsList items={items} undiscovered={undiscoveredComponents()} />
     </Boundary>
   );
 }

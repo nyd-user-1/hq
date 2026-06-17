@@ -8,11 +8,23 @@ import {
   warmIndex,
 } from "./archive";
 import { NOTES_DIR, noteTitle } from "./notes";
+import { getRecentSessions, getSdkSessions, type RecentSession } from "./sessions";
+import { getShipped, type Ship } from "./shipped";
+import { getTodos } from "./todo";
+import { getProjects } from "./projects";
+import { getSkills } from "./skills";
+import { getFiles } from "./files";
+import { COMPONENTS, REGISTRY_CREATED_AT } from "./components";
 
-// Full-text search over the two things HQ can see: transcripts (EVERY session
-// ever, via the all-time persisted index in lib/archive.ts) and memory
-// (~/.claude/projects/-Users-brendanstanton/memory/*.md). Substring/token match
-// with a context snippet, ranked by occurrence count.
+// Universal search over everything HQ can see. Two flavors of corpus:
+//  • CONTENT — full text of the thing (transcripts via the persisted index;
+//    memory / notes / scripts read live).
+//  • METADATA — the thing's identity, not its body (sessions/sdk by title +
+//    project + branch; files by path; components by name + desc; commits by
+//    message; todos by text + body; projects by name; skills by name + desc).
+// "transcripts" (conversation body) and "sessions" (session identity) are
+// deliberately separate scopes — a different search, honestly labelled.
+// Substring/token match with a context snippet, ranked newest-first.
 
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
 const MEMORY_DIR = path.join(
@@ -29,20 +41,65 @@ const isScript = (name: string) => SCRIPT_EXTS.some((e) => name.endsWith(e));
 export type SearchScope =
   | "all"
   | "transcripts"
+  | "sessions"
+  | "sdk"
+  | "files"
+  | "components"
+  | "commits"
+  | "todos"
+  | "projects"
   | "memory"
   | "notes"
-  | "scripts";
+  | "scripts"
+  | "skills";
+
+export type SearchKind =
+  | "transcript"
+  | "session"
+  | "sdk"
+  | "file"
+  | "component"
+  | "commit"
+  | "todo"
+  | "project"
+  | "memory"
+  | "note"
+  | "script"
+  | "skill";
+
+// All scopes except the "all" umbrella — the literal source for the chip row +
+// the param validator, so adding a corpus is one edit here, not three.
+export const SCOPES: { value: SearchScope; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "sessions", label: "Sessions" },
+  { value: "transcripts", label: "Transcripts" },
+  { value: "sdk", label: "SDK" },
+  { value: "files", label: "Files" },
+  { value: "components", label: "Components" },
+  { value: "commits", label: "Commits" },
+  { value: "todos", label: "Todos" },
+  { value: "projects", label: "Projects" },
+  { value: "notes", label: "Notes" },
+  { value: "memory", label: "Memory" },
+  { value: "scripts", label: "Scripts" },
+  { value: "skills", label: "Skills" },
+];
+
 export type SortDir = "new" | "old"; // result order: newest-first (default) / oldest-first
 
 export type SearchHit = {
-  kind: "transcript" | "memory" | "note" | "script";
-  /** transcript: session id (click pins the terminal); memory/note/script: file name */
+  kind: SearchKind;
+  /** the click target — transcript/session/sdk: session id; file: repo-rel path;
+   * component: name; commit: repo/sha; todo: id; project: name; skill: SKILL.md
+   * path; memory/note/script: file name */
   ref: string;
   title: string;
   snippet: string;
   at: number; // last-touched ms
   score: number;
   phrase: boolean; // true = contiguous-phrase hit (the narrowing tier)
+  path?: string; // file path for the footer (file/component/script/skill); click-to-copy
+  meta?: string; // small footer descriptor (ext · project · repo · category · /skill)
 };
 
 // Normalized query tokens: lowercase, split on any non-alphanumeric run, so
@@ -187,6 +244,189 @@ function searchScripts(toks: string[]): SearchHit[] {
   return hits;
 }
 
+// score one metadata string (vs. a whole document) against the query tokens.
+const sc = (text: string, toks: string[]) => scoreNorm(normalize(text), toks);
+
+// Sessions / SDK — match a session by its IDENTITY (title · project · branch ·
+// id), not its transcript body (that's the "transcripts" scope). `kind` keeps
+// the two honest. Click opens the transcript reader (same as a transcript hit).
+function searchSessionRows(
+  rows: RecentSession[],
+  kind: "session" | "sdk",
+  toks: string[]
+): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const s of rows) {
+    const title = s.customTitle || s.title || s.project;
+    const mt = sc([title, s.project, s.branch, s.id].filter(Boolean).join(" "), toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind,
+      ref: s.id,
+      title,
+      snippet: `${s.project}${s.branch ? " · " + s.branch : ""}`,
+      at: s.lastActive,
+      score: mt.score,
+      phrase: mt.phrase,
+      meta: s.project,
+    });
+  }
+  return hits;
+}
+
+// Files — match a file by its repo-relative PATH (name + dirs + ext). v1 is
+// name/path search; full content grep is the deferred v2. normalize() splits
+// "planner-panel.tsx" → "planner panel tsx", so "planner", "tsx", or the phrase
+// "planner panel" all hit.
+function searchFilesCorpus(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const f of getFiles()) {
+    const mt = sc(f.rel, toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "file",
+      ref: f.rel,
+      title: f.name,
+      snippet: f.rel,
+      at: f.mtime,
+      score: mt.score,
+      phrase: mt.phrase,
+      path: f.rel,
+      meta: f.ext ? "." + f.ext : "",
+    });
+  }
+  return hits;
+}
+
+// Components — match the registry by name + description + file (NOT source; that
+// rides with the deferred file-content v2). Click opens the component source.
+function searchComponentsCorpus(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const c of COMPONENTS) {
+    const mt = sc(`${c.name} ${c.desc} ${c.file}`, toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "component",
+      ref: c.name,
+      title: c.name,
+      snippet: c.desc,
+      at: REGISTRY_CREATED_AT,
+      score: mt.score,
+      phrase: mt.phrase,
+      path: c.file,
+      meta: c.status,
+    });
+  }
+  return hits;
+}
+
+// Commits — `git log` across ~/code is the one expensive read here (~1-2s), so
+// memoize it: a 10s in-process TTL covers a burst of searches without re-shelling.
+let shippedCache: { at: number; ships: Ship[] } | null = null;
+function cachedShipped(): Ship[] {
+  const now = Date.now();
+  if (shippedCache && now - shippedCache.at < 10000) return shippedCache.ships;
+  const ships = getShipped(200, 30);
+  shippedCache = { at: now, ships };
+  return ships;
+}
+
+function searchCommits(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const s of cachedShipped()) {
+    const mt = sc(`${s.subject} ${s.body}`, toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "commit",
+      ref: `${s.repo}/${s.sha}`,
+      title: s.subject,
+      snippet: s.body || s.subject,
+      at: s.at,
+      score: mt.score,
+      phrase: mt.phrase,
+      meta: s.repo,
+    });
+  }
+  return hits;
+}
+
+// Todos — top-level only (sub-items are noise here). Match text + body + tags.
+function searchTodos(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const t of getTodos()) {
+    if (t.parentId) continue;
+    const cats = (t.categories ?? []).join(" ");
+    const mt = sc(`${t.text} ${t.body ?? ""} ${t.category ?? ""} ${cats}`, toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "todo",
+      ref: t.id,
+      title: t.text,
+      snippet: t.body ? snippetAround(t.body, toks[0]) : t.done ? "done" : "open",
+      at: t.createdAt,
+      score: mt.score,
+      phrase: mt.phrase,
+      meta: t.done ? "done" : t.category ?? "open",
+    });
+  }
+  return hits;
+}
+
+// Projects — match the derived project name. Click lists the project's sessions.
+function searchProjects(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const p of getProjects()) {
+    const mt = sc(p.name, toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "project",
+      ref: p.name,
+      title: p.name,
+      snippet: `${p.sessions} session${p.sessions === 1 ? "" : "s"}`,
+      at: p.lastActive,
+      score: mt.score,
+      phrase: mt.phrase,
+      meta: `${p.sessions}`,
+    });
+  }
+  return hits;
+}
+
+// Skills — match name + title + description + arg hint. Click opens SKILL.md.
+function searchSkills(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const k of getSkills()) {
+    const mt = sc(`${k.name} ${k.title} ${k.description} ${k.argHint}`, toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "skill",
+      ref: k.path,
+      title: k.title,
+      snippet: k.description || `/${k.name}`,
+      at: k.mtime,
+      score: mt.score,
+      phrase: mt.phrase,
+      path: k.path,
+      meta: `/${k.name}`,
+    });
+  }
+  return hits;
+}
+
+// A session as a zero-score recent card (the empty-state browse).
+function sessionRecent(s: RecentSession, kind: "session" | "sdk"): SearchHit {
+  return {
+    kind,
+    ref: s.id,
+    title: s.customTitle || s.title || s.project,
+    snippet: `${s.project}${s.branch ? " · " + s.branch : ""}`,
+    at: s.lastActive,
+    score: 0,
+    phrase: false,
+    meta: s.project,
+  };
+}
+
 export function search(
   query: string,
   scope: SearchScope = "all",
@@ -207,12 +447,29 @@ export function search(
   const m = scope === "all" || scope === "memory" ? searchMemory(toks) : [];
   const n = scope === "all" || scope === "notes" ? searchNotes(toks) : [];
   const s = scope === "all" || scope === "scripts" ? searchScripts(toks) : [];
+  const sess =
+    scope === "all" || scope === "sessions"
+      ? searchSessionRows(getRecentSessions(1000), "session", toks)
+      : [];
+  const sdk =
+    scope === "all" || scope === "sdk"
+      ? searchSessionRows(getSdkSessions(200), "sdk", toks)
+      : [];
+  const fil = scope === "all" || scope === "files" ? searchFilesCorpus(toks) : [];
+  const comp = scope === "all" || scope === "components" ? searchComponentsCorpus(toks) : [];
+  const com = scope === "all" || scope === "commits" ? searchCommits(toks) : [];
+  const td = scope === "all" || scope === "todos" ? searchTodos(toks) : [];
+  const proj = scope === "all" || scope === "projects" ? searchProjects(toks) : [];
+  const sk = scope === "all" || scope === "skills" ? searchSkills(toks) : [];
 
   // Phrase is a hard tier: if the contiguous phrase matched anywhere, show ONLY
   // phrase hits — searching a full phrase is a NARROWING act (find the needle),
   // so scattered-term cards are noise. AND-of-tokens results survive only when
   // the phrase appears nowhere (e.g. two words never adjacent).
-  const all = [...t.hits, ...m, ...n, ...s];
+  const all = [
+    ...t.hits, ...m, ...n, ...s,
+    ...sess, ...sdk, ...fil, ...comp, ...com, ...td, ...proj, ...sk,
+  ];
   const anyPhrase = all.some((h) => h.phrase);
   // Default newest-first; the UI toggle flips to oldest-first (so the ORIGINAL
   // occurrence of a phrase rises to the top). Recency is primary; score breaks
@@ -328,6 +585,94 @@ export function recent(
       }
     }
   }
+  // Time-meaningful corpora join the default "all" browse; reference corpora
+  // (files/components/projects/skills) surface only when their scope is picked,
+  // so the empty state stays a recency feed, not a registry dump.
+  if (scope === "all" || scope === "sessions")
+    for (const s of getRecentSessions(40)) out.push(sessionRecent(s, "session"));
+  if (scope === "all" || scope === "sdk")
+    for (const s of getSdkSessions(40)) out.push(sessionRecent(s, "sdk"));
+  if (scope === "all" || scope === "todos")
+    for (const t of getTodos()) {
+      if (t.parentId) continue;
+      out.push({
+        kind: "todo",
+        ref: t.id,
+        title: t.text,
+        snippet: t.body
+          ? t.body.split("\n").find((l) => l.trim()) ?? ""
+          : t.done
+            ? "done"
+            : "open",
+        at: t.createdAt,
+        score: 0,
+        phrase: false,
+        meta: t.done ? "done" : t.category ?? "open",
+      });
+    }
+  if (scope === "all" || scope === "commits")
+    for (const s of cachedShipped().slice(0, 40))
+      out.push({
+        kind: "commit",
+        ref: `${s.repo}/${s.sha}`,
+        title: s.subject,
+        snippet: s.body || s.subject,
+        at: s.at,
+        score: 0,
+        phrase: false,
+        meta: s.repo,
+      });
+  if (scope === "files")
+    for (const f of [...getFiles()].sort((a, b) => b.mtime - a.mtime).slice(0, limit))
+      out.push({
+        kind: "file",
+        ref: f.rel,
+        title: f.name,
+        snippet: f.rel,
+        at: f.mtime,
+        score: 0,
+        phrase: false,
+        path: f.rel,
+        meta: f.ext ? "." + f.ext : "",
+      });
+  if (scope === "components")
+    for (const c of COMPONENTS)
+      out.push({
+        kind: "component",
+        ref: c.name,
+        title: c.name,
+        snippet: c.desc,
+        at: REGISTRY_CREATED_AT,
+        score: 0,
+        phrase: false,
+        path: c.file,
+        meta: c.status,
+      });
+  if (scope === "projects")
+    for (const p of getProjects())
+      out.push({
+        kind: "project",
+        ref: p.name,
+        title: p.name,
+        snippet: `${p.sessions} session${p.sessions === 1 ? "" : "s"}`,
+        at: p.lastActive,
+        score: 0,
+        phrase: false,
+        meta: `${p.sessions}`,
+      });
+  if (scope === "skills")
+    for (const k of getSkills())
+      out.push({
+        kind: "skill",
+        ref: k.path,
+        title: k.title,
+        snippet: k.description || `/${k.name}`,
+        at: k.mtime,
+        score: 0,
+        phrase: false,
+        path: k.path,
+        meta: `/${k.name}`,
+      });
   const dir = sort === "old" ? 1 : -1;
   return out.sort((a, b) => dir * (a.at - b.at)).slice(0, limit);
 }

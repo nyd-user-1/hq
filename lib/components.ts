@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { createHash } from "node:crypto";
+import { getFiles } from "./files";
 
 // The HQ component registry — hand-curated (approval is a human judgment, not
 // something you can derive from disk). APPROVED = reviewed, named per the
@@ -111,6 +112,21 @@ function readOrder(): string[] {
 export function saveComponentsOrder(order: string[]): void {
   fs.mkdirSync(path.dirname(ORDER_FILE), { recursive: true });
   fs.writeFileSync(ORDER_FILE, JSON.stringify({ order }, null, 2));
+}
+
+// Auto-discovery — every app/ui/*.tsx that ISN'T in the hand-curated registry
+// yet, surfaced via the shared file index (lib/files.ts). This is the registry's
+// "review backlog": the index finds candidates automatically so the curated list
+// stops silently lagging the directory. Promotion into COMPONENTS stays a human
+// act (approval is judgment, not derivable from disk).
+export function undiscoveredComponents(): { file: string; name: string }[] {
+  const known = new Set(COMPONENTS.map((c) => c.file));
+  return getFiles()
+    .filter(
+      (f) => f.rel.startsWith("app/ui/") && f.ext === "tsx" && !known.has(f.rel)
+    )
+    .map((f) => ({ file: f.rel, name: f.name.replace(/\.tsx$/, "") }))
+    .sort((a, b) => a.file.localeCompare(b.file));
 }
 
 // Registry in the saved display order; names absent from the sidecar keep their

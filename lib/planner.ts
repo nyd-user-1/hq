@@ -3,12 +3,14 @@ import {
   planBatches,
   summarizePlan,
   batchCost,
+  soloCost,
   type TaskNode,
   type CostParams,
   type Plan,
   type PlanSummary,
 } from "./batch-planner";
 import { coldContext, fileTokens, type ColdContext } from "./calibration";
+import { resolveFile } from "./files";
 import { getPlanConfig, isApiTier, type PlanConfig } from "./plan-config";
 import { getForecast, modelWeight } from "./usage";
 
@@ -50,6 +52,17 @@ export type ThroughputView = {
   planPctOfRemaining: number; // share of the remaining window one run consumes (0..1+)
 };
 
+// One chip in a batch's "files" row — the evaluator's guessed path, RESOLVED
+// against the real tree (lib/files.ts). `exists` lets the panel mark a real file
+// (copyable) vs. a hallucinated path (struck) — an honest quality signal on the
+// evaluator, not a link to a file we can't confirm exists.
+export type BatchFile = {
+  name: string; // basename for display
+  copy: string; // path to click-to-copy (resolved repo-rel, else the raw guess)
+  exists: boolean; // resolved to a real file on disk
+  ambiguous: boolean; // basename matched >1 file (best-guess shown)
+};
+
 // One batch, enriched for the panel: the files it touches, its cost, and turns —
 // so a batch card reads like a session card (cost · turns · files), not a bare list.
 export type BatchDetail = {
@@ -57,8 +70,10 @@ export type BatchDetail = {
   stage: number;
   serialAfter?: string;
   taskIds: string[];
-  files: string[];
-  usd: number; // seat-scaled, p50 cold-context
+  files: BatchFile[];
+  usd: number; // batch cost, seat-scaled, p50 cold-context
+  savings: number; // un-batched − batched for THIS batch's tasks, seat-scaled
+  outTokens: number; // Σ estimated output tokens (the batch's generation size)
   weighted: number;
   premiumTurns: number;
 };
@@ -151,14 +166,30 @@ export function buildPlannerView(): PlannerView {
   const p50params = params(cold.p50);
   const batches: BatchDetail[] = plan.batches.map((b) => {
     const c = batchCost(b.taskIds, byId, p50params);
-    const files = [
+    let soloUsd = 0;
+    let outTokens = 0;
+    for (const id of b.taskIds) {
+      const t = byId.get(id);
+      if (!t) continue;
+      soloUsd += soloCost(t, p50params).usd;
+      outTokens += t.effort;
+    }
+    const files: BatchFile[] = [
       ...new Set(
         b.taskIds.flatMap((id) => {
           const t = byId.get(id);
           return t ? [...t.writes, ...t.reads] : [];
         })
       ),
-    ];
+    ].map((raw) => {
+      const r = resolveFile(raw);
+      return {
+        name: (r.rel ?? raw).split("/").pop() || raw,
+        copy: r.rel ?? raw,
+        exists: r.exists,
+        ambiguous: r.ambiguous,
+      };
+    });
     return {
       id: b.id,
       stage: b.stage,
@@ -166,6 +197,8 @@ export function buildPlannerView(): PlannerView {
       taskIds: b.taskIds,
       files,
       usd: c.usd * seats,
+      savings: (soloUsd - c.usd) * seats,
+      outTokens,
       weighted: c.weighted,
       premiumTurns: c.premiumTurns,
     };

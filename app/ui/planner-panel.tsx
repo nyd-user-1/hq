@@ -252,10 +252,24 @@ export default function PlannerPanel() {
     return (id: string) => m.get(id) ?? id;
   }, [view]);
 
+  // 1-indexed batch number WITHIN each stage (so it reads "Stage 1 · Batch 1/2…",
+  // not a cryptic global "S0").
+  const batchNum = useMemo(() => {
+    const counts: Record<number, number> = {};
+    const m = new Map<string, number>();
+    for (const b of view?.batches ?? []) {
+      counts[b.stage] = (counts[b.stage] ?? 0) + 1;
+      m.set(b.id, counts[b.stage]);
+    }
+    return m;
+  }, [view]);
+
   const runPrompt = useCallback(
     (b: PlannerView["batches"][number]) => {
       const lines = b.taskIds.map((id) => `- ${titleOf(id)} (${id})`).join("\n");
-      const files = b.files.length ? `\n\nShared files: ${b.files.join(", ")}` : "";
+      const files = b.files.length
+        ? `\n\nShared files: ${b.files.map((f) => f.copy).join(", ")}`
+        : "";
       return `Work these to-dos together in one warm session (batched for shared context):\n${lines}${files}`;
     },
     [titleOf]
@@ -308,7 +322,7 @@ export default function PlannerPanel() {
             </div>
           </div>
         ) : (
-          <div className="flex min-w-0 flex-col gap-3.5">
+          <div className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-3.5 overflow-y-auto">
             {/* ── STATUS BAR ── */}
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex items-center gap-2">
@@ -484,105 +498,151 @@ export default function PlannerPanel() {
               </div>
             </div>
 
-            {/* ── PIPELINE (session-card-grade, actionable) ── */}
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className={LABEL}>
-                  {view.batches.length} batches · {view.plan.stages} stage
-                  {view.plan.stages > 1 ? "s" : ""}
-                  {view.plan.cyclic.length > 0 && ` · ${view.plan.cyclic.length} cyclic`}
-                </span>
-              </div>
-              <p className="font-mono text-[9px] leading-relaxed text-zinc-600">
-                drag a batch into a terminal — it FILLS the send box with a ready prompt for you
-                to review; you hit send. nothing auto-runs. (or copy it.)
-              </p>
+            {/* ── PIPELINE ── */}
+            <div className="flex min-w-0 flex-col">
+              <span className={LABEL}>
+                {view.batches.length} batches · {view.plan.stages} stage
+                {view.plan.stages > 1 ? "s" : ""}
+                {view.plan.cyclic.length > 0 && ` · ${view.plan.cyclic.length} cyclic`}
+              </span>
               {view.batches.map((b, i) => {
-                const isOpen = openBatch === b.id;
+                const isOpen = openBatch === b.id; // bullets dropdown
+                const isFiles = filesBatch === b.id; // files dropdown
                 return (
                   <div
                     key={b.id}
                     draggable
+                    title="drag into a terminal to stage its prompt in the send box"
                     onDragStart={(e) => {
                       const p = runPrompt(b);
                       e.dataTransfer.setData("text/plain", p);
                       e.dataTransfer.setData(DND_TODO, p);
                       e.dataTransfer.effectAllowed = "copy";
                     }}
-                    className="group min-w-0 cursor-grab rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50 active:cursor-grabbing"
+                    className={`group flex min-h-20 min-w-0 cursor-grab flex-col rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50 active:cursor-grabbing ${
+                      i === 0 ? "mt-3 mb-1.5" : "my-1.5"
+                    }`}
                     style={{ animation: "pl-rise .4s ease both", animationDelay: `${i * 45}ms` }}
                   >
-                    {/* header — click toggles the accordion */}
+                    {/* header — Batch (h2) over Stage (caption); savings is the h1.
+                        Click anywhere on it to toggle the task bullets. */}
                     <div
                       onClick={() => setOpenBatch(isOpen ? null : b.id)}
-                      className="flex min-w-0 cursor-pointer items-center gap-2 font-mono text-[10px]"
+                      className="flex min-w-0 cursor-pointer items-start justify-between gap-2"
                     >
+                      <div className="flex min-w-0 flex-col">
+                        <span className="font-mono text-sm font-semibold text-zinc-100">
+                          Batch {batchNum.get(b.id)}
+                        </span>
+                        <span className="font-mono text-[9px] uppercase tracking-widest text-orange-400">
+                          Stage {b.stage + 1}
+                          {b.serialAfter && (
+                            <span className="text-amber-400/70">
+                              {" "}
+                              · after batch {batchNum.get(b.serialAfter) ?? "?"}
+                            </span>
+                          )}
+                        </span>
+                      </div>
                       <span
-                        className={`select-none text-[9px] text-zinc-500 transition-transform ${
-                          isOpen ? "rotate-90" : ""
-                        }`}
+                        className="shrink-0 font-mono text-lg font-bold text-emerald-300"
+                        title="saved by batching vs running these un-batched"
                       >
-                        ▶
-                      </span>
-                      <span className="text-orange-400">S{b.stage}</span>
-                      <span className="uppercase tracking-wide text-zinc-400">batch {i + 1}</span>
-                      {b.serialAfter && (
-                        <span className="text-amber-400/70">after {b.serialAfter}</span>
-                      )}
-                      <span className="ml-auto flex items-center gap-2 text-zinc-500">
-                        <span className="text-orange-300">{usd(b.usd)}</span>
-                        <span>{b.taskIds.length}t</span>
+                        {usd(b.savings)}
                       </span>
                     </div>
-                    {/* task bullets — always visible */}
-                    <ul className="mt-1.5 flex min-w-0 flex-col gap-0.5">
-                      {b.taskIds.map((id) => (
-                        <li key={id} className="min-w-0 truncate text-[11px] text-zinc-300">
-                          <span className="text-zinc-600">·</span> {titleOf(id)}
-                        </li>
-                      ))}
-                    </ul>
-                    {/* expanded: metrics · file chips · copy prompt · drag */}
-                    {isOpen && (
-                      <div className="mt-2 flex flex-col gap-2 border-t border-zinc-800 pt-2">
+                    {/* action buttons (send-box model-selector style) + tokens —
+                        pushed to the card's bottom */}
+                    <div className="mt-auto flex items-center gap-1 pt-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFilesBatch(isFiles ? null : b.id);
+                        }}
+                        className={`flex items-center rounded-md px-1.5 py-1 font-mono text-[11px] transition-colors ${
+                          isFiles
+                            ? "bg-zinc-800 text-zinc-100"
+                            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                        }`}
+                      >
+                        {b.files.length} files {isFiles ? "▴" : "▾"}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyPrompt(b.id, runPrompt(b));
+                        }}
+                        className="flex items-center rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                      >
+                        {copied === b.id ? "copied ✓" : "copy prompt"}
+                      </button>
+                      <span className="ml-auto font-mono text-[11px] text-zinc-500">
+                        {tok(b.outTokens)} tok
+                      </span>
+                    </div>
+                    {/* files dropdown — cost demoted here as a supporting detail.
+                        Chips are RESOLVED against disk: a real file is click-to-copy
+                        (the BoundaryChip idiom); a struck chip = the evaluator
+                        guessed a path that resolves to nothing. */}
+                    {isFiles && (
+                      <div className="mt-2 flex flex-col gap-1.5 border-t border-zinc-800 pt-2">
                         <p className="font-mono text-[9px] text-zinc-500">
-                          {b.files.length} file{b.files.length !== 1 ? "s" : ""} · {tok(b.weighted)}{" "}
-                          weighted{b.premiumTurns > 0 && " · 200k+ premium"}
+                          {usd(b.usd)} cost · {tok(b.weighted)} weighted
+                          {b.premiumTurns > 0 && " · 200k+ premium"}
+                          {b.files.some((f) => !f.exists) &&
+                            ` · ${b.files.filter((f) => !f.exists).length} unverified`}
                         </p>
-                        {b.files.length > 0 && (
+                        {b.files.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
-                            {b.files.map((f) => (
-                              <span
-                                key={f}
-                                title={f}
-                                className="rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400"
-                              >
-                                {f.split("/").pop()}
-                              </span>
-                            ))}
+                            {b.files.map((f) =>
+                              f.exists ? (
+                                <button
+                                  key={f.copy}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyPrompt(f.copy, f.copy);
+                                  }}
+                                  title={`${f.copy} — click to copy path${
+                                    f.ambiguous ? " (ambiguous: basename matched >1 file)" : ""
+                                  }`}
+                                  className="rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[9px] text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
+                                >
+                                  {copied === f.copy ? "copied ✓" : f.name}
+                                  {f.ambiguous && <span className="text-amber-400/70"> ?</span>}
+                                </button>
+                              ) : (
+                                <span
+                                  key={f.copy}
+                                  title={`${f.copy} — no file resolved on disk (evaluator guess)`}
+                                  className="rounded px-1.5 py-0.5 font-mono text-[9px] text-zinc-600 line-through decoration-zinc-700/60"
+                                >
+                                  {f.name}
+                                </span>
+                              )
+                            )}
                           </div>
-                        )}
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              copyPrompt(b.id, runPrompt(b));
-                            }}
-                            className="font-mono text-[9px] uppercase tracking-wider text-zinc-500 transition-colors hover:text-orange-300"
-                          >
-                            {copied === b.id ? "copied ✓" : "copy prompt"}
-                          </button>
-                          <span className="ml-auto font-mono text-[9px] text-zinc-700">
-                            drag → send box
+                        ) : (
+                          <span className="font-mono text-[9px] text-zinc-600">
+                            no files inferred — re-evaluate for sharper grouping
                           </span>
-                        </div>
+                        )}
                       </div>
+                    )}
+                    {/* bullets dropdown */}
+                    {isOpen && (
+                      <ul className="mt-2 flex min-w-0 flex-col gap-0.5 border-t border-zinc-800 pt-2">
+                        {b.taskIds.map((id) => (
+                          <li key={id} className="min-w-0 truncate text-[11px] text-zinc-300">
+                            <span className="text-zinc-600">·</span> {titleOf(id)}
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </div>
                 );
               })}
               {view.batches.length === 0 && (
-                <p className="text-[11px] text-zinc-600">
+                <p className="mt-3 text-[11px] text-zinc-600">
                   no batches — evaluate todos first to build the graph.
                 </p>
               )}

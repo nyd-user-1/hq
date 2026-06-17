@@ -31,7 +31,13 @@ const KIND_TAG: Record<Item["kind"], { label: string; chipClass: string }> = {
 // kind pill; the name as the draggable label; the source as the body). Drag a
 // card into a terminal (drops the file path) or onto a sibling to reorder
 // (persisted via /api/components). Approved (blue) sits above Review (red).
-export default function ComponentsList({ items: initial }: { items: Item[] }) {
+export default function ComponentsList({
+  items: initial,
+  undiscovered = [],
+}: {
+  items: Item[];
+  undiscovered?: { file: string; name: string }[];
+}) {
   const [items, setItems] = useState<Item[]>(initial);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -320,8 +326,20 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
         )}
       </div>
 
-      {/* Footer — the drag hint, moved out of the header caption. */}
-      <p className="text-xs text-zinc-600">*Drag cards to chat or reorder.</p>
+      {/* Footer — the drag hint + the file index's auto-discovery backlog: every
+          app/ui/*.tsx not yet curated into the registry (hover for the list). */}
+      <p className="text-xs text-zinc-600">
+        *Drag cards to chat or reorder.
+        {undiscovered.length > 0 && (
+          <span
+            title={undiscovered.map((u) => u.file).join("\n")}
+            className="text-zinc-500"
+          >
+            {" "}
+            · {undiscovered.length} undiscovered in app/ui
+          </span>
+        )}
+      </p>
     </div>
   );
 }

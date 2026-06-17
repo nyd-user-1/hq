@@ -14,11 +14,91 @@ import {
   getScriptFile,
   scriptFilePath,
   queryTokens,
+  SCOPES,
   type SearchScope,
+  type SearchKind,
   type SortDir,
+  type SearchHit,
 } from "@/lib/search";
 import { getNoteFile } from "@/lib/notes";
+import { getRepoFile } from "@/lib/files";
+import { getCommit } from "@/lib/shipped";
+import { readSkillDoc } from "@/lib/skills";
+import { getProjectSessions } from "@/lib/projects";
+import { getTodos } from "@/lib/todo";
+import { COMPONENTS, readComponentSource } from "@/lib/components";
 import DraggableCard from "@/app/ui/draggable-card";
+
+// Per-kind badge tint — one accent per corpus so the result list reads at a glance.
+const KIND_BADGE: Record<SearchKind, string> = {
+  transcript: "bg-emerald-500/15 text-emerald-300",
+  session: "bg-emerald-500/15 text-emerald-300",
+  sdk: "bg-teal-500/15 text-teal-300",
+  file: "bg-sky-500/15 text-sky-300",
+  component: "bg-cyan-500/15 text-cyan-300",
+  commit: "bg-orange-500/15 text-orange-300",
+  todo: "bg-yellow-500/15 text-yellow-300",
+  project: "bg-fuchsia-500/15 text-fuchsia-300",
+  memory: "bg-violet-500/15 text-violet-300",
+  note: "bg-blue-500/15 text-blue-300",
+  script: "bg-amber-500/15 text-amber-300",
+  skill: "bg-rose-500/15 text-rose-300",
+};
+
+// The footer's left slot — the result's identity: a short session id, else the
+// file path, else the bare ref.
+function footRef(h: SearchHit): string {
+  if (h.kind === "transcript" || h.kind === "session" || h.kind === "sdk")
+    return h.ref.slice(0, 8);
+  return h.path ?? h.ref;
+}
+
+// Shared chrome for the new in-panel readers (file/component/commit/todo/
+// project/skill): the "← results" back link + a click-to-copy path header over a
+// scroll body. The original memory/transcript/note/script readers predate this
+// and keep their inline shells; new corpora share this one.
+function ReaderShell({
+  back,
+  label,
+  copy,
+  children,
+}: {
+  back: string;
+  label: string;
+  copy?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Boundary label="@panel/search/page.tsx">
+      <div className="flex items-baseline gap-3">
+        <Link
+          href={back}
+          scroll={false}
+          className="shrink-0 font-mono text-xs text-blue-400 hover:text-blue-300"
+        >
+          ← results
+        </Link>
+        {copy ? (
+          <CopyText
+            text={copy}
+            className="min-w-0 truncate font-mono text-xs text-zinc-500 hover:text-zinc-300"
+          >
+            {label}
+          </CopyText>
+        ) : (
+          <span className="min-w-0 truncate font-mono text-xs text-zinc-500">
+            {label}
+          </span>
+        )}
+      </div>
+      <div className="scrollbar-none min-h-0 flex-1 overflow-auto">{children}</div>
+    </Boundary>
+  );
+}
+
+// Source-code reader body (file / component source / commit diff) — wrapped mono.
+const CODE_BODY =
+  "whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-zinc-300";
 
 export const dynamic = "force-dynamic";
 
@@ -103,9 +183,9 @@ function SortIcon({ dir }: { dir: SortDir }) {
   );
 }
 
-// Search over everything HQ can see: transcripts + memory. Result click —
-// transcript: pin that session in the terminal (/sessions?session=<id>);
-// memory: open the .md right here (?open=<file>).
+// Universal search over everything HQ can see — transcripts, sessions, sdk runs,
+// files, components, commits, todos, projects, memory, notes, scripts, skills.
+// Result click opens the thing in-panel (read it where it lives).
 export default async function Search({
   searchParams,
 }: {
@@ -117,6 +197,12 @@ export default async function Search({
     openSession?: string;
     openNote?: string;
     openScript?: string;
+    openFile?: string;
+    openComponent?: string;
+    openCommit?: string;
+    openTodo?: string;
+    openProject?: string;
+    openSkill?: string;
     session?: string;
     pair?: string;
   }>;
@@ -129,16 +215,18 @@ export default async function Search({
     openSession,
     openNote,
     openScript,
+    openFile,
+    openComponent,
+    openCommit,
+    openTodo,
+    openProject,
+    openSkill,
     session,
     pair,
   } = await searchParams;
-  const scope: SearchScope =
-    rawScope === "transcripts" ||
-    rawScope === "memory" ||
-    rawScope === "notes" ||
-    rawScope === "scripts"
-      ? rawScope
-      : "all";
+  const scope: SearchScope = SCOPES.some((s) => s.value === rawScope)
+    ? (rawScope as SearchScope)
+    : "all";
   const sortDir: SortDir = rawSort === "old" ? "old" : "new";
   // Carry the terminal pins on every in-panel nav. Dropping ?session/?pair
   // un-pins the terminal, which then self-re-pins via router.replace and wipes
@@ -286,6 +374,123 @@ export default async function Search({
     );
   }
 
+  // ── opened file (Files corpus) ────────────────────────────────────────────
+  if (openFile) {
+    const content = getRepoFile(openFile);
+    return (
+      <ReaderShell back={back} label={openFile} copy={openFile}>
+        {content ? (
+          <pre className={CODE_BODY}>{content}</pre>
+        ) : (
+          <p className="text-xs text-zinc-600">file not found</p>
+        )}
+      </ReaderShell>
+    );
+  }
+
+  // ── opened component source ───────────────────────────────────────────────
+  if (openComponent) {
+    const c = COMPONENTS.find((x) => x.name === openComponent);
+    const content = c ? readComponentSource(c.file) : "";
+    return (
+      <ReaderShell back={back} label={c ? c.file : openComponent} copy={c?.file}>
+        {content ? (
+          <pre className={CODE_BODY}>{content}</pre>
+        ) : (
+          <p className="text-xs text-zinc-600">component source not found</p>
+        )}
+      </ReaderShell>
+    );
+  }
+
+  // ── opened commit diff ────────────────────────────────────────────────────
+  if (openCommit) {
+    const slash = openCommit.indexOf("/");
+    const repo = slash > 0 ? openCommit.slice(0, slash) : "";
+    const sha = slash > 0 ? openCommit.slice(slash + 1) : "";
+    const commit = repo && sha ? getCommit(repo, sha) : null;
+    return (
+      <ReaderShell
+        back={back}
+        label={`${repo} · ${sha.slice(0, 7)}`}
+        copy={commit ? `git -C ~/code/${repo} show ${sha}` : undefined}
+      >
+        {commit ? (
+          <pre className={CODE_BODY}>{commit.text}</pre>
+        ) : (
+          <p className="text-xs text-zinc-600">commit not found</p>
+        )}
+      </ReaderShell>
+    );
+  }
+
+  // ── opened todo ───────────────────────────────────────────────────────────
+  if (openTodo) {
+    const t = getTodos().find((x) => x.id === openTodo);
+    return (
+      <ReaderShell back={back} label={`todo · ${openTodo}`} copy={openTodo}>
+        {t ? (
+          <div className="flex flex-col gap-2 text-sm">
+            <p className="font-medium text-zinc-200">{t.text}</p>
+            {t.body ? (
+              <Markdown text={t.body} />
+            ) : (
+              <p className="text-xs text-zinc-600">no description</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-600">todo not found</p>
+        )}
+      </ReaderShell>
+    );
+  }
+
+  // ── opened project (its sessions) ─────────────────────────────────────────
+  if (openProject) {
+    const rows = getProjectSessions(openProject);
+    return (
+      <ReaderShell back={back} label={`project · ${openProject}`}>
+        <div className="flex flex-col gap-1.5">
+          {rows.length === 0 ? (
+            <p className="text-xs text-zinc-600">no sessions</p>
+          ) : (
+            rows.map((s) => (
+              <Link
+                key={s.id}
+                href={`${back}&openSession=${s.id}`}
+                scroll={false}
+                className="flex items-baseline gap-2 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm text-zinc-300">
+                  {s.customTitle || s.title}
+                </span>
+                <span className="shrink-0 font-mono text-[10px] text-zinc-600">
+                  {s.id.slice(0, 8)} · {ago(s.lastActive)}
+                </span>
+              </Link>
+            ))
+          )}
+        </div>
+      </ReaderShell>
+    );
+  }
+
+  // ── opened skill (SKILL.md) ───────────────────────────────────────────────
+  if (openSkill) {
+    const content = readSkillDoc(openSkill);
+    return (
+      <ReaderShell back={back} label="skill" copy={openSkill}>
+        {content ? (
+          <div className="text-sm">
+            <Markdown text={content} />
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-600">skill not found</p>
+        )}
+      </ReaderShell>
+    );
+  }
+
   // ── query + results ─────────────────────────────────────────────────────
   // No query → browse the most-recent transcripts + memory as cards (honors the
   // scope chips + sort toggle). With a query → ranked search hits.
@@ -312,11 +517,7 @@ export default async function Search({
     <Boundary label="@panel/search/page.tsx">
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {scopeChip("All", "all")}
-          {scopeChip("Transcripts", "transcripts")}
-          {scopeChip("Memory", "memory")}
-          {scopeChip("Notes", "notes")}
-          {scopeChip("Scripts", "scripts")}
+          {SCOPES.map((s) => scopeChip(s.label, s.value))}
           <Link
             href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
               sortDir === "new" ? "old" : "new"
@@ -344,35 +545,46 @@ export default async function Search({
 
       <ul className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
         {hits.map((h) => {
-          const href =
-            h.kind === "transcript"
-              ? `${back}&openSession=${h.ref}`
+          // route each kind to its in-panel reader (session/sdk reuse the
+          // transcript reader; project lists its sessions).
+          const op =
+            h.kind === "transcript" || h.kind === "session" || h.kind === "sdk"
+              ? `openSession=${h.ref}`
               : h.kind === "note"
-                ? `${back}&openNote=${encodeURIComponent(h.ref)}`
+                ? `openNote=${encodeURIComponent(h.ref)}`
                 : h.kind === "script"
-                  ? `${back}&openScript=${encodeURIComponent(h.ref)}`
-                  : `${back}&open=${encodeURIComponent(h.ref)}`;
+                  ? `openScript=${encodeURIComponent(h.ref)}`
+                  : h.kind === "memory"
+                    ? `open=${encodeURIComponent(h.ref)}`
+                    : h.kind === "file"
+                      ? `openFile=${encodeURIComponent(h.ref)}`
+                      : h.kind === "component"
+                        ? `openComponent=${encodeURIComponent(h.ref)}`
+                        : h.kind === "commit"
+                          ? `openCommit=${encodeURIComponent(h.ref)}`
+                          : h.kind === "todo"
+                            ? `openTodo=${encodeURIComponent(h.ref)}`
+                            : h.kind === "project"
+                              ? `openProject=${encodeURIComponent(h.ref)}`
+                              : `openSkill=${encodeURIComponent(h.ref)}`;
+          const href = `${back}&${op}`;
+          // anything with a path drags into a terminal (drops the path)
+          const drag =
+            h.kind === "script"
+              ? scriptFilePath(h.ref)
+              : h.kind === "file" || h.kind === "component"
+                ? h.path ?? null
+                : null;
           const cardCls =
             "flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50";
           const inner = (
             <>
               <div className="flex items-center gap-2.5">
-                <span className="min-w-0 truncate text-sm font-medium text-zinc-200">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">
                   {h.title}
                 </span>
-                <span className="shrink-0 font-mono text-xs text-zinc-500">
-                  {ago(h.at)}
-                </span>
                 <span
-                  className={`ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
-                    h.kind === "memory"
-                      ? "bg-violet-500/15 text-violet-300"
-                      : h.kind === "note"
-                        ? "bg-blue-500/15 text-blue-300"
-                        : h.kind === "script"
-                          ? "bg-amber-500/15 text-amber-300"
-                          : "bg-emerald-500/15 text-emerald-300"
-                  }`}
+                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${KIND_BADGE[h.kind]}`}
                 >
                   {h.kind}
                 </span>
@@ -382,17 +594,19 @@ export default async function Search({
                   {highlight(h.snippet, q)}
                 </p>
               )}
+              {/* footer — identity · descriptor · time, all at the bottom */}
+              <div className="flex items-center gap-2 font-mono text-[10px] text-zinc-600">
+                <span className="min-w-0 truncate">{footRef(h)}</span>
+                {h.meta && <span className="shrink-0 text-zinc-500">{h.meta}</span>}
+                <span className="ml-auto shrink-0">{ago(h.at)}</span>
+              </div>
             </>
           );
           return (
             <li key={`${h.kind}:${h.ref}`}>
-              {h.kind === "script" ? (
-                // draggable into a terminal (drops the path) + click-to-open source
-                <DraggableCard
-                  href={href}
-                  drag={scriptFilePath(h.ref)}
-                  className={cardCls}
-                >
+              {drag ? (
+                // draggable into a terminal (drops the path) + click-to-open
+                <DraggableCard href={href} drag={drag} className={cardCls}>
                   {inner}
                 </DraggableCard>
               ) : (
@@ -414,8 +628,8 @@ export default async function Search({
         )}
       </ul>
       <p className="text-xs text-zinc-600">
-        every session ever + memory · click a result to read it here · paths +
-        resume commands copy on click
+        universal search — sessions · files · components · commits · todos ·
+        memory · notes &amp; more · click a result to read it here
         {building && <span className="text-amber-400"> · indexing…</span>}
       </p>
       <RefreshWhile active={building} />
