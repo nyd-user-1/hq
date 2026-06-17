@@ -10,6 +10,9 @@ import SearchTrigger from "@/app/ui/search-trigger";
 import PanelMenu from "@/app/ui/panel-menu";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import PairColumn from "@/app/ui/pair-column";
+import { PlannerProvider } from "@/app/ui/planner-state";
+import PlannerPanel from "@/app/ui/planner-panel";
+import PlannerTrigger from "@/app/ui/planner-trigger";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
 // always mounted — the persistent heart), and the right app-panel portal anchor.
@@ -31,6 +34,7 @@ export default async function Shell({
     <div className="flex h-dvh flex-col bg-zinc-950 p-6 text-zinc-100">
       {/* no row gap — the sidebar carries mr-4 while open (collapses with it)
           and the app panel brings its own ml-4, so closed = truly full width */}
+      <PlannerProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
           <SidebarColumn>
@@ -52,6 +56,7 @@ export default async function Shell({
                   <>
                     <PanelMenu />
                     <SearchTrigger />
+                    <PlannerTrigger />
                   </>
                 }
               >
@@ -70,10 +75,15 @@ export default async function Shell({
           {/* min-w-0 (not shrink-0) so the panel yields when the row is tight —
               the terminal's min-width holds, the panel shrinks. */}
           <div id="app-panel-root" className="flex h-full min-w-0" />
+          {/* The independent Batch Planner's own portal root — a second panel
+              that can be open AT THE SAME TIME as #app-panel-root. */}
+          <div id="planner-panel-root" className="flex h-full min-w-0" />
         </div>
       </SidebarProvider>
 
       <PanelWrapper panel={panel} />
+      <PlannerPanel />
+      </PlannerProvider>
     </div>
   );
 }

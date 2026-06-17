@@ -57,7 +57,7 @@ const MODEL_WEIGHT: Array<[string, number]> = [
   ["fable", 5.0],
   ["mythos", 5.0],
 ];
-function modelWeight(model?: string): number {
+export function modelWeight(model?: string): number {
   if (!model) return 1.0;
   const m = model.toLowerCase();
   for (const [key, w] of MODEL_WEIGHT) if (m.includes(key)) return w;
@@ -279,6 +279,17 @@ export function getUsage(): { windows: Window[]; generatedAt: number } {
   }
 
   return { windows, generatedAt: now };
+}
+
+// Per-turn context samples for calibration: each deduped record's total context
+// (input + cache write + cache read) and its cache-creation (the cold-prefix
+// write). The batch planner derives a measured cold-context range from these
+// instead of assuming a constant. Refreshes the cache first.
+export function contextSamples(): { ctx: number; create: number }[] {
+  refreshCache();
+  const out: { ctx: number; create: number }[] = [];
+  for (const r of allRecs()) out.push({ ctx: r.input + r.cw + r.cr, create: r.cw });
+  return out;
 }
 
 // Per-transcript deduped lifetime totals from the file cache (call getUsage()

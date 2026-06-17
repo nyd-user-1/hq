@@ -38,7 +38,63 @@
 }
 
 .boundary-flash {
-  animation: boundary-border-flash 1.2s ease-out both;
+  /* No `both`: the keyframe ends at the same zinc-700 the Tailwind border class
+     already sets, so dropping the forwards-fill is visually identical AND frees
+     border-color for the thinking/done states below to override after the flash. */
+  animation: boundary-border-flash 1.2s ease-out;
+  transition: border-color 0.25s ease; /* smooths the gray↔orange swap */
+}
+
+/* "Thinking" indicator (terminal.tsx toggles these on its own boundary box):
+   hold orange while a turn runs, then flash green on finish and fade to gray. */
+.boundary-flash.is-thinking {
+  border-color: #f97316; /* orange-500 — matches the ✶ working status */
+}
+/* Traveling pulse: a bright orange arc loops the box while thinking. A conic
+   gradient rotated via @property, masked to the 1px border ring. */
+@property --hq-spin {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes hq-border-spin {
+  to {
+    --hq-spin: 360deg;
+  }
+}
+.boundary-flash.is-thinking::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--hq-spin),
+    transparent 0deg,
+    #fbbf24 35deg,
+    #fb923c 55deg,
+    transparent 95deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: hq-border-spin 2.2s linear infinite;
+  pointer-events: none;
+}
+@keyframes boundary-border-done {
+  0%,
+  30% {
+    border-color: #22c55e; /* green-500 */
+  }
+  100% {
+    border-color: #3f3f46; /* zinc-700 */
+  }
+}
+.boundary-flash.is-done {
+  animation: boundary-border-done 1.2s ease-out;
 }
 
 .boundary-flash-chip {

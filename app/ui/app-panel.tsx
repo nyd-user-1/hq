@@ -11,18 +11,20 @@ import ButtonChipIcon from "@/app/ui/button-chip-icon";
 export default function AppPanel({
   open,
   onClose,
+  rootId = "app-panel-root",
   children,
 }: {
   open: boolean;
   onClose: () => void;
+  rootId?: string; // portal target; defaults to the route panel's root
   children: React.ReactNode;
 }) {
   const [root, setRoot] = useState<Element | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    setRoot(document.getElementById("app-panel-root"));
-  }, []);
+    setRoot(document.getElementById(rootId));
+  }, [rootId]);
   useEffect(() => {
     if (!open) setExpanded(false);
   }, [open]);

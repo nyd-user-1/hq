@@ -404,8 +404,33 @@ export default function Terminal({
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // pending refetch retry
   const stagedAtRef = useRef(0); // when the "+" staging view was entered
+  const rootRef = useRef<HTMLDivElement>(null); // pane root — to reach the enclosing boundary box
+  const wasThinkingRef = useRef(false); // tracks the working→done edge for the green flash
   const working = status !== null;
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
+
+  // Thinking border (Terminal 1 only for now): drive THIS pane's own boundary box
+  // off `working` (the same signal as the ✶ status) — hold orange while a turn
+  // runs, flash green on finish, then fade back to gray. closest() scopes it to
+  // this terminal's box, so it never colors a sibling pane.
+  useEffect(() => {
+    if (paramKey !== "session") return;
+    const box = rootRef.current?.closest(".boundary-flash");
+    if (!box) return;
+    if (working) {
+      box.classList.add("is-thinking");
+      box.classList.remove("is-done");
+      wasThinkingRef.current = true;
+      return;
+    }
+    box.classList.remove("is-thinking");
+    if (wasThinkingRef.current) {
+      wasThinkingRef.current = false;
+      box.classList.add("is-done");
+      const t = setTimeout(() => box.classList.remove("is-done"), 1300);
+      return () => clearTimeout(t);
+    }
+  }, [working, paramKey]);
 
   useEffect(() => {
     mountCount += 1;
@@ -871,8 +896,8 @@ export default function Terminal({
   const canSend =
     !staged && !notConnected && (draft.trim() !== "" || attachments.length > 0);
 
-  // The cache + ctx meter. Lives top-right in the header normally; in the
-  // centered shell it drops to the footer row under the composer (right side).
+  // The cache meter — top-right in the header (and the footer in the centered
+  // shell). ctx moved out to sit beside the session id (ctxMeter, below).
   const meter = (
     <>
       {cacheLeft !== null &&
@@ -892,17 +917,29 @@ export default function Terminal({
             cache cold
           </span>
         ))}
-      {contextTokens > 0 && (
-        <span
-          className="font-mono text-[11px] text-zinc-500"
-          title={`~${ctxLeftPct}% of your 1M window left — ${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} used (mirrors the CLI's ctx %)`}
-        >
-          ctx {ctxLeftPct}%
-        </span>
-      )}
-      {/* ctx bar (hidden until 75% — near-empty most of a 1M session); the
-          ctx number itself sits just left of it. */}
-      {contextTokens > 0 && ctxPct >= 75 && (
+    </>
+  );
+
+  // ctx % — a fuel gauge by % of the 1M window LEFT: hidden until it drops to
+  // 50%, then green (50–26) → amber (25–11) → red (≤10) → red-blink (≤5). Sits
+  // just after the session id. The bar still appears past 75% used.
+  const ctxColor =
+    ctxLeftPct <= 10
+      ? "text-red-400"
+      : ctxLeftPct <= 25
+        ? "text-amber-400"
+        : "text-green-400";
+  const ctxMeter = contextTokens > 0 && ctxLeftPct <= 50 && (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <span
+        className={`font-mono text-[11px] ${ctxColor} ${
+          ctxLeftPct <= 5 ? "animate-pulse" : ""
+        }`}
+        title={`~${ctxLeftPct}% of your 1M window left — ${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} used (mirrors the CLI's ctx %)`}
+      >
+        ctx {ctxLeftPct}%
+      </span>
+      {ctxPct >= 75 && (
         <span
           className="relative h-1 w-14 overflow-hidden rounded-full bg-zinc-800"
           title={`context ~${fmtTokens(contextTokens)} of ${fmtTokens(CONTEXT_LIMIT)} · the tick at ${fmtTokens(PRICING_CLIFF)} is the long-context pricing cliff (~2× input)`}
@@ -919,11 +956,12 @@ export default function Terminal({
           />
         </span>
       )}
-    </>
+    </span>
   );
 
   return (
     <div
+      ref={rootRef}
       className="relative flex h-full min-h-0 flex-col gap-3"
       // The whole pane is the catch basin: drop a screenshot anywhere in THIS
       // terminal and it attaches to THIS send box; drop a To Do card and its text
@@ -1022,6 +1060,8 @@ export default function Terminal({
         ) : (
           <span className="font-mono text-[11px] text-zinc-600">—</span>
         )}
+        {/* ctx % rides right after the session id (it's a property of THIS id). */}
+        {ctxMeter}
         {/* The /clear chain: this session's tied line of continuations.
             Click a row to show that session in the terminal. */}
         {lineage?.chain && (
@@ -1060,29 +1100,29 @@ export default function Terminal({
         )}
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-          {/* Focus — flip this live session into the centered conversation shell
-              (the same layout the not-connected state uses). Only offered when a
-              real session is pinned; the empty state is already centered. */}
+          {/* Layout toggle — flips this live session between two real modes:
+              "wide screen" (default, blue) and "focus" (the centered conversation
+              shell, green). Shows the CURRENT mode in its own color. Only offered
+              when a real session is pinned; the empty state is already centered. */}
           {resolvedId && !notConnected && (
             <button
               onClick={() => setFocusMode((f) => !f)}
               title={
                 focusMode
-                  ? "exit focus — back to the full-width terminal"
-                  : "focus — read this session in a centered, distraction-free column"
+                  ? "in focus — click for wide screen"
+                  : "in wide screen — click for focus"
               }
               className={`rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors ${
                 focusMode
-                  ? "border-emerald-500/40 text-emerald-300"
-                  : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
+                  ? // → wide screen: blue-600 (#2563eb), the rerender-flash blue
+                    "border-blue-600/60 text-blue-600 hover:border-blue-500 hover:text-blue-500"
+                  : // → focus: emerald/green
+                    "border-emerald-500/40 text-emerald-300 hover:border-emerald-400 hover:text-emerald-200"
               }`}
             >
-              focus{focusMode ? " ✓" : ""}
+              {focusMode ? "wide screen" : "focus"}
             </button>
           )}
-          {/* meter rides here normally; in the centered shell it moves to the
-              footer under the composer (right-aligned). */}
-          {!centered && meter}
         </span>
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -1507,8 +1547,11 @@ export default function Terminal({
                 <path d="M5 12h14" />
               </svg>
             </button>
-            {/* right cluster, bottom-right: model + todo + send (send morphs to stop). */}
-            <div className="ml-auto flex items-center gap-1">
+            {/* right cluster, bottom-right: cache + model + todo + send. */}
+            <div className="ml-auto flex items-center gap-2">
+              {/* cache meter — in wide screen it lives here, just before the model
+                  selector (in the centered shell it stays in the footer instead). */}
+              {!centered && meter}
               {/* model picker — defaults to the model read from the transcript;
                   your pick rides on the send as `claude --model <id>`, which sets
                   the resumed session's model. Dropdown opens up-and-right. */}

@@ -13,7 +13,8 @@ export default function SidebarToggle() {
     <ButtonChipIcon
       onClick={toggle}
       label={open ? "Collapse sidebar" : "Expand sidebar"}
-      className="shrink-0"
+      // join the rerender flash on reload like the other boundary chips
+      className="boundary-flash-chip shrink-0"
       icon={
         // lucide PanelLeftClose / PanelLeftOpen
         <svg
