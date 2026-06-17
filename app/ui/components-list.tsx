@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
 import MetaChipRow from "@/app/ui/meta-chip-row";
 import SearchField from "@/app/ui/search-field";
+import SortIcon from "@/app/ui/sort-icon";
+
+type SortMode = "manual" | "new" | "old";
 
 type Item = {
   name: string;
@@ -38,6 +41,28 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
     id: string;
     pos: "before" | "after";
   } | null>(null);
+  const [sort, setSort] = useState<SortMode>("manual"); // manual = saved drag order
+  const [kind, setKind] = useState<Item["kind"] | null>(null); // active kind filter
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Close the kind-filter dropdown on an outside click or Escape.
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node))
+        setFilterOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFilterOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [filterOpen]);
 
   const q = query.trim().toLowerCase();
   const match = (c: Item) =>
@@ -45,8 +70,22 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
     c.name.toLowerCase().includes(q) ||
     c.desc.toLowerCase().includes(q) ||
     c.file.toLowerCase().includes(q);
-  const approved = items.filter((c) => c.status === "approved" && match(c));
-  const review = items.filter((c) => c.status === "review" && match(c));
+  // Search + kind filter + timestamp sort (manual = saved drag order). Drag is
+  // only allowed in the unfiltered manual view (same rule as To Do).
+  const visible = (status: Item["status"]) => {
+    const arr = items.filter(
+      (c) =>
+        c.status === status && match(c) && (kind === null || c.kind === kind)
+    );
+    return sort === "manual"
+      ? arr
+      : [...arr].sort((a, b) =>
+          sort === "new" ? b.createdAt - a.createdAt : a.createdAt - b.createdAt
+        );
+  };
+  const approved = visible("approved");
+  const review = visible("review");
+  const canReorder = sort === "manual" && kind === null;
 
   function toggleExpand(name: string) {
     setExpanded((s) => {
@@ -83,7 +122,7 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
       key={c.name}
       who="claude"
       dotClass="text-orange-500"
-      tag={KIND_TAG[c.kind]}
+      tag={kind !== null ? KIND_TAG[c.kind] : undefined}
       label={c.name}
       fillLabel
       expandable={!!c.code}
@@ -93,7 +132,7 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
       dragId={c.name}
       dragSourceId={draggingId}
       dropEdge={dropTarget?.id === c.name ? dropTarget.pos : null}
-      reorderEnabled
+      reorderEnabled={canReorder}
       onDragStart={() => setDraggingId(c.name)}
       onDragEnd={() => {
         setDraggingId(null);
@@ -140,39 +179,149 @@ export default function ComponentsList({ items: initial }: { items: Item[] }) {
   );
 
   return (
-    <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-      <div className="sticky top-0 z-10 flex flex-col gap-1.5 bg-zinc-950 pb-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* Header — mirrors To Do / Projects: search, then a row with the Filter
+          dropdown (left, model-button styling) and the sort + new buttons right. */}
+      <div className="flex flex-col gap-1.5">
         <SearchField
           value={query}
           onChange={setQuery}
           placeholder="Search components…"
         />
-        <p className="text-[11px] text-zinc-500">
-          *Drag cards to chat or reorder.
-        </p>
+        <div className="flex items-center gap-2">
+          {/* Filter — model-button styling; the kind dropdown's trigger, opening
+              bottom-left. Shows the active kind, else "Filter". */}
+          <div ref={filterRef} className="relative">
+            <button
+              onClick={() => setFilterOpen((o) => !o)}
+              title="filter by kind"
+              aria-label="Filter by kind"
+              aria-haspopup="menu"
+              aria-expanded={filterOpen}
+              className="flex max-w-full items-center rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <span className="truncate">
+                {kind ? KIND_TAG[kind].label : "Filter"}
+              </span>
+            </button>
+            {filterOpen && (
+              <div
+                role="menu"
+                className="absolute left-0 top-full z-30 mt-1 flex w-44 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setKind(null);
+                    setFilterOpen(false);
+                  }}
+                  className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
+                >
+                  <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
+                    All
+                  </span>
+                  {kind === null && (
+                    <span className="ml-auto text-xs text-blue-400">✓</span>
+                  )}
+                </button>
+                {(["presentational", "container"] as const).map((k) => (
+                  <button
+                    key={k}
+                    role="menuitem"
+                    onClick={() => {
+                      setKind((p) => (p === k ? null : k));
+                      setFilterOpen(false);
+                    }}
+                    className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
+                  >
+                    <span
+                      className={`rounded px-1.5 py-0.5 font-mono text-[11px] ${KIND_TAG[k].chipClass}`}
+                    >
+                      {KIND_TAG[k].label}
+                    </span>
+                    {kind === k && (
+                      <span className="ml-auto text-xs text-blue-400">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              onClick={() =>
+                setSort((s) =>
+                  s === "manual" ? "new" : s === "new" ? "old" : "manual"
+                )
+              }
+              title={
+                sort === "manual"
+                  ? "Manual order — drag to reorder. Click to sort newest first."
+                  : sort === "new"
+                    ? "Sorted newest first — click for oldest. Sorting overrides the manual drag order."
+                    : "Sorted oldest first — click to return to manual drag order."
+              }
+              aria-label="Toggle sort order"
+              aria-pressed={sort !== "manual"}
+              className={`flex shrink-0 items-center rounded-md p-1.5 transition-colors ${
+                sort === "manual"
+                  ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  : "bg-zinc-800 text-zinc-100"
+              }`}
+            >
+              <SortIcon dir={sort === "old" ? "old" : "new"} />
+            </button>
+            <button
+              title="New component — coming next"
+              aria-label="New component"
+              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
 
-      {approved.length > 0 && (
-        <section className="flex flex-col gap-1">
-          <h2 className="font-mono text-[10px] uppercase tracking-widest text-blue-400">
-            Approved
-          </h2>
-          <ol className="flex list-none flex-col gap-3">{approved.map(card)}</ol>
-        </section>
-      )}
+      <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
+        {approved.length > 0 && (
+          <section className="flex flex-col gap-1">
+            <h2 className="font-mono text-[10px] uppercase tracking-widest text-blue-400">
+              Approved
+            </h2>
+            <ol className="flex list-none flex-col gap-3">
+              {approved.map(card)}
+            </ol>
+          </section>
+        )}
 
-      {review.length > 0 && (
-        <section className="flex flex-col gap-1">
-          <h2 className="font-mono text-[10px] uppercase tracking-widest text-red-400">
-            Review
-          </h2>
-          <ol className="flex list-none flex-col gap-3">{review.map(card)}</ol>
-        </section>
-      )}
+        {review.length > 0 && (
+          <section className="flex flex-col gap-1">
+            <h2 className="font-mono text-[10px] uppercase tracking-widest text-red-400">
+              Review
+            </h2>
+            <ol className="flex list-none flex-col gap-3">{review.map(card)}</ol>
+          </section>
+        )}
 
-      {approved.length === 0 && review.length === 0 && (
-        <p className="text-sm text-zinc-600">no components match “{query}”.</p>
-      )}
+        {approved.length === 0 && review.length === 0 && (
+          <p className="text-sm text-zinc-600">no components match “{query}”.</p>
+        )}
+      </div>
+
+      {/* Footer — the drag hint, moved out of the header caption. */}
+      <p className="text-xs text-zinc-600">*Drag cards to chat or reorder.</p>
     </div>
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AccordionTodoItem from "@/app/ui/accordion-todo-item";
 import SearchField from "@/app/ui/search-field";
 import SortIcon from "@/app/ui/sort-icon";
-import { CATEGORIES } from "@/app/ui/todo-categories";
+import { CATEGORIES, CAT_BY_KEY } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
 
 type SortMode = "manual" | "new" | "old";
@@ -21,7 +21,12 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [sort, setSort] = useState<SortMode>("manual"); // manual = stored drag order
   const [editingId, setEditingId] = useState<string | null>(null);
   const editIdRef = useRef<string | null>(null); // mirrors editingId; guards Enter+blur double-fire
+  const [bodyEditId, setBodyEditId] = useState<string | null>(null); // todo whose body is being edited in place
+  const [bodyDraft, setBodyDraft] = useState("");
+  const bodyEditIdRef = useRef<string | null>(null); // mirrors bodyEditId; guards esc-then-blur double-fire
   const tmpRef = useRef(0); // counter for local temp ids (blank not yet persisted)
+  const [tagOpen, setTagOpen] = useState(false); // category-filter dropdown
+  const tagRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [cat, setCat] = useState<string | null>(null); // active category filter
@@ -30,6 +35,24 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     id: string;
     pos: "before" | "after";
   } | null>(null);
+
+  // Close the category dropdown on an outside click or Escape.
+  useEffect(() => {
+    if (!tagOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (tagRef.current && !tagRef.current.contains(e.target as Node))
+        setTagOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTagOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [tagOpen]);
 
   const all = items.filter((t) => !t.parentId);
   const byCat = cat ? all.filter((t) => t.category === cat) : all;
@@ -101,9 +124,45 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       .then((data) => {
         if (data?.item) {
           setItems((xs) => xs.map((t) => (t.id === id ? data.item : t)));
+          // Reveal the freshly-named todo's body so "add details…" is visible —
+          // a user-created todo can grow a body just like a /todo or Claude one.
+          setExpanded((s) => new Set(s).add(data.item.id));
         }
       })
       .catch(() => {});
+  }
+
+  // Edit-in-place for the markdown body (the "Edit state" roadmap, To Do first;
+  // backend is updateTodo + PATCH /api/todo). Mirrors the title-rename pattern.
+  function startBodyEdit(t: TodoItem) {
+    setExpanded((s) => new Set(s).add(t.id)); // body must be visible to edit it
+    setBodyDraft(t.body ?? "");
+    bodyEditIdRef.current = t.id;
+    setBodyEditId(t.id);
+  }
+
+  function cancelBodyEdit() {
+    bodyEditIdRef.current = null;
+    setBodyEditId(null);
+    setBodyDraft("");
+  }
+
+  // Save on ⌘↵ or blur. editIdRef-style guard kills the esc-then-blur double fire.
+  function commitBodyEdit(id: string) {
+    if (bodyEditIdRef.current !== id) return;
+    bodyEditIdRef.current = null;
+    const body = bodyDraft.trim();
+    setBodyEditId(null);
+    setBodyDraft("");
+    setItems((xs) =>
+      xs.map((t) => (t.id === id ? { ...t, body: body || undefined } : t))
+    );
+    if (id.startsWith("tmp_")) return; // a not-yet-persisted blank — local only
+    fetch("/api/todo", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, body }),
+    }).catch(() => {});
   }
 
   async function toggle(id: string) {
@@ -174,14 +233,70 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
           placeholder="Search to-dos…"
         />
         <div className="flex items-center gap-2">
-          <p className="text-[11px] text-zinc-500">
+          {/* Filter — styled like the send box's model button; the category
+              dropdown's trigger, opening bottom-left. Shows the active category
+              (like the model button shows the current model), else "Filter". */}
+          <div ref={tagRef} className="relative">
             <button
-              onClick={clearCompleted}
-              className="transition-colors hover:text-zinc-300"
+              onClick={() => setTagOpen((o) => !o)}
+              title="filter by category"
+              aria-label="Filter by category"
+              aria-haspopup="menu"
+              aria-expanded={tagOpen}
+              className="flex max-w-full items-center rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
             >
-              *Clear completed ({doneCount})
+              <span className="truncate">
+                {cat ? CAT_BY_KEY[cat].label : "Filter"}
+              </span>
             </button>
-          </p>
+            {tagOpen && (
+              <div
+                role="menu"
+                className="absolute left-0 top-full z-30 mt-1 flex w-44 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setCat(null);
+                    setTagOpen(false);
+                  }}
+                  className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
+                >
+                  <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
+                    All
+                  </span>
+                  {cat === null && (
+                    <span className="ml-auto text-xs text-blue-400">✓</span>
+                  )}
+                </button>
+                {present.map((c) => (
+                  <button
+                    key={c.key}
+                    role="menuitem"
+                    onClick={() => {
+                      setCat((p) => (p === c.key ? null : c.key));
+                      setTagOpen(false);
+                    }}
+                    className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
+                  >
+                    <span
+                      className={`rounded px-1.5 py-0.5 font-mono text-[11px] ${c.chip}`}
+                    >
+                      {c.label}
+                    </span>
+                    {cat === c.key && (
+                      <span className="ml-auto text-xs text-blue-400">✓</span>
+                    )}
+                  </button>
+                ))}
+                {present.length === 0 && (
+                  <p className="px-2 py-1.5 font-mono text-[10px] text-zinc-600">
+                    no categories yet
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
           <div className="ml-auto flex items-center gap-1">
             <button
               onClick={() =>
@@ -230,34 +345,6 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
         </div>
       </div>
 
-      {present.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setCat(null)}
-            className={`rounded-md px-2 py-0.5 font-mono text-[11px] transition-colors ${
-              cat === null
-                ? "bg-zinc-700 text-zinc-100"
-                : "bg-zinc-800/60 text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            All
-          </button>
-          {present.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setCat((p) => (p === c.key ? null : c.key))}
-              className={`rounded-md px-2 py-0.5 font-mono text-[11px] transition-colors ${
-                cat === c.key
-                  ? c.chip
-                  : "bg-zinc-800/60 text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
-
       {list.length > 0 ? (
         <ol className="scrollbar-none flex min-h-0 flex-1 list-none flex-col gap-3 overflow-y-auto pt-1 text-sm">
           {list.map((t) => (
@@ -266,6 +353,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
               item={t}
               open={expanded.has(t.id)}
               copied={copiedId === t.id}
+              showTag={cat !== null}
               reorderEnabled={cat === null && sort === "manual"}
               dragSourceId={draggingId}
               dropEdge={dropTarget?.id === t.id ? dropTarget.pos : null}
@@ -274,6 +362,12 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
               onEditChange={setDraft}
               onEditCommit={() => finishEdit(t.id, true)}
               onEditCancel={() => finishEdit(t.id, false)}
+              bodyEditing={bodyEditId === t.id}
+              bodyDraft={bodyDraft}
+              onBodyEditStart={() => startBodyEdit(t)}
+              onBodyChange={setBodyDraft}
+              onBodyCommit={() => commitBodyEdit(t.id)}
+              onBodyCancel={cancelBodyEdit}
               onToggleExpand={() => toggleExpand(t.id)}
               onToggleDone={() => toggle(t.id)}
               onCopy={() => copy(t)}
@@ -300,6 +394,16 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
           {query ? `no to-dos matching “${query}”` : "no to-do items yet"}
         </p>
       )}
+
+      {/* Clear completed — relocated to the foot of the list (was the caption). */}
+      <p className="text-xs text-zinc-600">
+        <button
+          onClick={clearCompleted}
+          className="transition-colors hover:text-zinc-300"
+        >
+          *Clear completed ({doneCount})
+        </button>
+      </p>
     </div>
   );
 }

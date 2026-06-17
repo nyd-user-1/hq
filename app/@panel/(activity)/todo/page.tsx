@@ -10,9 +10,6 @@ export default function ToDo() {
   return (
     <Boundary topOnly bleedX label="@panel/todo/page.tsx">
       <TodoList initial={getTodos()} />
-      <p className="text-xs text-zinc-600">
-        reads ~/.claude/hq/todo.json — HQ-native, no vault required
-      </p>
     </Boundary>
   );
 }

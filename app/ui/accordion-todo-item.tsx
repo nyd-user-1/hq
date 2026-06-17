@@ -6,6 +6,23 @@ import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
 import { CAT_BY_KEY } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
 
+// lucide "pencil" — the body's edit-in-place affordance.
+const PencilGlyph = () => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
+
 // One collapsible To Do card — a thin wrapper over the generic AccordionItem
 // that maps a TodoItem to it: provenance (● who · category), a draggable title,
 // a done checkbox (trailing), and a body of markdown + a MetaChipRow footer. The
@@ -18,6 +35,7 @@ export default function AccordionTodoItem({
   reorderEnabled,
   dragSourceId,
   dropEdge,
+  showTag = false,
   editing = false,
   editValue = "",
   onEditChange,
@@ -30,6 +48,12 @@ export default function AccordionTodoItem({
   onDragEnd,
   onDragOverEdge,
   onDropEdge,
+  bodyEditing = false,
+  bodyDraft = "",
+  onBodyEditStart,
+  onBodyChange,
+  onBodyCommit,
+  onBodyCancel,
 }: {
   item: TodoItem;
   open: boolean;
@@ -37,6 +61,7 @@ export default function AccordionTodoItem({
   reorderEnabled: boolean;
   dragSourceId: string | null;
   dropEdge: "before" | "after" | null;
+  showTag?: boolean; // show the category badge atop the card (when a filter is active)
   editing?: boolean; // inline title edit (freshly added "+" todo)
   editValue?: string;
   onEditChange?: (v: string) => void;
@@ -49,6 +74,12 @@ export default function AccordionTodoItem({
   onDragEnd: () => void;
   onDragOverEdge: (pos: "before" | "after") => void;
   onDropEdge: (pos: "before" | "after") => void;
+  bodyEditing?: boolean; // editing the markdown body in place
+  bodyDraft?: string;
+  onBodyEditStart?: () => void;
+  onBodyChange?: (v: string) => void;
+  onBodyCommit?: () => void;
+  onBodyCancel?: () => void;
 }) {
   const t = item;
   const sess =
@@ -64,19 +95,24 @@ export default function AccordionTodoItem({
       : isSession
         ? "text-orange-500"
         : "text-zinc-600";
-  const cat = t.category ? CAT_BY_KEY[t.category] : undefined;
+  // Category badge — only when the list is filtered to a category (showTag).
+  const cat = showTag && t.category ? CAT_BY_KEY[t.category] : undefined;
 
   // The created-at time now sits at the END of the meta row ("at <time>")
   // rather than in the provenance header.
-  const metaItems = [
-    ...(sess
-      ? [
-          { label: "Task", value: t.id },
-          { label: "via session", value: sess.slice(0, 8), copyText: sess },
-        ]
-      : []),
-    { label: "at", value: new Date(t.createdAt).toLocaleTimeString() },
-  ];
+  const atChip = {
+    label: "at",
+    value: new Date(t.createdAt).toLocaleTimeString(),
+  };
+  const metaItems = sess
+    ? [
+        { label: "Task", value: t.id },
+        { label: "via session", value: sess.slice(0, 8), copyText: sess },
+        atChip,
+      ]
+    : t.addedBy === "you"
+      ? [{ label: "Task", value: t.id }, { label: "via", value: "user" }, atChip]
+      : [atChip];
 
   return (
     <AccordionItem
@@ -143,20 +179,65 @@ export default function AccordionTodoItem({
     >
       {expandable && (
         <div className="group/body relative">
-          <button
-            onClick={onCopy}
-            title="copy"
-            aria-label="Copy to-do"
-            className="absolute right-0 top-0 z-10 rounded bg-zinc-900/80 p-1 text-zinc-500 opacity-0 transition hover:text-zinc-200 focus:opacity-100 group-hover/body:opacity-100"
-          >
-            {copied ? (
-              <span className="text-[10px] text-green-400">✓</span>
-            ) : (
-              <CopyGlyph />
-            )}
-          </button>
-          {t.body && <Markdown text={t.body} />}
-          <MetaChipRow divider={!!t.body} items={metaItems} />
+          {bodyEditing ? (
+            <textarea
+              autoFocus
+              value={bodyDraft}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => onBodyChange?.(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  onBodyCancel?.();
+                }
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  onBodyCommit?.();
+                }
+              }}
+              onBlur={() => onBodyCommit?.()}
+              placeholder="add details — markdown ok · ⌘↵ save · esc cancel"
+              rows={4}
+              className="w-full resize-y rounded border border-zinc-700 bg-zinc-950/60 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none"
+            />
+          ) : (
+            <>
+              {/* edit-in-place + copy affordances, top-right of the body */}
+              <div className="absolute right-0 top-0 z-10 flex items-center gap-1 opacity-0 transition focus-within:opacity-100 group-hover/body:opacity-100">
+                <button
+                  onClick={() => onBodyEditStart?.()}
+                  title="edit details"
+                  aria-label="Edit details"
+                  className="rounded bg-zinc-900/80 p-1 text-zinc-500 transition hover:text-zinc-200"
+                >
+                  <PencilGlyph />
+                </button>
+                <button
+                  onClick={onCopy}
+                  title="copy"
+                  aria-label="Copy to-do"
+                  className="rounded bg-zinc-900/80 p-1 text-zinc-500 transition hover:text-zinc-200"
+                >
+                  {copied ? (
+                    <span className="text-[10px] text-green-400">✓</span>
+                  ) : (
+                    <CopyGlyph />
+                  )}
+                </button>
+              </div>
+              {t.body ? (
+                <Markdown text={t.body} />
+              ) : (
+                <button
+                  onClick={() => onBodyEditStart?.()}
+                  className="italic text-zinc-600 transition-colors hover:text-zinc-400"
+                >
+                  add details…
+                </button>
+              )}
+            </>
+          )}
+          <MetaChipRow divider={!!t.body || bodyEditing} items={metaItems} />
         </div>
       )}
     </AccordionItem>
