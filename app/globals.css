@@ -42,7 +42,7 @@
      already sets, so dropping the forwards-fill is visually identical AND frees
      border-color for the thinking/done states below to override after the flash. */
   animation: boundary-border-flash 1.2s ease-out;
-  transition: border-color 0.25s ease; /* smooths the gray↔orange swap */
+  transition: border-color 0.45s ease; /* smooths gray↔orange and the green→gray fade */
 }
 
 /* "Thinking" indicator (terminal.tsx toggles these on its own boundary box):
@@ -84,17 +84,10 @@
   animation: hq-border-spin 2.2s linear infinite;
   pointer-events: none;
 }
-@keyframes boundary-border-done {
-  0%,
-  30% {
-    border-color: #22c55e; /* green-500 */
-  }
-  100% {
-    border-color: #3f3f46; /* zinc-700 */
-  }
-}
+/* Done, but unacknowledged: hold green until the user engages with the screen,
+   then the class is dropped and the border transition fades it back to gray. */
 .boundary-flash.is-done {
-  animation: boundary-border-done 1.2s ease-out;
+  border-color: #22c55e; /* green-500 */
 }
 
 .boundary-flash-chip {

@@ -411,8 +411,9 @@ export default function Terminal({
 
   // Thinking border (Terminal 1 only for now): drive THIS pane's own boundary box
   // off `working` (the same signal as the ✶ status) — hold orange while a turn
-  // runs, flash green on finish, then fade back to gray. closest() scopes it to
-  // this terminal's box, so it never colors a sibling pane.
+  // runs, then on finish HOLD green until the user engages (mouse over the
+  // terminal, or any click / keypress / scroll), at which point it fades to gray.
+  // closest() scopes it to this terminal's box, so it never colors a sibling pane.
   useEffect(() => {
     if (paramKey !== "session") return;
     const box = rootRef.current?.closest(".boundary-flash");
@@ -424,12 +425,22 @@ export default function Terminal({
       return;
     }
     box.classList.remove("is-thinking");
-    if (wasThinkingRef.current) {
-      wasThinkingRef.current = false;
-      box.classList.add("is-done");
-      const t = setTimeout(() => box.classList.remove("is-done"), 1300);
-      return () => clearTimeout(t);
-    }
+    if (!wasThinkingRef.current) return; // wasn't mid-turn → nothing to acknowledge
+    wasThinkingRef.current = false;
+    box.classList.add("is-done"); // held green — the "done, unacknowledged" state
+    const root = rootRef.current;
+    const dismiss = () => {
+      box.classList.remove("is-done"); // → border transition fades green to gray
+      root?.removeEventListener("pointermove", dismiss);
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("keydown", dismiss);
+      window.removeEventListener("wheel", dismiss);
+    };
+    root?.addEventListener("pointermove", dismiss); // mousing over the terminal
+    window.addEventListener("pointerdown", dismiss); // a click anywhere
+    window.addEventListener("keydown", dismiss); // a keypress anywhere
+    window.addEventListener("wheel", dismiss, { passive: true }); // a scroll
+    return dismiss; // a new turn / unmount also clears the green + detaches
   }, [working, paramKey]);
 
   useEffect(() => {
