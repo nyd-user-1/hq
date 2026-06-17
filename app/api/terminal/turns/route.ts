@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { timelineFor, workingStatus } from "@/lib/transcript";
+import {
+  timelineFor,
+  workingStatus,
+  lastTurnInterrupted,
+} from "@/lib/transcript";
 import { getSessions, getRecentSessions, listCodeProjects } from "@/lib/sessions";
 import { latestHandoff } from "@/lib/vault";
 import { lineageFor, sessionBornAt } from "@/lib/lineage";
@@ -31,6 +35,9 @@ export async function GET(req: Request) {
   const { id: resolved, items, project, contextTokens, model, lastWrite, more } =
     timelineFor(target, 24, full);
   const status = workingStatus(resolved);
+  // Only meaningful when NOT working: did the last turn end on a hard interrupt?
+  // Drives the terminal's red "interrupted — awaiting new direction" border.
+  const interrupted = !status && lastTurnInterrupted(resolved);
   // A fresh session (only local-command records, e.g. right after /clear) gets
   // resume options: recent sessions to follow, the latest handoff memo to copy.
   // Computed only then — this route polls at 1s while a turn is in flight.
@@ -62,6 +69,7 @@ export async function GET(req: Request) {
     items,
     project,
     status,
+    interrupted,
     contextTokens,
     model,
     lastWrite,

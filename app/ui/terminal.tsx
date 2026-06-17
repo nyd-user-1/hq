@@ -5,9 +5,78 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
 import BoundaryChip from "@/app/ui/boundary-chip";
+import SearchField from "@/app/ui/search-field";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
+
+// Minimal typing for the CSS Custom Highlight API (not yet in the TS DOM lib).
+// In-session find-in-page registers Ranges here to overlay highlights WITHOUT
+// rewriting the Markdown-rendered DOM.
+type HighlightCtor = new (...ranges: Range[]) => { priority: number };
+type HighlightRegistry = Map<string, { priority: number }>;
+function highlightApi(): { reg: HighlightRegistry; Ctor: HighlightCtor } | null {
+  const reg = (CSS as unknown as { highlights?: HighlightRegistry }).highlights;
+  const Ctor = (globalThis as unknown as { Highlight?: HighlightCtor }).Highlight;
+  return reg && Ctor ? { reg, Ctor } : null;
+}
+
+// CSS injected at runtime because Turbopack's DEV CSS pipeline mangles it (the
+// production Lightning CSS build is fine): it rejects the `::highlight()`
+// pseudo-element outright AND silently drops the `.is-thinking .boundary-flash-chip`
+// descendant rules. A <style> tag the browser parses natively is the portable
+// home for all of it. (@property --hq-spin + @keyframes hq-border-spin stay in
+// globals.css — the pulse below references them across the same document.)
+const TERMINAL_RUNTIME_CSS = `
+/* Turn-state border: orange while awaiting a complete response, green when done,
+   red when the user hard-interrupted (stays until the next input). */
+.boundary-flash.is-thinking { border-color: #f97316; }
+.boundary-flash.is-done { border-color: #22c55e; }
+.boundary-flash.is-interrupted { border-color: #ef4444; }
+/* Traveling pulse — shared shell, color per state. */
+.boundary-flash.is-thinking::after,
+.boundary-flash.is-done::after,
+.boundary-flash.is-interrupted::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: hq-border-spin 2.2s linear infinite; pointer-events: none;
+}
+.boundary-flash.is-thinking::after {
+  background: conic-gradient(from var(--hq-spin), transparent 0deg, #fbbf24 35deg, #fb923c 55deg, transparent 95deg, transparent 360deg);
+}
+.boundary-flash.is-done::after {
+  background: conic-gradient(from var(--hq-spin), transparent 0deg, #86efac 35deg, #22c55e 55deg, transparent 95deg, transparent 360deg);
+}
+.boundary-flash.is-interrupted::after {
+  background: conic-gradient(from var(--hq-spin), transparent 0deg, #fca5a5 35deg, #ef4444 55deg, transparent 95deg, transparent 360deg);
+}
+/* Boundary chips ride the state — copying the rerender-flash pattern (which uses
+   a blue-600 chip bg + white text): the chip BACKGROUND takes the state color in a
+   600 shade for crisp white text, while the border stays the vivid 500. Orange
+   thinking, green done, red interrupted. */
+.boundary-flash.is-thinking .boundary-flash-chip { background-color: #ea580c; color: #fff; }
+.boundary-flash.is-done .boundary-flash-chip { background-color: #16a34a; color: #fff; }
+.boundary-flash.is-interrupted .boundary-flash-chip { background-color: #dc2626; color: #fff; }
+/* Find-in-page: a crisp white × on a dark circle for the native clear button. */
+.hq-find-field::-webkit-search-cancel-button {
+  -webkit-appearance: none; appearance: none;
+  height: 14px; width: 14px; margin-left: 4px; cursor: pointer;
+  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='8' fill='%233f3f46'/><path d='M5.5 5.5 10.5 10.5 M10.5 5.5 5.5 10.5' fill='none' stroke='%23ffffff' stroke-width='1.6' stroke-linecap='round'/></svg>") center / contain no-repeat;
+}
+/* Find-in-page highlights (CSS Custom Highlight API). */
+::highlight(hq-search-session),
+::highlight(hq-search-pair) { background-color: rgba(250, 204, 21, 0.28); color: #fde68a; }
+::highlight(hq-search-active-session),
+::highlight(hq-search-active-pair) { background-color: #facc15; color: #18181b; }`;
+function ensureTerminalRuntimeStyle() {
+  const ID = "hq-terminal-runtime-style";
+  if (typeof document === "undefined" || document.getElementById(ID)) return;
+  const style = document.createElement("style");
+  style.id = ID;
+  style.textContent = TERMINAL_RUNTIME_CSS;
+  document.head.appendChild(style);
+}
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
 // remounts as the sidebar navigates the panel — it only re-renders when
@@ -289,7 +358,7 @@ function RecentSessions({
       {sessions.map((s) => (
         <div key={s.id} className="flex items-center gap-2">
           <Link
-            href={`/sessions?session=${s.id}`}
+            href={`/?session=${s.id}`}
             scroll={false}
             title="open this session in the terminal"
             className="group/resume flex min-w-0 flex-1 items-baseline gap-2 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
@@ -333,15 +402,15 @@ export default function Terminal({
   // the OTHER terminal's param — preserved whenever this one re-points, so
   // opening a session in one pane never closes the other.
   const sibling = params.get(paramKey === "session" ? "pair" : "session");
-  // session id → href that re-points THIS terminal. Terminal 1 keeps its
-  // existing /sessions route; Terminal 2 sets ?pair on the current path while
-  // preserving Terminal 1's ?session.
+  // session id → href that re-points THIS terminal. Terminal 1 pins on the home
+  // route (the /sessions panel was removed — the sidebar owns session selection
+  // now); Terminal 2 sets ?pair on the current path while preserving T1's ?session.
   const hrefFor = (id: string) => {
     const sp = new URLSearchParams();
     if (paramKey === "session") {
       sp.set("session", id);
       if (sibling) sp.set("pair", sibling); // keep terminal 2 open
-      return `/sessions?${sp.toString()}`; // unchanged T1 route
+      return `/?${sp.toString()}`; // pin T1 on home (no panel)
     }
     if (sibling) sp.set("session", sibling); // keep terminal 1
     sp.set("pair", id);
@@ -376,12 +445,25 @@ export default function Terminal({
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const [focusMode, setFocusMode] = useState(false); // centered "conversation shell" toggle for a live session (the not-connected state forces it on)
+  const [searchOpen, setSearchOpen] = useState(false); // header search expanded?
+  const [searchQuery, setSearchQuery] = useState(""); // raw input — updates instantly so typing never lags
+  const [appliedQuery, setAppliedQuery] = useState(""); // debounced — what the (heavy) DOM walk actually runs
+  const [searchMatchCount, setSearchMatchCount] = useState(0); // hits in the transcript
+  const [searchActiveIndex, setSearchActiveIndex] = useState(0); // which hit is current
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // The matched hits in document order, stored as (textNode, offset) — NOT live
+  // Ranges — so the list is cheap to build over the whole transcript (incl. text
+  // inside collapsed tool steps). Ranges are minted on demand for visible hits +
+  // the active one; collapsed hits are revealed lazily when navigated to.
+  const searchMatchesRef = useRef<{ node: Text; start: number }[]>([]);
+  const openedDetailsRef = useRef<HTMLDetailsElement[]>([]); // tool steps we force-opened to reveal a hit
   const stoppedRef = useRef(false); // true when the user killed the run via stop
   const sendTargetRef = useRef<string | null>(null); // session the in-flight send went to
   const [escArmed, setEscArmed] = useState(false); // first Esc pressed, waiting for the second
   const [escNote, setEscNote] = useState<string | null>(null); // why Esc couldn't interrupt
   const escTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
+  const [interrupted, setInterrupted] = useState(false); // last turn ended on a hard interrupt
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
   const [projects, setProjects] = useState<string[]>([]); // ~/code dirs for the "+" launcher
   const [lineage, setLineage] = useState<Lineage>(null); // this session's /clear chain
@@ -406,46 +488,173 @@ export default function Terminal({
   const stagedAtRef = useRef(0); // when the "+" staging view was entered
   const rootRef = useRef<HTMLDivElement>(null); // pane root — to reach the enclosing boundary box
   const wasThinkingRef = useRef(false); // tracks the working→done edge for the green flash
+  const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // debounce orange→green
+  const dismissRef = useRef<(() => void) | null>(null); // detaches the held-green engagement listeners
   const working = status !== null;
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
 
-  // Thinking border (Terminal 1 only for now): drive THIS pane's own boundary box
-  // off `working` (the same signal as the ✶ status) — hold orange while a turn
-  // runs, then on finish HOLD green until the user engages (mouse over the
-  // terminal, or any click / keypress / scroll), at which point it fades to gray.
-  // closest() scopes it to this terminal's box, so it never colors a sibling pane.
+  // In-session find-in-page. `q` is the DEBOUNCED query — the heavy DOM walk +
+  // highlight build runs off this, so typing into the box stays instant even on a
+  // huge transcript (the input is driven by `searchQuery`, which updates every
+  // keystroke). Per-pane highlight keys (Terminal 1 = "session", 2 = "pair") keep
+  // the two terminals from clobbering each other's registry entries.
+  const q = appliedQuery.trim().toLowerCase();
+  const searching = searchOpen && q.length > 0;
+  const hlName = `hq-search-${paramKey}`;
+  const hlActiveName = `hq-search-active-${paramKey}`;
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setAppliedQuery("");
+  }, []);
+  // Step to the next / previous hit, wrapping around.
+  const gotoMatch = useCallback((dir: 1 | -1) => {
+    setSearchActiveIndex((i) => {
+      const n = searchMatchesRef.current.length;
+      return n ? (i + dir + n) % n : 0;
+    });
+  }, []);
+
+  // A hit is visible iff none of its ancestor <details> (tool steps) are closed.
+  const isHitVisible = useCallback((node: Node) => {
+    const container = scrollRef.current;
+    let el = node.parentElement;
+    while (el && el !== container) {
+      if (el.tagName === "DETAILS" && !(el as HTMLDetailsElement).open)
+        return false;
+      el = el.parentElement;
+    }
+    return true;
+  }, []);
+
+  // Register the base highlight for every CURRENTLY-visible hit (collapsed ones
+  // are skipped here — they light up once navigation reveals them).
+  const registerVisibleHighlights = useCallback(() => {
+    const api = highlightApi();
+    if (!api) return;
+    const len = q.length;
+    const ranges: Range[] = [];
+    for (const m of searchMatchesRef.current) {
+      if (!isHitVisible(m.node)) continue;
+      try {
+        const r = document.createRange();
+        r.setStart(m.node, m.start);
+        r.setEnd(m.node, m.start + len);
+        ranges.push(r);
+      } catch {
+        /* node went stale (live tail rewrote the DOM) — skip it */
+      }
+    }
+    if (ranges.length) api.reg.set(hlName, new api.Ctor(...ranges));
+    else api.reg.delete(hlName);
+  }, [q, hlName, isHitVisible]);
+
+  // Debounce the raw input into the applied query — the expensive search only
+  // recomputes ~250ms after you stop typing, never mid-keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setAppliedQuery(searchQuery), 250);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // A new applied query always starts back at the first hit.
+  useEffect(() => {
+    setSearchActiveIndex(0);
+  }, [q]);
+
+  // Focus the box the moment it expands (it's always mounted for the width
+  // animation, so autoFocus won't refire — focus imperatively instead).
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
+  // Turn-state border (Terminal 1 only for now): drive THIS pane's own boundary
+  // box off the turn lifecycle. ORANGE while the user awaits a COMPLETE response
+  // — `working` (the ✶ status: thinking / writing / tool calls / API, the whole
+  // turn) OR a local send in flight. On a clean finish → GREEN, held until the
+  // user engages (mouse over the terminal, or any click / keypress / scroll), then
+  // it fades to gray. On a HARD INTERRUPT → RED, held until the user sends new
+  // input (NOT dismissed by mere engagement — a stopped turn needs fresh
+  // direction, so it stays loud until you give it). A short debounce on the clean
+  // finish keeps brief gaps between phases from flashing green early. closest()
+  // scopes it to this terminal's box, so it never colors a sibling pane.
   useEffect(() => {
     if (paramKey !== "session") return;
     const box = rootRef.current?.closest(".boundary-flash");
     if (!box) return;
-    if (working) {
-      box.classList.add("is-thinking");
-      box.classList.remove("is-done");
+    const awaiting = working || sending;
+
+    if (awaiting) {
+      if (doneTimerRef.current) {
+        clearTimeout(doneTimerRef.current); // we're active again → cancel any pending finish
+        doneTimerRef.current = null;
+      }
+      dismissRef.current?.(); // tear down a prior held-green's listeners, if any
+      box.classList.add("is-thinking"); // orange
+      box.classList.remove("is-done", "is-interrupted");
       wasThinkingRef.current = true;
       return;
     }
-    box.classList.remove("is-thinking");
+
+    if (interrupted) {
+      // Hard interrupt → RED, held until the next input (the awaiting branch above
+      // clears it). No engagement dismissal — the user must notice + redirect.
+      if (doneTimerRef.current) {
+        clearTimeout(doneTimerRef.current);
+        doneTimerRef.current = null;
+      }
+      dismissRef.current?.(); // drop any held-green listeners
+      box.classList.remove("is-thinking", "is-done");
+      box.classList.add("is-interrupted");
+      wasThinkingRef.current = false; // consumed — don't also schedule green
+      return;
+    }
+
     if (!wasThinkingRef.current) return; // wasn't mid-turn → nothing to acknowledge
-    wasThinkingRef.current = false;
-    box.classList.add("is-done"); // held green — the "done, unacknowledged" state
-    const root = rootRef.current;
-    const dismiss = () => {
-      box.classList.remove("is-done"); // → border transition fades green to gray
-      root?.removeEventListener("pointermove", dismiss);
-      window.removeEventListener("pointerdown", dismiss);
-      window.removeEventListener("keydown", dismiss);
-      window.removeEventListener("wheel", dismiss);
+    if (doneTimerRef.current) return; // a finish is already pending
+
+    // Debounce: only declare the turn done after the await has stayed clear for a
+    // beat — a gap between thinking → tool → writing shouldn't blink green.
+    doneTimerRef.current = setTimeout(() => {
+      doneTimerRef.current = null;
+      wasThinkingRef.current = false;
+      box.classList.remove("is-thinking");
+      box.classList.add("is-done"); // orange → held green (pulse + green chips)
+      const root = rootRef.current;
+      const dismiss = () => {
+        box.classList.remove("is-done"); // → border transition fades green to gray
+        root?.removeEventListener("pointermove", dismiss);
+        window.removeEventListener("pointerdown", dismiss);
+        window.removeEventListener("keydown", dismiss);
+        window.removeEventListener("wheel", dismiss);
+        dismissRef.current = null;
+      };
+      dismissRef.current = dismiss;
+      root?.addEventListener("pointermove", dismiss); // mousing over the terminal
+      window.addEventListener("pointerdown", dismiss); // a click anywhere
+      window.addEventListener("keydown", dismiss); // a keypress anywhere
+      window.addEventListener("wheel", dismiss, { passive: true }); // a scroll
+    }, 700);
+
+    // Re-run (next turn) / unmount: cancel a pending finish + drop held-green.
+    return () => {
+      if (doneTimerRef.current) {
+        clearTimeout(doneTimerRef.current);
+        doneTimerRef.current = null;
+      }
+      dismissRef.current?.();
     };
-    root?.addEventListener("pointermove", dismiss); // mousing over the terminal
-    window.addEventListener("pointerdown", dismiss); // a click anywhere
-    window.addEventListener("keydown", dismiss); // a keypress anywhere
-    window.addEventListener("wheel", dismiss, { passive: true }); // a scroll
-    return dismiss; // a new turn / unmount also clears the green + detaches
-  }, [working, paramKey]);
+  }, [working, sending, interrupted, paramKey]);
 
   useEffect(() => {
     mountCount += 1;
     console.log(`[terminal] mounted — count=${mountCount}`);
+  }, []);
+
+  // Inject the runtime <style> on mount so the turn-state border/pulse/chip rules
+  // exist the instant `.is-thinking`/`.is-done` get toggled (id-guarded; the two
+  // panes share one tag).
+  useEffect(() => {
+    ensureTerminalRuntimeStyle();
   }, []);
 
   // Latest pathname in a ref so loadTurns can build re-pin URLs WITHOUT listing
@@ -505,6 +714,7 @@ export default function Terminal({
         }
       }
       setStatus(d.status ?? null);
+      setInterrupted(d.interrupted ?? false);
       setContextTokens(d.contextTokens ?? 0);
       setModel(d.model ?? "");
       setLastWrite(d.lastWrite || null);
@@ -534,6 +744,121 @@ export default function Terminal({
       loadingOlderRef.current = false;
     });
   }, [hasMore, loadTurns]);
+
+  // Search opened → pull the FULL transcript so find-in-page covers everything,
+  // not just the loaded tail. loadOlder no-ops if already expanded / nothing more.
+  useEffect(() => {
+    if (searchOpen) loadOlder();
+  }, [searchOpen, loadOlder]);
+
+  // Build the match list for the active query across the WHOLE transcript — text
+  // inside collapsed tool steps included. Cheap on purpose: one TreeWalker pass of
+  // (node, offset) pairs, NO per-step textContent serialization and NOTHING opened
+  // — so it stays snappy regardless of transcript size or hit count. Only visible
+  // hits get highlighted now; collapsed ones are revealed lazily on navigation.
+  useEffect(() => {
+    const api = highlightApi();
+    const container = scrollRef.current;
+    if (!api || !container || !searching) {
+      api?.reg.delete(hlName);
+      api?.reg.delete(hlActiveName);
+      searchMatchesRef.current = [];
+      setSearchMatchCount(0);
+      openedDetailsRef.current.forEach((d) => (d.open = false)); // re-collapse what nav opened
+      openedDetailsRef.current = [];
+      return;
+    }
+    ensureTerminalRuntimeStyle(); // the highlight + state styling lives in a runtime <style>
+    const matches: { node: Text; start: number }[] = [];
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const v = node.nodeValue;
+        return v && v.trim()
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      },
+    });
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = (node.nodeValue ?? "").toLowerCase();
+      for (
+        let idx = text.indexOf(q);
+        idx !== -1;
+        idx = text.indexOf(q, idx + q.length)
+      ) {
+        matches.push({ node: node as Text, start: idx });
+      }
+    }
+    searchMatchesRef.current = matches;
+    registerVisibleHighlights();
+    setSearchMatchCount(matches.length);
+    setSearchActiveIndex((i) =>
+      matches.length ? Math.min(i, matches.length - 1) : 0,
+    );
+  }, [searching, q, items, hlName, hlActiveName, registerVisibleHighlights]);
+
+  // Navigate to the active hit: reveal it if it's tucked inside a collapsed tool
+  // step (then re-light the now-visible siblings), paint it the brighter active
+  // shade, and scroll it a third of the way down for context.
+  useEffect(() => {
+    const api = highlightApi();
+    const container = scrollRef.current;
+    if (!api || !container) return;
+    const matches = searchMatchesRef.current;
+    if (!searching || matches.length === 0) {
+      api.reg.delete(hlActiveName);
+      return;
+    }
+    const m = matches[Math.min(searchActiveIndex, matches.length - 1)];
+    // Reveal-on-navigate (Chrome-find style): open any collapsed <details> hiding
+    // this hit, then refresh the base highlights so its newly-visible siblings show.
+    let opened = false;
+    let el = m.node.parentElement;
+    while (el && el !== container) {
+      if (el.tagName === "DETAILS" && !(el as HTMLDetailsElement).open) {
+        (el as HTMLDetailsElement).open = true;
+        openedDetailsRef.current.push(el as HTMLDetailsElement);
+        opened = true;
+      }
+      el = el.parentElement;
+    }
+    if (opened) registerVisibleHighlights();
+    let range: Range;
+    try {
+      range = document.createRange();
+      range.setStart(m.node, m.start);
+      range.setEnd(m.node, m.start + q.length);
+    } catch {
+      return; // node went stale
+    }
+    const hl = new api.Ctor(range);
+    hl.priority = 1; // outrank the base highlight where they overlap
+    api.reg.set(hlActiveName, hl);
+    const rr = range.getBoundingClientRect();
+    const cr = container.getBoundingClientRect();
+    if (rr.height || rr.width) {
+      container.scrollTo({
+        top: container.scrollTop + (rr.top - cr.top) - container.clientHeight / 3,
+        behavior: "smooth",
+      });
+    }
+  }, [
+    searchActiveIndex,
+    searchMatchCount,
+    searching,
+    hlActiveName,
+    q,
+    registerVisibleHighlights,
+  ]);
+
+  // Tidy the global highlight registry when this pane unmounts.
+  useEffect(
+    () => () => {
+      const api = highlightApi();
+      api?.reg.delete(`hq-search-${paramKey}`);
+      api?.reg.delete(`hq-search-active-${paramKey}`);
+    },
+    [paramKey],
+  );
 
   // Entering the staging view: clear the display (nothing is being shown) and
   // stamp the moment — only sessions born after it count as the newborn.
@@ -1073,6 +1398,107 @@ export default function Terminal({
         )}
         {/* ctx % rides right after the session id (it's a property of THIS id). */}
         {ctxMeter}
+        {/* Search — bare icon-button (send-box standard) just after the session
+            id. Click expands it into the SearchField primitive (animated width)
+            that filters THIS session's transcript; the icon morphs to ×. */}
+        {resolvedId && !notConnected && (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+              aria-label={searchOpen ? "Close search" : "Search this session"}
+              title={searchOpen ? "close search" : "search this session"}
+              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              {searchOpen ? (
+                // lucide x
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              ) : (
+                // lucide search
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+              )}
+            </button>
+            {/* Expanding field — always mounted (so the width animates), the
+                reusable SearchField primitive inside. Escape closes + clears. */}
+            <span
+              className={`overflow-hidden transition-all duration-200 ease-out ${
+                searchOpen ? "w-44 opacity-100 sm:w-56" : "w-0 opacity-0"
+              }`}
+            >
+              <SearchField
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="search this session…"
+                inputRef={searchInputRef}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") closeSearch();
+                  else if (e.key === "Enter") {
+                    e.preventDefault();
+                    gotoMatch(e.shiftKey ? -1 : 1); // ↵ next · ⇧↵ prev
+                  }
+                }}
+                className="hq-find-field !py-1 !text-xs"
+              />
+            </span>
+            {searching && (
+              <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-zinc-500">
+                <button
+                  type="button"
+                  onClick={() => gotoMatch(-1)}
+                  disabled={!searchMatchCount}
+                  aria-label="Previous match"
+                  title="previous match (⇧↵)"
+                  className="flex items-center rounded p-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  {/* lucide chevron-up */}
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m18 15-6-6-6 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => gotoMatch(1)}
+                  disabled={!searchMatchCount}
+                  aria-label="Next match"
+                  title="next match (↵)"
+                  className="flex items-center rounded p-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  {/* lucide chevron-down */}
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                <span className="tabular-nums" title="↵ next · ⇧↵ previous">
+                  {searchMatchCount ? searchActiveIndex + 1 : 0}/{searchMatchCount}
+                </span>
+              </span>
+            )}
+          </span>
+        )}
         {/* The /clear chain: this session's tied line of continuations.
             Click a row to show that session in the terminal. */}
         {lineage?.chain && (
@@ -1112,26 +1538,58 @@ export default function Terminal({
         {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
         <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
           {/* Layout toggle — flips this live session between two real modes:
-              "wide screen" (default, blue) and "focus" (the centered conversation
-              shell, green). Shows the CURRENT mode in its own color. Only offered
-              when a real session is pinned; the empty state is already centered. */}
+              "wide screen" (default) and "focus mode" (the centered conversation
+              shell). Bare icon-button matching the send-box buttons: minimize-2
+              while wide (shrink into focus), maximize-2 while focused (expand back
+              out). Only offered when a real session is pinned; empty state is
+              already centered. */}
           {resolvedId && !notConnected && (
             <button
+              type="button"
               onClick={() => setFocusMode((f) => !f)}
+              aria-label={focusMode ? "Wide screen" : "Focus mode"}
               title={
                 focusMode
-                  ? "in focus — click for wide screen"
-                  : "in wide screen — click for focus"
+                  ? "in focus mode — click to expand to wide screen"
+                  : "in wide screen — click for focus mode"
               }
-              className={`rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors ${
-                focusMode
-                  ? // → wide screen: blue-600 (#2563eb), the rerender-flash blue
-                    "border-blue-600/60 text-blue-600 hover:border-blue-500 hover:text-blue-500"
-                  : // → focus: emerald/green
-                    "border-emerald-500/40 text-emerald-300 hover:border-emerald-400 hover:text-emerald-200"
-              }`}
+              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
             >
-              {focusMode ? "wide screen" : "focus"}
+              {focusMode ? (
+                // lucide maximize-2 — expand back out to wide screen
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" x2="14" y1="3" y2="10" />
+                  <line x1="3" x2="10" y1="21" y2="14" />
+                </svg>
+              ) : (
+                // lucide minimize-2 — shrink into the centered focus mode
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" x2="21" y1="10" y2="3" />
+                  <line x1="3" x2="10" y1="21" y2="14" />
+                </svg>
+              )}
             </button>
           )}
         </span>

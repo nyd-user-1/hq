@@ -45,13 +45,13 @@
   transition: border-color 0.45s ease; /* smooths gray↔orange and the green→gray fade */
 }
 
-/* "Thinking" indicator (terminal.tsx toggles these on its own boundary box):
-   hold orange while a turn runs, then flash green on finish and fade to gray. */
-.boundary-flash.is-thinking {
-  border-color: #f97316; /* orange-500 — matches the ✶ working status */
-}
-/* Traveling pulse: a bright orange arc loops the box while thinking. A conic
-   gradient rotated via @property, masked to the 1px border ring. */
+/* Turn-state indicator (terminal.tsx toggles `.is-thinking` / `.is-done` on its
+   own boundary box). The STATE RULES — border color, the traveling-pulse
+   ::after, and the boundary-chip colors — are NOT here: Turbopack's dev CSS
+   pipeline silently DROPS the descendant chip selector (production Lightning CSS
+   keeps it), the same flakiness that rejects ::highlight. So terminal.tsx injects
+   all of them at runtime via a <style> tag the browser parses natively. Only the
+   shared @property + @keyframes the pulse depends on live here. */
 @property --hq-spin {
   syntax: "<angle>";
   initial-value: 0deg;
@@ -62,37 +62,20 @@
     --hq-spin: 360deg;
   }
 }
-.boundary-flash.is-thinking::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(
-    from var(--hq-spin),
-    transparent 0deg,
-    #fbbf24 35deg,
-    #fb923c 55deg,
-    transparent 95deg,
-    transparent 360deg
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: hq-border-spin 2.2s linear infinite;
-  pointer-events: none;
-}
-/* Done, but unacknowledged: hold green until the user engages with the screen,
-   then the class is dropped and the border transition fades it back to gray. */
-.boundary-flash.is-done {
-  border-color: #22c55e; /* green-500 */
-}
 
 .boundary-flash-chip {
-  animation: boundary-chip-flash 1.2s ease-out both;
+  /* No `both` (same reasoning as .boundary-flash): the keyframe ends at the
+     resting zinc the Tailwind classes already set, so dropping the forwards-fill
+     is visually identical AND frees `color` for the is-thinking/is-done overrides
+     above to take hold after the flash. */
+  animation: boundary-chip-flash 1.2s ease-out;
 }
+
+/* NOTE: the find-in-page highlight-pseudo rules are NOT here — Turbopack's dev
+   CSS parser rejects that pseudo-element ("not a valid pseudo-element") and
+   drops the rule, even though the production Lightning CSS build accepts it. To
+   work in BOTH, terminal.tsx injects them at runtime via a <style> tag (parsed
+   natively by the browser, which supports the CSS Custom Highlight API). */
 
 @utility scrollbar-none {
   scrollbar-width: none;

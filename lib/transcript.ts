@@ -603,6 +603,68 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   return { startedAt, outputTokens, phase, phases: seq };
 }
 
+// Did this session's MOST RECENT turn end on a hard interrupt ("[Request
+// interrupted by user]") with no newer prompt since? Powers the terminal's red
+// "interrupted — awaiting new direction" border. workingStatus() returns null on
+// both a clean finish and an interrupt, so this is the separate signal that tells
+// them apart. Reads only the tail (cheap). False while a turn is in flight or
+// after a normal completion; true only when the latest turn boundary is the
+// interrupt marker — which clears the moment a fresh prompt lands.
+export function lastTurnInterrupted(id: string | null): boolean {
+  const sid = id ?? latestSessionId();
+  if (!sid) return false;
+  let text: string;
+  try {
+    const file = sessionFilePath(sid);
+    const st = fs.statSync(file);
+    const startAt = Math.max(0, st.size - TAIL_BYTES);
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(st.size - startAt);
+    fs.readSync(fd, buf, 0, buf.length, startAt);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return false;
+  }
+  const lines = text.split("\n");
+  // Walk back to the most recent MEANINGFUL turn boundary and ask: was it the
+  // interrupt marker? Skip sidechains, local-command meta, and mid-turn tool
+  // results (a trailing tool_result means a turn is still live → not interrupted).
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e.isSidechain) continue;
+    if (e.type !== "user" && e.type !== "assistant") continue;
+    const c = e.message?.content;
+    if (
+      typeof c === "string" &&
+      (c.includes("<command-name>") ||
+        c.includes("<local-command-stdout>") ||
+        c.includes("<local-command-caveat>"))
+    )
+      continue; // meta record
+    const blocks = Array.isArray(c) ? c : [];
+    if (e.type === "user" && blocks.some((b) => b?.type === "tool_result"))
+      return false; // mid-turn tool result → a turn is in flight, not interrupted
+    if (e.type === "assistant") return false; // a real reply → completed, not interrupted
+    const flatText =
+      typeof c === "string"
+        ? c
+        : blocks
+            .filter((b) => b?.type === "text")
+            .map((b) => b.text ?? "")
+            .join(" ");
+    return flatText.includes("[Request interrupted by user]");
+  }
+  return false;
+}
+
 export type CommandRun = {
   command: string; // "/code-review"
   arg: string; // trailing args, if any
