@@ -45,6 +45,7 @@ export default function AccordionItem({
   labelEditor,
   done = false,
   fillLabel = false,
+  wrapLabel = false,
   expandable,
   open,
   onToggleExpand,
@@ -75,6 +76,7 @@ export default function AccordionItem({
   labelEditor?: ReactNode; // when set, replaces the title span (inline rename input)
   done?: boolean; // strike-through styling
   fillLabel?: boolean; // label flex-grows (no trailing control → copy sits right)
+  wrapLabel?: boolean; // let the title wrap instead of truncating (responsive rows)
   expandable: boolean;
   open: boolean;
   onToggleExpand: () => void;
@@ -180,9 +182,9 @@ export default function AccordionItem({
               }}
               onDragEnd={onDragEnd}
               title={label}
-              className={`min-w-0 ${
-                fillLabel ? "flex-1 " : ""
-              }cursor-grab truncate text-xs active:cursor-grabbing ${
+              className={`min-w-0 ${fillLabel ? "flex-1 " : ""}${
+                wrapLabel ? "break-words" : "truncate"
+              } cursor-grab text-xs active:cursor-grabbing ${
                 done ? "text-zinc-600 line-through" : "text-zinc-200"
               }`}
             >

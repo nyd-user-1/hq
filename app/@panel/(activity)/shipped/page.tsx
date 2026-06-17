@@ -145,7 +145,7 @@ export default async function Shipped({
     <Boundary topOnly bleedX label="@panel/shipped/page.tsx">
       <ShippedFeed ships={ships} pinTail={pinTail} />
       <p className="text-xs text-zinc-600">
-        every ~/code repo · newest first (each repo&apos;s latest always shown)
+        *Click a commit to read its diff here.
       </p>
     </Boundary>
   );

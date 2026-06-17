@@ -1,16 +1,17 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
 import MetaChipRow from "@/app/ui/meta-chip-row";
 import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
 import { CAT_BY_KEY } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
 
-// lucide "pencil" — the body's edit-in-place affordance.
-const PencilGlyph = () => (
+// lucide "pencil" — the body's edit-in-place affordance + the kebab's Rename.
+const PencilGlyph = ({ size = 12 }: { size?: number }) => (
   <svg
-    width="12"
-    height="12"
+    width={size}
+    height={size}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -20,6 +21,30 @@ const PencilGlyph = () => (
   >
     <path d="M12 20h9" />
     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
+
+// lucide "ellipsis-vertical" (the ⋮ kebab) and "trash" (Delete).
+const KebabGlyph = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="5" r="1.6" />
+    <circle cx="12" cy="12" r="1.6" />
+    <circle cx="12" cy="19" r="1.6" />
+  </svg>
+);
+const TrashGlyph = () => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M3 6h18" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
   </svg>
 );
 
@@ -54,6 +79,8 @@ export default function AccordionTodoItem({
   onBodyChange,
   onBodyCommit,
   onBodyCancel,
+  onRename,
+  onDelete,
 }: {
   item: TodoItem;
   open: boolean;
@@ -80,8 +107,27 @@ export default function AccordionTodoItem({
   onBodyChange?: (v: string) => void;
   onBodyCommit?: () => void;
   onBodyCancel?: () => void;
+  onRename?: () => void; // kebab → rename the title in place
+  onDelete?: () => void; // kebab → delete the todo
 }) {
   const t = item;
+  // The ⋮ kebab's own open state — local; closes on outside click / Escape.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node))
+        setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
   const sess =
     t.fromSession || (t.addedBy && t.addedBy !== "you" ? t.addedBy : null);
   // Every to-do now has body content — at minimum the "at <time>" meta row — so
@@ -121,6 +167,8 @@ export default function AccordionTodoItem({
       tag={cat ? { label: cat.label, chipClass: cat.chip } : undefined}
       claimedBy={t.claimedBy}
       label={t.text}
+      wrapLabel
+      fillLabel
       labelEditor={
         editing ? (
           <input
@@ -151,6 +199,53 @@ export default function AccordionTodoItem({
       onDragEnd={onDragEnd}
       onDragOverEdge={onDragOverEdge}
       onDropEdge={onDropEdge}
+      trailing={
+        <div ref={menuRef} className="relative ml-auto shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((o) => !o);
+            }}
+            title="more"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex size-6 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+          >
+            <KebabGlyph />
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute right-0 top-full z-30 mt-1 flex w-36 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+            >
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRename?.();
+                }}
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+              >
+                <PencilGlyph size={13} />
+                Rename
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete?.();
+                }}
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-red-500/10"
+              >
+                <TrashGlyph />
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      }
       leading={
         t.done ? (
           <button

@@ -3,11 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import AccordionTodoItem from "@/app/ui/accordion-todo-item";
 import SearchField from "@/app/ui/search-field";
-import SortIcon from "@/app/ui/sort-icon";
 import { CATEGORIES, CAT_BY_KEY } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
-
-type SortMode = "manual" | "new" | "old";
 
 // To Do over the HQ-native store (/api/todo). A to-do is a title + an optional
 // markdown body (no sub-item records). This is the CONTAINER: it owns the list
@@ -18,7 +15,6 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const [items, setItems] = useState<TodoItem[]>(initial);
   const [draft, setDraft] = useState(""); // inline title editor for a "+"-added todo
   const [query, setQuery] = useState(""); // search box over the list
-  const [sort, setSort] = useState<SortMode>("manual"); // manual = stored drag order
   const [editingId, setEditingId] = useState<string | null>(null);
   const editIdRef = useRef<string | null>(null); // mirrors editingId; guards Enter+blur double-fire
   const [bodyEditId, setBodyEditId] = useState<string | null>(null); // todo whose body is being edited in place
@@ -64,14 +60,9 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
           (t.body ?? "").toLowerCase().includes(needle)
       )
     : byCat;
-  // Sort is a view over the list: "manual" shows the stored drag order; a date
-  // sort overrides it (and disables drag — see reorderEnabled below).
-  const list =
-    sort === "manual"
-      ? filtered
-      : [...filtered].sort((a, b) =>
-          sort === "new" ? b.createdAt - a.createdAt : a.createdAt - b.createdAt
-        );
+  // No sort control here (it's "ironic" on a To Do list) — the list shows the
+  // stored manual drag order; only category-filter + search narrow it.
+  const list = filtered;
   const doneCount = items.filter((t) => t.done).length;
   // Only show filter chips for categories that actually have items.
   const present = CATEGORIES.filter((c) =>
@@ -94,10 +85,25 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     setItems((xs) => [item, ...xs]);
     setCat(null);
     setQuery("");
-    setSort("manual");
     setDraft("");
     editIdRef.current = id;
     setEditingId(id);
+  }
+
+  // Rename an existing todo: reuse the inline title editor (the kebab → Rename).
+  function startRename(t: TodoItem) {
+    setDraft(t.text);
+    editIdRef.current = t.id;
+    setEditingId(t.id);
+  }
+
+  // Delete a todo (kebab → Delete). Optimistic; the blank-id case is local-only.
+  function deleteTodo(id: string) {
+    setItems((xs) => xs.filter((t) => t.id !== id));
+    if (id.startsWith("tmp_")) return;
+    fetch(`/api/todo?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(
+      () => {}
+    );
   }
 
   // Close the inline title editor. Enter/blur → save; Escape or an empty title →
@@ -110,11 +116,22 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     setEditingId(null);
     const text = draft.trim();
     setDraft("");
+    const isNew = id.startsWith("tmp_");
     if (!save || !text) {
-      setItems((xs) => xs.filter((t) => t.id !== id)); // drop the uncommitted blank
-      return;
+      if (isNew) setItems((xs) => xs.filter((t) => t.id !== id)); // drop the uncommitted blank
+      return; // an existing todo: cancel leaves the title unchanged
     }
     setItems((xs) => xs.map((t) => (t.id === id ? { ...t, text } : t)));
+    if (!isNew) {
+      // Rename of an existing todo → PATCH the title, no view changes.
+      fetch("/api/todo", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, text }),
+      }).catch(() => {});
+      return;
+    }
+    // New blank → POST, swap the temp row for the server's (real id, createdAt).
     fetch("/api/todo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -233,10 +250,31 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
           placeholder="Search to-dos…"
         />
         <div className="flex items-center gap-2">
-          {/* Filter — styled like the send box's model button; the category
-              dropdown's trigger, opening bottom-left. Shows the active category
-              (like the model button shows the current model), else "Filter". */}
-          <div ref={tagRef} className="relative">
+          {/* + on the LEFT */}
+          <button
+            onClick={addBlank}
+            title="New to-do"
+            aria-label="New to-do"
+            className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+          {/* Filter on the RIGHT — styled like the send box's model button; the
+              category dropdown's trigger, opening bottom-right. Shows the active
+              category (like the model button shows the model), else "Filter". */}
+          <div ref={tagRef} className="relative ml-auto">
             <button
               onClick={() => setTagOpen((o) => !o)}
               title="filter by category"
@@ -252,7 +290,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
             {tagOpen && (
               <div
                 role="menu"
-                className="absolute left-0 top-full z-30 mt-1 flex w-44 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+                className="absolute right-0 top-full z-30 mt-1 flex w-44 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
               >
                 <button
                   role="menuitem"
@@ -297,51 +335,6 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
               </div>
             )}
           </div>
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              onClick={() =>
-                setSort((s) =>
-                  s === "manual" ? "new" : s === "new" ? "old" : "manual"
-                )
-              }
-              title={
-                sort === "manual"
-                  ? "Manual order — drag to reorder. Click to sort newest first."
-                  : sort === "new"
-                    ? "Sorted newest first — click for oldest. Sorting overrides the manual drag order."
-                    : "Sorted oldest first — click to return to manual drag order."
-              }
-              aria-label="Toggle sort order"
-              aria-pressed={sort !== "manual"}
-              className={`flex shrink-0 items-center rounded-md p-1.5 transition-colors ${
-                sort === "manual"
-                  ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                  : "bg-zinc-800 text-zinc-100"
-              }`}
-            >
-              <SortIcon dir={sort === "old" ? "old" : "new"} />
-            </button>
-            <button
-              onClick={addBlank}
-              title="New to-do"
-              aria-label="New to-do"
-              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -354,7 +347,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
               open={expanded.has(t.id)}
               copied={copiedId === t.id}
               showTag={cat !== null}
-              reorderEnabled={cat === null && sort === "manual"}
+              reorderEnabled={cat === null}
               dragSourceId={draggingId}
               dropEdge={dropTarget?.id === t.id ? dropTarget.pos : null}
               editing={editingId === t.id}
@@ -368,6 +361,8 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
               onBodyChange={setBodyDraft}
               onBodyCommit={() => commitBodyEdit(t.id)}
               onBodyCancel={cancelBodyEdit}
+              onRename={() => startRename(t)}
+              onDelete={() => deleteTodo(t.id)}
               onToggleExpand={() => toggleExpand(t.id)}
               onToggleDone={() => toggle(t.id)}
               onCopy={() => copy(t)}
