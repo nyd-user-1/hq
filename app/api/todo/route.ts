@@ -30,13 +30,20 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const { id, text, done, claimedBy, body, category } = await req
-    .json()
-    .catch(() => ({}));
+  const { id, text, done, claimedBy, body, category, categories, pinned } =
+    await req.json().catch(() => ({}));
   if (typeof id !== "string" || !id) {
     return new NextResponse("id required", { status: 400 });
   }
-  const item = updateTodo(id, { text, done, claimedBy, body, category });
+  const item = updateTodo(id, {
+    text,
+    done,
+    claimedBy,
+    body,
+    category,
+    categories,
+    pinned,
+  });
   if (!item) return new NextResponse("not found", { status: 404 });
   return NextResponse.json({ item });
 }

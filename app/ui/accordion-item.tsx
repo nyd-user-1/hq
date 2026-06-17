@@ -39,6 +39,7 @@ export default function AccordionItem({
   dotClass = "text-zinc-600",
   meta,
   tag,
+  tags,
   claimedBy,
   index,
   label,
@@ -69,6 +70,7 @@ export default function AccordionItem({
   dotClass?: string;
   meta?: string; // muted middle text (a timestamp, a file path…)
   tag?: AccordionTag; // right-aligned pill (a category / kind)
+  tags?: AccordionTag[]; // multiple right-aligned pills (e.g. several categories)
   claimedBy?: string;
   // disclosure
   index?: number; // optional leading number; omit to hide
@@ -131,18 +133,23 @@ export default function AccordionItem({
               {meta}
             </span>
           )}
-          {tag && (
-            <span
-              className={`ml-auto shrink-0 rounded px-1 normal-case tracking-normal ${tag.chipClass}`}
-            >
-              {tag.label}
+          {(tags?.length ? tags : tag ? [tag] : []).length > 0 && (
+            <span className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1">
+              {(tags?.length ? tags : [tag!]).map((tg, i) => (
+                <span
+                  key={i}
+                  className={`rounded px-1 normal-case tracking-normal ${tg.chipClass}`}
+                >
+                  {tg.label}
+                </span>
+              ))}
             </span>
           )}
           {claimedBy && (
             <span
               title={`claimed by session ${claimedBy}`}
               className={`shrink-0 rounded bg-amber-500/15 px-1 normal-case tracking-normal text-amber-300/90 ${
-                tag ? "ml-2" : "ml-auto"
+                tag || tags?.length ? "ml-2" : "ml-auto"
               }`}
             >
               {claimedBy.slice(0, 8)}

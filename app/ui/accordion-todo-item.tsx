@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "@/app/ui/md";
 import MetaChipRow from "@/app/ui/meta-chip-row";
 import AccordionItem, { CopyGlyph } from "@/app/ui/accordion-item";
-import { CAT_BY_KEY } from "@/app/ui/todo-categories";
+import { CATEGORIES, CAT_BY_KEY } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
 
 // lucide "pencil" — the body's edit-in-place affordance + the kebab's Rename.
@@ -48,6 +48,35 @@ const TrashGlyph = () => (
   </svg>
 );
 
+// kebab item glyphs (lucide): star (filled when pinned), terminal, tag, link, copy.
+const Icon = ({ d, fill = "none" }: { d: string; fill?: string }) => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill={fill}
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {d.split("|").map((p, i) => (
+      <path key={i} d={p} />
+    ))}
+  </svg>
+);
+const STAR_D =
+  "M11.5 2.7a.6.6 0 0 1 1 0l2.4 5 5.5.8a.6.6 0 0 1 .3 1l-4 3.9.9 5.5a.6.6 0 0 1-.8.6L12 18.4l-4.9 2.6a.6.6 0 0 1-.8-.6l.9-5.5-4-3.9a.6.6 0 0 1 .3-1l5.5-.8z";
+const TERMINAL_D = "m4 17 6-6-6-6|M12 19h8";
+const TAG_D =
+  "M3 11V4a1 1 0 0 1 1-1h7l9 9-8 8z|M7.5 7.5h.01";
+const LINK_D =
+  "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7|M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7";
+const COPY_D =
+  "M9 9h13v13H9z|M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1";
+const MENU_ITEM =
+  "flex items-center gap-2 rounded px-2 py-1.5 text-left text-zinc-300 transition-colors hover:bg-zinc-900";
+
 // One collapsible To Do card — a thin wrapper over the generic AccordionItem
 // that maps a TodoItem to it: provenance (● who · category), a draggable title,
 // a done checkbox (trailing), and a body of markdown + a MetaChipRow footer. The
@@ -81,6 +110,10 @@ export default function AccordionTodoItem({
   onBodyCancel,
   onRename,
   onDelete,
+  onSetCategory,
+  onTogglePin,
+  onSend,
+  onOpenSession,
 }: {
   item: TodoItem;
   open: boolean;
@@ -109,10 +142,15 @@ export default function AccordionTodoItem({
   onBodyCancel?: () => void;
   onRename?: () => void; // kebab → rename the title in place
   onDelete?: () => void; // kebab → delete the todo
+  onSetCategory?: (cat: string | null) => void; // kebab → tag/clear the category
+  onTogglePin?: () => void; // kebab → star/unstar (pin to top)
+  onSend?: () => void; // kebab → drop the title into Terminal 1's box (no send)
+  onOpenSession?: (sess: string) => void; // kebab → pin the source session
 }) {
   const t = item;
   // The ⋮ kebab's own open state — local; closes on outside click / Escape.
   const [menuOpen, setMenuOpen] = useState(false);
+  const [catSubOpen, setCatSubOpen] = useState(false); // "Set category" inline submenu
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menuOpen) return;
@@ -141,8 +179,17 @@ export default function AccordionTodoItem({
       : isSession
         ? "text-orange-500"
         : "text-zinc-600";
-  // Category badge — only when the list is filtered to a category (showTag).
-  const cat = showTag && t.category ? CAT_BY_KEY[t.category] : undefined;
+  // Effective category set: `categories` is authoritative once defined (even if
+  // []); else fall back to the legacy single `category` (e.g. batch-optimizer).
+  const catKeys =
+    t.categories !== undefined ? t.categories : t.category ? [t.category] : [];
+  // Category badges — only when the list is filtered to a category (showTag).
+  const catTags = showTag
+    ? catKeys
+        .map((k) => CAT_BY_KEY[k])
+        .filter(Boolean)
+        .map((c) => ({ label: c.label, chipClass: c.chip }))
+    : [];
 
   // The created-at time now sits at the END of the meta row ("at <time>")
   // rather than in the provenance header.
@@ -164,7 +211,8 @@ export default function AccordionTodoItem({
     <AccordionItem
       who={who}
       dotClass={dotClass}
-      tag={cat ? { label: cat.label, chipClass: cat.chip } : undefined}
+      meta={t.pinned ? "★ pinned" : undefined}
+      tags={catTags.length ? catTags : undefined}
       claimedBy={t.claimedBy}
       label={t.text}
       wrapLabel
@@ -204,6 +252,7 @@ export default function AccordionTodoItem({
           <button
             onClick={(e) => {
               e.stopPropagation();
+              setCatSubOpen(false);
               setMenuOpen((o) => !o);
             }}
             title="more"
@@ -218,7 +267,7 @@ export default function AccordionTodoItem({
             <div
               role="menu"
               onClick={(e) => e.stopPropagation()}
-              className="absolute right-0 top-full z-30 mt-1 flex w-36 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+              className="absolute right-0 top-full z-30 mt-1 flex w-52 flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 text-xs shadow-xl"
             >
               <button
                 role="menuitem"
@@ -226,7 +275,7 @@ export default function AccordionTodoItem({
                   setMenuOpen(false);
                   onRename?.();
                 }}
-                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+                className={MENU_ITEM}
               >
                 <PencilGlyph size={13} />
                 Rename
@@ -235,9 +284,116 @@ export default function AccordionTodoItem({
                 role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
+                  onBodyEditStart?.();
+                }}
+                className={MENU_ITEM}
+              >
+                <Icon d="M4 13.5V4a2 2 0 0 1 2-2h8.5L20 7.5V20a2 2 0 0 1-2 2h-6|M14 2v6h6|M9 13h6|M9 17h3" />
+                Edit details
+              </button>
+              {/* Set category — inline submenu (the Filter reads category). */}
+              <button
+                role="menuitem"
+                onClick={() => setCatSubOpen((o) => !o)}
+                className={MENU_ITEM}
+              >
+                <Icon d={TAG_D} />
+                Set category
+                <span className="ml-auto text-zinc-600">
+                  {catSubOpen ? "▾" : "›"}
+                </span>
+              </button>
+              {catSubOpen && (
+                <div className="ml-3 flex flex-col border-l border-zinc-800 pl-1">
+                  {/* Multi-select: click toggles a tag and keeps the menu open so
+                      you can pick several; "None" clears all. */}
+                  <button
+                    role="menuitem"
+                    onClick={() => onSetCategory?.(null)}
+                    className="flex items-center gap-2 rounded px-2 py-1 text-left transition-colors hover:bg-zinc-900"
+                  >
+                    <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
+                      None
+                    </span>
+                    {catKeys.length === 0 && (
+                      <span className="ml-auto text-blue-400">✓</span>
+                    )}
+                  </button>
+                  {CATEGORIES.map((c) => (
+                    <button
+                      key={c.key}
+                      role="menuitem"
+                      onClick={() => onSetCategory?.(c.key)}
+                      className="flex items-center gap-2 rounded px-2 py-1 text-left transition-colors hover:bg-zinc-900"
+                    >
+                      <span
+                        className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${c.chip}`}
+                      >
+                        {c.label}
+                      </span>
+                      {catKeys.includes(c.key) && (
+                        <span className="ml-auto text-blue-400">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="my-1 border-t border-zinc-800" />
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onSend?.();
+                }}
+                title="drop the title into Terminal 1's message box — you send it"
+                className={MENU_ITEM}
+              >
+                <Icon d={TERMINAL_D} />
+                Send to terminal
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onCopy();
+                }}
+                className={MENU_ITEM}
+              >
+                <Icon d={COPY_D} />
+                Copy
+              </button>
+              {sess && (
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onOpenSession?.(sess);
+                  }}
+                  className={MENU_ITEM}
+                >
+                  <Icon d={LINK_D} />
+                  Open session
+                </button>
+              )}
+              <div className="my-1 border-t border-zinc-800" />
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onTogglePin?.();
+                }}
+                className={MENU_ITEM}
+              >
+                <Icon d={STAR_D} fill={t.pinned ? "currentColor" : "none"} />
+                {t.pinned ? "Unstar" : "Star"}
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
                   onDelete?.();
                 }}
-                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-red-400 transition-colors hover:bg-red-500/10"
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-red-400 transition-colors hover:bg-red-500/10"
               >
                 <TrashGlyph />
                 Delete

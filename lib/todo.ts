@@ -21,7 +21,25 @@ export type TodoItem = {
   body?: string; // rich description shown when the row is expanded (e.g. a /todo paste)
   addedBy?: string; // provenance: a session id (Claude via /todo) or "you" (added in HQ)
   fromSession?: string; // the session a "+ todo" was captured from (shown in the body)
-  category?: string; // efficiency | ui | functionality | data | docs (for the filter)
+  category?: string; // legacy single category (kept for the batch-optimizer)
+  categories?: string[]; // user-set tags (multi); authoritative once defined, even if []
+  pinned?: boolean; // starred → floats to the top of the list
+  // ── Batch-optimizer graph (Stage-1 evaluator output; all optional) ──────────
+  writes?: string[]; // files this todo is expected to modify
+  reads?: string[]; // files it needs to read for context
+  dependsOn?: string[]; // ids of todos that must complete first
+  effort?: number; // estimated OUTPUT tokens to complete it
+  evaluatedAt?: number; // when the evaluator last enriched this (freshness)
+};
+
+// Stage-1 evaluator output for one todo (the enrichment we persist back).
+export type TodoGraph = {
+  id: string;
+  writes?: string[];
+  reads?: string[];
+  dependsOn?: string[];
+  effort?: number;
+  category?: string;
 };
 
 type Store = { version: number; items: TodoItem[] };
@@ -93,7 +111,10 @@ export function addTodo(
 export function updateTodo(
   id: string,
   patch: Partial<
-    Pick<TodoItem, "text" | "done" | "claimedBy" | "body" | "category">
+    Pick<
+      TodoItem,
+      "text" | "done" | "claimedBy" | "body" | "category" | "categories" | "pinned"
+    >
   >
 ): TodoItem | null {
   const store = read();
@@ -103,12 +124,35 @@ export function updateTodo(
   if (typeof patch.done === "boolean") item.done = patch.done;
   if (typeof patch.body === "string") item.body = patch.body;
   if (typeof patch.category === "string") item.category = patch.category;
+  if (Array.isArray(patch.categories)) item.categories = patch.categories;
+  if (typeof patch.pinned === "boolean") item.pinned = patch.pinned;
   if ("claimedBy" in patch) {
     if (patch.claimedBy) item.claimedBy = patch.claimedBy;
     else delete item.claimedBy; // empty/null releases the claim
   }
   write(store);
   return item;
+}
+
+// Bulk-apply the Stage-1 evaluator's graph enrichment onto existing todos.
+// Additive and isolated from updateTodo (the PATCH path the UI owns): only sets
+// the graph fields provided, stamps evaluatedAt, never touches title/done/order.
+export function enrichTodos(graphs: TodoGraph[]): TodoItem[] {
+  const store = read();
+  const byId = new Map(store.items.map((i) => [i.id, i]));
+  const now = Date.now();
+  for (const g of graphs) {
+    const item = byId.get(g.id);
+    if (!item) continue;
+    if (Array.isArray(g.writes)) item.writes = g.writes;
+    if (Array.isArray(g.reads)) item.reads = g.reads;
+    if (Array.isArray(g.dependsOn)) item.dependsOn = g.dependsOn;
+    if (typeof g.effort === "number") item.effort = g.effort;
+    if (typeof g.category === "string") item.category = g.category;
+    item.evaluatedAt = now;
+  }
+  write(store);
+  return store.items;
 }
 
 export function removeTodo(id: string): boolean {

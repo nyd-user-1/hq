@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AccordionTodoItem from "@/app/ui/accordion-todo-item";
 import SearchField from "@/app/ui/search-field";
 import { CATEGORIES, CAT_BY_KEY } from "@/app/ui/todo-categories";
@@ -31,6 +32,9 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     id: string;
     pos: "before" | "after";
   } | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
 
   // Close the category dropdown on an outside click or Escape.
   useEffect(() => {
@@ -50,8 +54,13 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     };
   }, [tagOpen]);
 
+  // Effective category set per todo: `categories` is authoritative once defined
+  // (even if []); else fall back to the legacy single `category`.
+  const catsOf = (t: TodoItem) =>
+    t.categories !== undefined ? t.categories : t.category ? [t.category] : [];
+
   const all = items.filter((t) => !t.parentId);
-  const byCat = cat ? all.filter((t) => t.category === cat) : all;
+  const byCat = cat ? all.filter((t) => catsOf(t).includes(cat)) : all;
   const needle = query.trim().toLowerCase();
   const filtered = needle
     ? byCat.filter(
@@ -61,12 +70,15 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
       )
     : byCat;
   // No sort control here (it's "ironic" on a To Do list) — the list shows the
-  // stored manual drag order; only category-filter + search narrow it.
-  const list = filtered;
+  // stored manual drag order; only category-filter + search narrow it. Starred
+  // (pinned) todos float to the top (stable sort preserves order within groups).
+  const list = [...filtered].sort(
+    (a, b) => Number(!!b.pinned) - Number(!!a.pinned)
+  );
   const doneCount = items.filter((t) => t.done).length;
   // Only show filter chips for categories that actually have items.
   const present = CATEGORIES.filter((c) =>
-    all.some((t) => t.category === c.key)
+    all.some((t) => catsOf(t).includes(c.key))
   );
 
   // "+" adds a blank row and opens it for inline rename. The blank lives only in
@@ -104,6 +116,57 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
     fetch(`/api/todo?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(
       () => {}
     );
+  }
+
+  // Kebab → Set category (multi). Toggle a tag in/out; null clears all. Writes
+  // the `categories` array (the Filter reads it). The blank-id case is local-only.
+  function setCategory(id: string, c: string | null) {
+    const t = items.find((x) => x.id === id);
+    if (!t) return;
+    const cur = catsOf(t);
+    const next =
+      c === null
+        ? []
+        : cur.includes(c)
+          ? cur.filter((x) => x !== c)
+          : [...cur, c];
+    setItems((xs) =>
+      xs.map((x) => (x.id === id ? { ...x, categories: next } : x))
+    );
+    if (id.startsWith("tmp_")) return;
+    fetch("/api/todo", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, categories: next }),
+    }).catch(() => {});
+  }
+
+  // Kebab → Star: pin to the top of the list (persists via `pinned`).
+  function togglePin(t: TodoItem) {
+    const next = !t.pinned;
+    setItems((xs) => xs.map((x) => (x.id === t.id ? { ...x, pinned: next } : x)));
+    if (t.id.startsWith("tmp_")) return;
+    fetch("/api/todo", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: t.id, pinned: next }),
+    }).catch(() => {});
+  }
+
+  // Kebab → Send to terminal: drop the title into Terminal 1's message box (the
+  // hq:compose event APPENDS to the draft — it does NOT send. You hit ↵ yourself).
+  function sendToTerminal(t: TodoItem) {
+    window.dispatchEvent(
+      new CustomEvent("hq:compose", { detail: { text: t.text } })
+    );
+  }
+
+  // Kebab → Open session: pin the originating session in the terminal (only shown
+  // for Claude/`/todo`-origin todos). Keeps any other params.
+  function openSession(sess: string) {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("session", sess);
+    router.push(`${pathname ?? "/"}?${sp.toString()}`, { scroll: false });
   }
 
   // Close the inline title editor. Enter/blur → save; Escape or an empty title →
@@ -363,6 +426,10 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
               onBodyCancel={cancelBodyEdit}
               onRename={() => startRename(t)}
               onDelete={() => deleteTodo(t.id)}
+              onSetCategory={(c) => setCategory(t.id, c)}
+              onTogglePin={() => togglePin(t)}
+              onSend={() => sendToTerminal(t)}
+              onOpenSession={(sess) => openSession(sess)}
               onToggleExpand={() => toggleExpand(t.id)}
               onToggleDone={() => toggle(t.id)}
               onCopy={() => copy(t)}
