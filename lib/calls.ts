@@ -95,10 +95,10 @@ export function getCalls(limit = 25): Call[] {
   return calls.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
 }
 
-// Every call from the last 48h (rolling), uncapped. Scans every transcript
+// Every call from the last 7 days (rolling), uncapped. Scans every transcript
 // touched in that window and reads it in full (the tail/file caps in getCalls
-// would silently drop older calls), keeping calls timestamped within 48h.
-const WINDOW_MS = 48 * 60 * 60 * 1000;
+// would silently drop older calls), keeping calls timestamped within 7 days.
+const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function getRecentCalls(): Call[] {
   const cutoffMs = Date.now() - WINDOW_MS;

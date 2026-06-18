@@ -62,8 +62,8 @@ export default function Calls() {
         ))}
       </ul>
       <p className="text-xs text-zinc-600">
-        {calls.length} calls · last 48h (est.) · 2× = past the 200k cliff ·
-        rates in lib/pricing.ts
+        {calls.length} calls · last 7d (est.) · 2× = past the 200k cliff · rates
+        in lib/pricing.ts
       </p>
     </Boundary>
   );
