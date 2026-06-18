@@ -12,7 +12,10 @@ import PanelWrapper from "@/app/ui/panel-wrapper";
 import PairColumn from "@/app/ui/pair-column";
 import { PlannerProvider } from "@/app/ui/planner-state";
 import PlannerPanel from "@/app/ui/planner-panel";
-import PlannerTrigger from "@/app/ui/planner-trigger";
+import { TextEditorProvider } from "@/app/ui/text-editor-state";
+import TextEditor from "@/app/ui/text-editor";
+import { CommandProvider } from "@/app/ui/command-state";
+import CommandPalette from "@/app/ui/command-palette";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
 // always mounted — the persistent heart), and the right app-panel portal anchor.
@@ -34,7 +37,9 @@ export default async function Shell({
     <div className="flex h-dvh flex-col bg-zinc-950 p-6 text-zinc-100">
       {/* no row gap — the sidebar carries mr-4 while open (collapses with it)
           and the app panel brings its own ml-4, so closed = truly full width */}
+      <CommandProvider>
       <PlannerProvider>
+      <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
           <SidebarColumn>
@@ -56,7 +61,6 @@ export default async function Shell({
                   <>
                     <PanelMenu />
                     <SearchTrigger />
-                    <PlannerTrigger />
                   </>
                 }
               >
@@ -79,11 +83,17 @@ export default async function Shell({
               that can be open AT THE SAME TIME as #app-panel-root. */}
           <div id="planner-panel-root" className="flex h-full min-w-0" />
         </div>
+        {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
+            planner / text-editor contexts its commands drive. */}
+        <CommandPalette />
       </SidebarProvider>
 
       <PanelWrapper panel={panel} />
       <PlannerPanel />
+      <TextEditor />
+      </TextEditorProvider>
       </PlannerProvider>
+      </CommandProvider>
     </div>
   );
 }

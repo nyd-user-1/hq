@@ -61,6 +61,8 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "NoteBody", file: "app/ui/note-body.tsx", kind: "presentational", status: "review", desc: "Saved note-block body." },
   { name: "SidebarToggle", file: "app/ui/sidebar-toggle.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — the boundary sidebar toggle." },
   { name: "SearchTrigger", file: "app/ui/search-trigger.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — opens/closes the Search panel (active state)." },
+  { name: "TextEditor", file: "app/ui/text-editor.tsx", kind: "container", status: "review", desc: "Full-screen capture modal (opened from the panel-menu “Text” item) — paste text, ↵ saves it as a searchable HQ note (POST /api/notes)." },
+  { name: "CommandPalette", file: "app/ui/command-palette.tsx", kind: "container", status: "review", desc: "⌘K launcher — ranked + grouped Actions/Navigate commands; keyboard-driven; nav carries the terminal pins (withPins)." },
 ];
 
 // Registry provenance — like a to-do, each entry records the session that added

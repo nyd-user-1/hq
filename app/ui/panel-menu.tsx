@@ -7,6 +7,8 @@ import { PANELS } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import { CHIP_CLASS } from "@/app/ui/boundary-chip";
+import { usePlanner } from "@/app/ui/planner-state";
+import { useTextEditor } from "@/app/ui/text-editor-state";
 
 // The "panels" dropdown, restyled as a boundary chip so it sits on the terminal
 // boundary line (just after the terminal.tsx path chip, before the search icon).
@@ -16,6 +18,8 @@ import { CHIP_CLASS } from "@/app/ui/boundary-chip";
 export default function PanelMenu() {
   const params = useSearchParams();
   const pathname = usePathname();
+  const { open: plannerOpen, toggle: togglePlanner } = usePlanner();
+  const { open: textOpen, toggle: toggleText } = useTextEditor();
   const ref = useRef<HTMLDetailsElement>(null);
   const close = () => {
     if (ref.current) ref.current.open = false;
@@ -83,6 +87,33 @@ export default function PanelMenu() {
             </Link>
           );
         })}
+        {/* Planner — not a route panel; an independent toggle with its own panel
+            root (can sit open alongside a route panel), so it's a button driven by
+            client state, not a Link. Sits after Compose. */}
+        <button
+          onClick={() => {
+            togglePlanner();
+            close();
+          }}
+          className={`rounded px-2 py-1 text-left font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
+            plannerOpen ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Planner
+        </button>
+        {/* Text — like Planner, an independent client-state toggle (a full-screen
+            capture modal, not a route panel), so it's a button. Sits last. */}
+        <button
+          onClick={() => {
+            toggleText();
+            close();
+          }}
+          className={`rounded px-2 py-1 text-left font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
+            textOpen ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Text
+        </button>
       </div>
     </details>
   );

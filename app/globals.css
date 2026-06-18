@@ -71,6 +71,29 @@
   animation: boundary-chip-flash 1.2s ease-out;
 }
 
+/* ⌘K command palette entrance — the launcher should read as a layer LANDING on
+   top, not the screen dimming shut. The backdrop fades in fast; the card settles
+   down from slightly above with a soft scale, so it visually "mounts." Enter-only
+   (the component unmounts on close), like the boundary flash above. */
+@keyframes cmdk-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cmdk-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* NOTE: the find-in-page highlight-pseudo rules are NOT here — Turbopack's dev
    CSS parser rejects that pseudo-element ("not a valid pseudo-element") and
    drops the rule, even though the production Lightning CSS build accepts it. To
