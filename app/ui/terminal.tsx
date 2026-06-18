@@ -967,6 +967,34 @@ export default function Terminal({
     return () => clearInterval(t);
   }, [working, lastWrite]);
 
+  // Cold flash: the instant the countdown hits 0, show "cold" in blue, then fade
+  // it out and vanish (~5s total). The 1s tick above STOPS at expiry, so this
+  // can't ride `now` — it's an edge-detected one-shot: armed while warm, fired
+  // the moment the window closes, and only when it JUST closed (the 2s guard
+  // keeps a load into an already-cold cache from flashing).
+  const [coldFlash, setColdFlash] = useState<"off" | "on" | "out">("off");
+  const coldFiredRef = useRef(false);
+  useEffect(() => {
+    const cl =
+      !working && lastWrite !== null && now > 0
+        ? CACHE_TTL_MS - (now - lastWrite)
+        : null;
+    if (cl !== null && cl > 0) {
+      coldFiredRef.current = false; // warm → re-arm for the next expiry
+      setColdFlash((s) => (s === "off" ? s : "off"));
+      return;
+    }
+    if (cl === null || coldFiredRef.current || -cl >= 2000) return;
+    coldFiredRef.current = true;
+    setColdFlash("on");
+    const out = setTimeout(() => setColdFlash("out"), 3000); // hold, then fade
+    const gone = setTimeout(() => setColdFlash("off"), 5000); // unmount by 5s
+    return () => {
+      clearTimeout(out);
+      clearTimeout(gone);
+    };
+  }, [working, lastWrite, now]);
+
   // Bottom-follow: only auto-scroll when you're already at the bottom — a live turn
   // lands in view if you're watching, but never yanks you down while you read up top.
   useEffect(() => {
@@ -1247,23 +1275,25 @@ export default function Terminal({
   // shell). ctx moved out to sit beside the session id (ctxMeter, below).
   const meter = (
     <>
-      {cacheLeft !== null &&
-        (cacheLeft > 0 ? (
-          <span
-            className="font-mono text-[11px] text-amber-400"
-            title="prompt cache is warm — replying now reads history at ~10% price"
-          >
-            cache {Math.floor(cacheLeft / 60000)}:
-            {String(Math.floor((cacheLeft % 60000) / 1000)).padStart(2, "0")}
-          </span>
-        ) : (
-          <span
-            className="font-mono text-[11px] text-zinc-600"
-            title="prompt cache expired — the next message re-reads the full history"
-          >
-            cache cold
-          </span>
-        ))}
+      {cacheLeft !== null && cacheLeft > 0 && (
+        <span
+          className="font-mono text-[11px] text-amber-400"
+          title="prompt cache is warm — replying now reads history at ~10% price"
+        >
+          cache {Math.floor(cacheLeft / 60000)}:
+          {String(Math.floor((cacheLeft % 60000) / 1000)).padStart(2, "0")}
+        </span>
+      )}
+      {coldFlash !== "off" && (
+        <span
+          className={`font-mono text-[11px] text-blue-400 transition-opacity duration-[1500ms] ease-out ${
+            coldFlash === "out" ? "opacity-0" : "opacity-100"
+          }`}
+          title="prompt cache expired — the next message re-reads the full history"
+        >
+          cold
+        </span>
+      )}
     </>
   );
 
