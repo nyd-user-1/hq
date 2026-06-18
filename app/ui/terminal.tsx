@@ -458,6 +458,7 @@ export default function Terminal({
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const [focusMode, setFocusMode] = useState(false); // centered "conversation shell" toggle for a live session (the not-connected state forces it on)
   const [driveMode, setDriveMode] = useState(false); // "Drive from HQ": route the send box to the live REPL (Terminal 1 only)
+  const [starting, setStarting] = useState<string | null>(null); // a project being born-and-driven from the staging view
   const [searchOpen, setSearchOpen] = useState(false); // header search expanded?
   const [searchQuery, setSearchQuery] = useState(""); // raw input — updates instantly so typing never lags
   const [appliedQuery, setAppliedQuery] = useState(""); // debounced — what the (heavy) DOM walk actually runs
@@ -1239,6 +1240,34 @@ export default function Terminal({
     }
   }
 
+  // New-session-from-HQ: birth a fresh `claude` in the project dir via the REPL
+  // backend, then pin + drive it — no TUI, no copy-paste. The route returns the
+  // real session id once the process inits; we navigate the pane to it (drive on).
+  async function birthAndDrive(project?: string) {
+    if (starting) return;
+    setStarting(project ?? "here");
+    setError(null);
+    try {
+      const res = await fetch("/api/terminal/repl", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "new", project, model: chosenModel ?? undefined }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || `error ${res.status}`);
+      const data = await res.json();
+      if (data?.sessionId) {
+        setDriveMode(true);
+        router.push(hrefFor(data.sessionId), { scroll: false });
+      } else {
+        throw new Error("no session id returned");
+      }
+    } catch (e) {
+      setError(`couldn't start a session${project ? ` in ${project}` : ""}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setStarting(null);
+    }
+  }
+
   // Kill the HQ-spawned run; the in-flight POST settles and cleans up state.
   // Aims at the snapshotted send target, so it kills the right run even if a
   // different session card was clicked since. Drops the CLI-style interrupt
@@ -1733,31 +1762,37 @@ export default function Terminal({
             <div className="flex flex-col gap-1">
               <p className="text-zinc-400">new session — nothing exists yet</p>
               <p className="text-zinc-600">
-                a session is born when you type in a Claude terminal. pick a
-                project — it copies{" "}
-                <span className="text-zinc-400">
-                  {"cd ~/code/<name> && claude"}
-                </span>{" "}
-                to paste. starting IN the project sets the working dir, so
-                Recents sorts it on its own.
+                pick a project and HQ <span className="text-emerald-400">drives a fresh session right here</span> —
+                no terminal, no copy-paste. It spawns{" "}
+                <span className="text-zinc-400">{"claude"}</span> in{" "}
+                <span className="text-zinc-400">{"~/code/<name>"}</span> and goes live.
               </p>
             </div>
             {projects.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {projects.map((p) => (
-                  <CopyChip
+                  <button
                     key={p}
-                    label={p}
-                    text={`cd ~/code/"${p}" && claude`}
-                  />
+                    type="button"
+                    disabled={!!starting}
+                    onClick={() => birthAndDrive(p)}
+                    title={`start a session in ~/code/${p} and drive it from HQ`}
+                    className={`rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors disabled:opacity-50 ${
+                      starting === p
+                        ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
+                        : "border-zinc-700 text-zinc-300 hover:border-emerald-500/60 hover:text-emerald-300"
+                    }`}
+                  >
+                    {starting === p ? `starting ${p}…` : p}
+                  </button>
                 ))}
               </div>
             )}
             <div className="flex items-center gap-2">
-              <CopyChip label="copy · claude" text="claude" />
+              <CopyChip label="copy · cd && claude" text="claude" />
               <span className="text-[11px] text-zinc-600">
-                or just here (current dir) — fresh context; this pane flips to
-                the new session the moment it appears
+                or copy the command to start one yourself in a terminal — this
+                pane flips to it the moment it appears
               </span>
             </div>
             {resume && <RecentSessions sessions={resume.sessions} now={now} />}

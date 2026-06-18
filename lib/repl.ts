@@ -12,6 +12,7 @@
 // SAFETY: this is a SIBLING process to any live TUI. The UX contract is "minimize
 // the TUI, drive from HQ" — one active writer at a time. stopRepl() releases it.
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { sessionCwd } from "@/lib/transcript";
 
@@ -75,16 +76,13 @@ function handleLine(repl: Repl, line: string) {
   emit(repl, e);
 }
 
-// Start (or return) the REPL for a session. `requestedId` is the session to
-// --resume; pass null/"" to start a fresh session (its id arrives via init).
-export function ensureRepl(
-  requestedId: string,
-  opts: { model?: string } = {},
+// Low-level spawn: create + register a REPL under `key`. `resumeId` is the
+// session to --resume ("" = a fresh session, whose real id arrives via init).
+// HQ_REPL_SESSION = key so the permission shim posts back under the same key.
+function spawnRepl(
+  key: string,
+  opts: { cwd: string; resumeId?: string; sessionId?: string; model?: string },
 ): Repl {
-  const existing = repls.get(requestedId);
-  if (existing?.alive) return existing;
-
-  const cwd = sessionCwd(requestedId) ?? process.env.HOME ?? process.cwd();
   const port = process.env.HQ_PORT ?? "3002";
   const mcpConfig = JSON.stringify({
     mcpServers: { "hq-approve": { command: "node", args: [shimPath()] } },
@@ -101,20 +99,25 @@ export function ensureRepl(
     "--mcp-config", mcpConfig,
     "--permission-prompt-tool", "mcp__hq-approve__approve",
     ...(opts.model ? ["--model", opts.model] : []),
-    ...(requestedId ? ["--resume", requestedId] : []),
+    // resume an existing session, OR birth a new one with a preassigned id.
+    ...(opts.resumeId
+      ? ["--resume", opts.resumeId]
+      : opts.sessionId
+        ? ["--session-id", opts.sessionId]
+        : []),
   ];
 
   const child = spawn("claude", args, {
-    cwd,
-    env: { ...process.env, HQ_PORT: port, HQ_REPL_SESSION: requestedId },
+    cwd: opts.cwd,
+    env: { ...process.env, HQ_PORT: port, HQ_REPL_SESSION: key },
     stdio: ["pipe", "pipe", "pipe"],
   });
 
   const repl: Repl = {
     child,
-    requestedId,
-    sessionId: requestedId || null,
-    cwd,
+    requestedId: key,
+    sessionId: opts.resumeId || opts.sessionId || null,
+    cwd: opts.cwd,
     startedAt: Date.now(),
     lastActivity: Date.now(),
     busy: false,
@@ -124,7 +127,7 @@ export function ensureRepl(
     subscribers: new Set(),
     pending: new Map(),
   };
-  repls.set(requestedId, repl);
+  repls.set(key, repl);
 
   child.stdout!.on("data", (d: Buffer) => {
     repl.stdoutBuf += d.toString();
@@ -147,6 +150,28 @@ export function ensureRepl(
   });
 
   return repl;
+}
+
+// Start (or return) the REPL for an EXISTING session (--resume from its own cwd).
+export function ensureRepl(
+  requestedId: string,
+  opts: { model?: string } = {},
+): Repl {
+  const existing = repls.get(requestedId);
+  if (existing?.alive) return existing;
+  const cwd = sessionCwd(requestedId) ?? process.env.HOME ?? process.cwd();
+  return spawnRepl(requestedId, { cwd, resumeId: requestedId, model: opts.model });
+}
+
+// Birth a BRAND-NEW session in `cwd`, driven by HQ. We PREASSIGN the id
+// (--session-id) rather than waiting to learn it from init — a fresh stream-json
+// process doesn't emit init until its first stdin turn, so waiting would hang.
+// Keyed by the id from the start, so the UI's ensureRepl(id) finds this exact
+// warm process (idempotent) instead of trying to --resume a not-yet-existing one.
+export function startNewSession(cwd: string, opts: { model?: string } = {}): string {
+  const sessionId = randomUUID();
+  spawnRepl(sessionId, { cwd, sessionId, model: opts.model });
+  return sessionId;
 }
 
 export function getRepl(requestedId: string): Repl | undefined {

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { existsSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   ensureRepl,
+  startNewSession,
   sendTurn,
   stopRepl,
   replStatus,
@@ -27,11 +31,28 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   reapIdle();
   const body = await req.json().catch(() => null);
-  const session: string | undefined = body?.session;
   const action: string | undefined = body?.action;
-  if (!session || !action) {
-    return new NextResponse("action + session required", { status: 400 });
+  if (!action) return new NextResponse("action required", { status: 400 });
+
+  // "new" — birth a fresh session in a project dir and DRIVE it (no TUI). Returns
+  // the real session id once the process inits; the UI pins + drives by it.
+  if (action === "new") {
+    const project: string | undefined = body.project;
+    const cwd: string | undefined = body.cwd ?? (project ? join(homedir(), "code", project) : undefined);
+    if (!cwd) return new NextResponse("project or cwd required", { status: 400 });
+    if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
+      return new NextResponse(`no such project dir: ${cwd}`, { status: 400 });
+    }
+    try {
+      const sessionId = startNewSession(cwd, { model: body.model });
+      return NextResponse.json({ ok: true, sessionId });
+    } catch (e) {
+      return new NextResponse(e instanceof Error ? e.message : String(e), { status: 500 });
+    }
   }
+
+  const session: string | undefined = body?.session;
+  if (!session) return new NextResponse("session required", { status: 400 });
 
   if (action === "start") {
     ensureRepl(session, { model: body.model });
