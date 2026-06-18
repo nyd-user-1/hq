@@ -179,6 +179,10 @@ export default function AccordionTodoItem({
       : isSession
         ? "text-orange-500"
         : "text-zinc-600";
+  // Header label is now the originating SESSION (short id) instead of you/claude;
+  // the dot color still carries who (blue = you, orange = a session). Falls back
+  // to who when there's no session on the to-do.
+  const whoLabel = sess ? sess.slice(0, 8) : who;
   // Effective category set: `categories` is authoritative once defined (even if
   // []); else fall back to the legacy single `category` (e.g. batch-optimizer).
   const catKeys =
@@ -209,8 +213,9 @@ export default function AccordionTodoItem({
 
   return (
     <AccordionItem
-      who={who}
+      who={whoLabel}
       dotClass={dotClass}
+      time={new Date(t.createdAt).toLocaleTimeString()}
       meta={t.pinned ? "★ pinned" : undefined}
       tags={catTags.length ? catTags : undefined}
       claimedBy={t.claimedBy}

@@ -38,6 +38,7 @@ export default function AccordionItem({
   who,
   dotClass = "text-zinc-600",
   meta,
+  time,
   tag,
   tags,
   claimedBy,
@@ -69,6 +70,7 @@ export default function AccordionItem({
   who?: string;
   dotClass?: string;
   meta?: string; // muted middle text (a timestamp, a file path…)
+  time?: string; // right-aligned timestamp, opposite `who` (the To Do card header)
   tag?: AccordionTag; // right-aligned pill (a category / kind)
   tags?: AccordionTag[]; // multiple right-aligned pills (e.g. several categories)
   claimedBy?: string;
@@ -153,6 +155,11 @@ export default function AccordionItem({
               }`}
             >
               {claimedBy.slice(0, 8)}
+            </span>
+          )}
+          {time && (
+            <span className="ml-auto shrink-0 pl-2 normal-case tracking-normal text-zinc-600">
+              {time}
             </span>
           )}
         </div>
