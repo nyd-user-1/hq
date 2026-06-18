@@ -1328,8 +1328,10 @@ export default function Terminal({
   // focus mode render through the exact SAME layout. When off, the scroll + dock
   // wrappers collapse to `display:contents`, so the full-width transcript is
   // byte-for-byte unchanged.
+  // Driving a freshly-birthed session has no transcript yet — but HQ owns a live
+  // process, so it's NOT "not connected": show the chat + a usable send box.
   const notConnected =
-    !staged && (previewInstall || (!loading && items.length === 0));
+    !staged && !driveMode && (previewInstall || (!loading && items.length === 0));
   const centered = notConnected || focusMode;
   const colWrap = centered
     ? "mx-auto flex w-full max-w-3xl flex-col gap-4 px-4"
