@@ -1,0 +1,250 @@
+// HQ Live REPL — persistent `claude` stream-json processes, one per driven
+// session. This is the WRITE half of HQ: where the read half tails the transcript
+// the TUI writes, this OWNS a warm `claude` process and drives it. See the brief
+// "The HQ Live REPL" (notes) for the full design + Phase 0 findings.
+//
+// One process per session, kept alive across turns (warm context). We speak the
+// bidirectional stream-json protocol: user turns as JSON lines on stdin, streaming
+// events (tokens, tool calls, results) on stdout. Tool permissions escalate to a
+// local MCP shim (repl-approve-mcp.mjs) that long-polls /api/terminal/repl/permission
+// → the browser renders Approve/Deny → the verdict rides back.
+//
+// SAFETY: this is a SIBLING process to any live TUI. The UX contract is "minimize
+// the TUI, drive from HQ" — one active writer at a time. stopRepl() releases it.
+import { spawn, type ChildProcess } from "node:child_process";
+import path from "node:path";
+import { sessionCwd } from "@/lib/transcript";
+
+export type ReplEvent = Record<string, unknown> & { type?: string; subtype?: string };
+
+type PendingPermission = {
+  request: ReplEvent;
+  resolve: (decision: PermissionDecision) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+export type PermissionDecision =
+  | { behavior: "allow"; updatedInput?: Record<string, unknown> }
+  | { behavior: "deny"; message?: string };
+
+type Repl = {
+  child: ChildProcess;
+  requestedId: string;
+  sessionId: string | null; // resolved from the init event
+  cwd: string;
+  startedAt: number;
+  lastActivity: number;
+  busy: boolean; // true between a sent turn and its result
+  alive: boolean;
+  stdoutBuf: string;
+  events: ReplEvent[]; // ring buffer for late SSE subscribers
+  subscribers: Set<(e: ReplEvent) => void>;
+  pending: Map<string, PendingPermission>; // permission asks keyed by tool_use_id
+};
+
+// Survive Next dev HMR (module re-eval) so we never orphan a running process.
+const g = globalThis as unknown as { __hqRepls?: Map<string, Repl> };
+const repls: Map<string, Repl> = g.__hqRepls ?? (g.__hqRepls = new Map());
+
+const EVENT_CAP = 1500;
+const IDLE_MS = 30 * 60 * 1000; // reap a REPL untouched for 30 min
+const PERMISSION_TIMEOUT_MS = 10 * 60 * 1000; // deny if unanswered for 10 min
+
+function shimPath(): string {
+  return path.join(process.cwd(), "lib", "repl-approve-mcp.mjs");
+}
+
+function emit(repl: Repl, e: ReplEvent) {
+  repl.lastActivity = Date.now();
+  repl.events.push(e);
+  if (repl.events.length > EVENT_CAP) repl.events.splice(0, repl.events.length - EVENT_CAP);
+  for (const cb of repl.subscribers) {
+    try { cb(e); } catch { /* a dead subscriber shouldn't break the fan-out */ }
+  }
+}
+
+function handleLine(repl: Repl, line: string) {
+  if (!line.trim()) return;
+  let e: ReplEvent;
+  try { e = JSON.parse(line) as ReplEvent; } catch { return; }
+  // Learn the real session id from init (a NEW session won't match requestedId).
+  if (e.type === "system" && e.subtype === "init" && typeof e.session_id === "string") {
+    repl.sessionId = e.session_id as string;
+  }
+  if (e.type === "result") repl.busy = false; // turn complete
+  emit(repl, e);
+}
+
+// Start (or return) the REPL for a session. `requestedId` is the session to
+// --resume; pass null/"" to start a fresh session (its id arrives via init).
+export function ensureRepl(
+  requestedId: string,
+  opts: { model?: string } = {},
+): Repl {
+  const existing = repls.get(requestedId);
+  if (existing?.alive) return existing;
+
+  const cwd = sessionCwd(requestedId) ?? process.env.HOME ?? process.cwd();
+  const port = process.env.HQ_PORT ?? "3002";
+  const mcpConfig = JSON.stringify({
+    mcpServers: { "hq-approve": { command: "node", args: [shimPath()] } },
+  });
+
+  const args = [
+    "-p",
+    "--verbose",
+    "--input-format", "stream-json",
+    "--output-format", "stream-json",
+    "--include-partial-messages",
+    "--replay-user-messages",
+    "--permission-mode", "default",
+    "--mcp-config", mcpConfig,
+    "--permission-prompt-tool", "mcp__hq-approve__approve",
+    ...(opts.model ? ["--model", opts.model] : []),
+    ...(requestedId ? ["--resume", requestedId] : []),
+  ];
+
+  const child = spawn("claude", args, {
+    cwd,
+    env: { ...process.env, HQ_PORT: port, HQ_REPL_SESSION: requestedId },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const repl: Repl = {
+    child,
+    requestedId,
+    sessionId: requestedId || null,
+    cwd,
+    startedAt: Date.now(),
+    lastActivity: Date.now(),
+    busy: false,
+    alive: true,
+    stdoutBuf: "",
+    events: [],
+    subscribers: new Set(),
+    pending: new Map(),
+  };
+  repls.set(requestedId, repl);
+
+  child.stdout!.on("data", (d: Buffer) => {
+    repl.stdoutBuf += d.toString();
+    let i: number;
+    while ((i = repl.stdoutBuf.indexOf("\n")) >= 0) {
+      handleLine(repl, repl.stdoutBuf.slice(0, i));
+      repl.stdoutBuf = repl.stdoutBuf.slice(i + 1);
+    }
+  });
+  child.stderr!.on("data", (d: Buffer) => {
+    emit(repl, { type: "hq_stderr", text: d.toString().slice(0, 2000) });
+  });
+  child.on("exit", (code, sig) => {
+    repl.alive = false;
+    repl.busy = false;
+    emit(repl, { type: "hq_exit", code, signal: sig });
+    // fail any outstanding permission asks closed
+    for (const [, p] of repl.pending) { clearTimeout(p.timer); p.resolve({ behavior: "deny", message: "session ended" }); }
+    repl.pending.clear();
+  });
+
+  return repl;
+}
+
+export function getRepl(requestedId: string): Repl | undefined {
+  return repls.get(requestedId);
+}
+
+export function replStatus(requestedId: string) {
+  const r = repls.get(requestedId);
+  if (!r) return { running: false };
+  return {
+    running: r.alive,
+    busy: r.busy,
+    sessionId: r.sessionId,
+    cwd: r.cwd,
+    startedAt: r.startedAt,
+    lastActivity: r.lastActivity,
+  };
+}
+
+// Send a user turn into the warm process.
+export function sendTurn(
+  requestedId: string,
+  payload: { text: string; images?: { data: string; mime: string }[] },
+): boolean {
+  const r = repls.get(requestedId);
+  if (!r?.alive || !r.child.stdin) return false;
+  const content: Record<string, unknown>[] = [];
+  for (const img of payload.images ?? []) {
+    content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.data } });
+  }
+  if (payload.text.trim()) content.push({ type: "text", text: payload.text });
+  if (content.length === 0) return false;
+  const msg = { type: "user", message: { role: "user", content } };
+  r.busy = true;
+  r.lastActivity = Date.now();
+  r.child.stdin.write(JSON.stringify(msg) + "\n");
+  emit(r, { type: "hq_sent", at: Date.now() });
+  return true;
+}
+
+// Subscribe to a REPL's event stream. Replays the buffered events first so a
+// freshly-connected browser catches up, then streams live. Returns an unsubscribe.
+export function subscribe(requestedId: string, cb: (e: ReplEvent) => void): () => void {
+  const r = repls.get(requestedId);
+  if (!r) return () => {};
+  for (const e of r.events) { try { cb(e); } catch { /* ignore */ } }
+  r.subscribers.add(cb);
+  return () => { r.subscribers.delete(cb); };
+}
+
+export function stopRepl(requestedId: string): boolean {
+  const r = repls.get(requestedId);
+  if (!r) return false;
+  try { r.child.kill("SIGTERM"); } catch { /* already gone */ }
+  r.alive = false;
+  return true;
+}
+
+// Permission bridge: the MCP shim calls registerPermission() (via the route) and
+// awaits; the browser answers via resolvePermission(). Keyed by tool_use_id.
+export function registerPermission(requestedId: string, request: ReplEvent): Promise<PermissionDecision> {
+  const r = repls.get(requestedId);
+  const toolUseId = String(request.tool_use_id ?? request.toolUseId ?? Math.random());
+  return new Promise<PermissionDecision>((resolve) => {
+    const timer = setTimeout(() => {
+      r?.pending.delete(toolUseId);
+      resolve({ behavior: "deny", message: "approval timed out" });
+    }, PERMISSION_TIMEOUT_MS);
+    if (r) {
+      r.pending.set(toolUseId, { request, resolve, timer });
+      emit(r, { type: "hq_permission", tool_use_id: toolUseId, request });
+    } else {
+      clearTimeout(timer);
+      resolve({ behavior: "deny", message: "no active session" });
+    }
+  });
+}
+
+export function resolvePermission(
+  requestedId: string,
+  toolUseId: string,
+  decision: PermissionDecision,
+): boolean {
+  const r = repls.get(requestedId);
+  const p = r?.pending.get(toolUseId);
+  if (!r || !p) return false;
+  clearTimeout(p.timer);
+  r.pending.delete(toolUseId);
+  p.resolve(decision);
+  emit(r, { type: "hq_permission_resolved", tool_use_id: toolUseId, behavior: decision.behavior });
+  return true;
+}
+
+// Reap idle REPLs (called opportunistically from routes).
+export function reapIdle() {
+  const now = Date.now();
+  for (const [id, r] of repls) {
+    if (!r.alive) { repls.delete(id); continue; }
+    if (now - r.lastActivity > IDLE_MS) { stopRepl(id); repls.delete(id); }
+  }
+}
