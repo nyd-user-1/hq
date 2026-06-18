@@ -48,7 +48,7 @@ export const NAV_TARGETS: NavTarget[] = [
   { title: "CMD", href: "/cmd", group: "Console", keywords: "slash commands cli reference" },
   { title: "Routines", href: "/routines", group: "Console", keywords: "cron scheduled jobs" },
   { title: "Firehose", href: "/firehose", group: "Console", keywords: "stream events live feed" },
-  // Standalone panels
+  // Standalone panels. (Search isn't here — the palette's own input IS the
+  // global search now; the magnifier chip still opens the full /search page.)
   { title: "Compose", href: "/compose", group: "", keywords: "tray assemble send refs" },
-  { title: "Search", href: "/search", group: "", keywords: "find transcripts memory notes" },
 ];

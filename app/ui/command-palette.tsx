@@ -17,29 +17,53 @@ import { useCommand } from "@/app/ui/command-state";
 import { usePlanner } from "@/app/ui/planner-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 import { useSidebar } from "@/app/ui/sidebar-state";
+import { KIND_TAG } from "@/app/ui/search-tags";
+import { ago } from "@/lib/ago";
 
-// The ⌘K command palette — a top-anchored launcher over a blurred backdrop.
-// Shape borrows the shadcn/cmdk pattern (search row · grouped list with
-// separators · icon + label + right-aligned tag · comfortable rows) but is
-// hand-built — no cmdk/radix deps (HQ ships three runtime deps total). Wears
-// HQ's dashed Boundary frame + file chip to stay consistent with every other
-// surface. Two sections: ACTIONS (the client-state tools) and NAVIGATE (every
-// panel, pin-carrying via withPins so jumping never resets the terminal). Fully
-// keyboard-driven; the mouse mirrors the keyboard selection. State + the global
-// hotkey live in command-state.tsx.
+// The ⌘K command palette — a top-anchored launcher + universal search over a
+// blurred backdrop. Three sections: ACTIONS (the client-state tools), NAVIGATE
+// (every panel — labelled Group/Title, pin-carrying via withPins), and a live
+// SEARCH section that debounce-queries /api/search as you type and deep-links a
+// hit into the /search reader for that exact item. Hand-built — no cmdk/radix,
+// per HQ's three-runtime-dep rule. State + the global hotkey live in
+// command-state.tsx; the search engine is lib/search via /api/search (so this
+// client component never imports node:fs).
 
-type Section = "Actions" | "Navigate";
-const SECTION_ORDER: Section[] = ["Actions", "Navigate"];
+type Section = "Actions" | "Navigate" | "Search";
+
+// Minimal client-side shape of a lib/search SearchHit (typed locally so we never
+// import lib/search — it pulls node:fs into the bundle).
+type Hit = {
+  kind: string;
+  ref: string;
+  title: string;
+  snippet: string;
+  at: number;
+  path?: string;
+  meta?: string;
+};
 
 type Command = {
   id: string;
   section: Section;
   title: string;
-  hint?: string; // right-aligned tag (the panel group)
+  hint?: string; // breadcrumb group (Navigate) — rendered as a "Group/" prefix
+  kind?: string; // search-hit kind tag (Search)
+  snippet?: string; // search-hit context line (Search)
+  foot?: string; // search-hit identity — short session id or file path (Search)
+  meta?: string; // search-hit descriptor — ext · project · repo · category (Search)
+  at?: number; // search-hit last-touched ms (Search)
   keywords?: string;
   icon: React.ReactNode;
   run: () => void;
 };
+
+// Colored kind chip — the SAME accents the /search result badges use, so a
+// transcript reads green, memory violet, note blue, commit orange, at a glance.
+const kindTag = (k: string): string =>
+  (KIND_TAG as Record<string, string>)[k] ?? "bg-zinc-800/60 text-zinc-300";
+
+const STATIC_SECTIONS: Section[] = ["Actions", "Navigate"];
 
 const SVG = {
   width: 15,
@@ -84,7 +108,7 @@ const IconClose = () => (
     <path d="M18 6 6 18M6 6l12 12" />
   </svg>
 );
-// per-group nav icons so the list isn't 14 identical glyphs
+// per-group nav icons so the list isn't all identical glyphs
 const IconActivity = () => (
   <svg {...SVG}>
     <path d="M12 2 2 7l10 5 10-5-10-5Z" />
@@ -112,9 +136,15 @@ const IconCompose = () => (
     <path d="M9 21V9" />
   </svg>
 );
+const IconDoc = () => (
+  <svg {...SVG}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 13h8M8 17h6" />
+  </svg>
+);
 
 function navIcon(t: NavTarget): React.ReactNode {
-  if (t.href === "/search") return <IconSearch />;
   if (t.href === "/compose") return <IconCompose />;
   if (t.group === "Activity") return <IconActivity />;
   if (t.group === "Metrics") return <IconMetrics />;
@@ -122,7 +152,8 @@ function navIcon(t: NavTarget): React.ReactNode {
   return <IconCompose />;
 }
 
-// substring/token ranking — predictable, no fuzzy surprises. 0 = hidden.
+// substring/token ranking for the static commands — predictable, no fuzzy
+// surprises. 0 = hidden. (Search hits bypass this — they're already query results.)
 function rank(cmd: Command, q: string): number {
   if (!q) return 1;
   const hay = `${cmd.title} ${cmd.hint ?? ""} ${cmd.keywords ?? ""}`.toLowerCase();
@@ -136,6 +167,38 @@ function rank(cmd: Command, q: string): number {
   return 30; // matched only via keywords / hint
 }
 
+// Map a hit kind → the /search panel's open-param, then build the deep-link
+// (carrying the terminal pins by hand — withPins only takes a bare path).
+function openHref(h: Hit, q: string): string {
+  const e = encodeURIComponent;
+  const op =
+    h.kind === "transcript" || h.kind === "session" || h.kind === "sdk"
+      ? `openSession=${h.ref}`
+      : h.kind === "note"
+        ? `openNote=${e(h.ref)}`
+        : h.kind === "script"
+          ? `openScript=${e(h.ref)}`
+          : h.kind === "memory"
+            ? `open=${e(h.ref)}`
+            : h.kind === "file"
+              ? `openFile=${e(h.ref)}`
+              : h.kind === "component"
+                ? `openComponent=${e(h.ref)}`
+                : h.kind === "commit"
+                  ? `openCommit=${e(h.ref)}`
+                  : h.kind === "todo"
+                    ? `openTodo=${e(h.ref)}`
+                    : h.kind === "project"
+                      ? `openProject=${e(h.ref)}`
+                      : `openSkill=${e(h.ref)}`;
+  const sp = new URLSearchParams(window.location.search);
+  const pins = (["session", "pair"] as const)
+    .map((k) => (sp.get(k) ? `${k}=${sp.get(k)}` : ""))
+    .filter(Boolean)
+    .join("&");
+  return `/search?q=${e(q)}&scope=all&sort=new&${op}${pins ? `&${pins}` : ""}`;
+}
+
 export default function CommandPalette() {
   const { open, setOpen } = useCommand();
   const router = useRouter();
@@ -146,6 +209,7 @@ export default function CommandPalette() {
   const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
+  const [hits, setHits] = useState<Hit[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -156,6 +220,31 @@ export default function CommandPalette() {
       router.push(withPins(href, window.location.search), { scroll: false }),
     [router]
   );
+
+  // Debounced universal search as you type → /api/search (lib/search engine).
+  useEffect(() => {
+    const query = q.trim();
+    if (!query) {
+      setHits([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/search?q=${encodeURIComponent(query)}&limit=8`
+        );
+        const data = await res.json();
+        if (alive) setHits(Array.isArray(data?.hits) ? data.hits : []);
+      } catch {
+        if (alive) setHits([]);
+      }
+    }, 160);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [q]);
 
   const commands: Command[] = useMemo(
     () => [
@@ -176,21 +265,47 @@ export default function CommandPalette() {
     [go, togglePlanner, toggleText, toggleSidebar]
   );
 
-  // Filter + rank, preserve section order, build a flat list for selection.
+  const searchCommands: Command[] = useMemo(
+    () =>
+      hits.map((h) => ({
+        id: `hit:${h.kind}:${h.ref}`,
+        section: "Search" as const,
+        title: h.title || h.ref,
+        kind: h.kind,
+        snippet: h.snippet,
+        // transcripts/sessions show the short session id; everything else its path
+        foot:
+          h.kind === "transcript" || h.kind === "session" || h.kind === "sdk"
+            ? h.ref.slice(0, 8)
+            : h.path ?? h.ref,
+        meta: h.meta,
+        at: h.at,
+        icon: <IconDoc />,
+        run: () => router.push(openHref(h, q), { scroll: false }),
+      })),
+    [hits, q, router]
+  );
+
+  // Filter + rank the static commands, keep section order, then append the live
+  // Search group (already query results — not re-ranked). flat = selection order.
   const { groups, flat } = useMemo(() => {
     const query = q.trim().toLowerCase();
     const scored = commands
       .map((c) => ({ c, s: rank(c, query) }))
       .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s); // stable: equal scores keep registry order
+      .sort((a, b) => b.s - a.s);
+    const grouped: { section: Section; items: Command[] }[] = STATIC_SECTIONS.map(
+      (section) => ({
+        section,
+        items: scored.filter((x) => x.c.section === section).map((x) => x.c),
+      })
+    ).filter((g) => g.items.length > 0);
+    if (searchCommands.length)
+      grouped.push({ section: "Search", items: searchCommands });
     const flatList: Command[] = [];
-    const grouped = SECTION_ORDER.map((section) => ({
-      section,
-      items: scored.filter((x) => x.c.section === section).map((x) => x.c),
-    })).filter((g) => g.items.length > 0);
     grouped.forEach((g) => g.items.forEach((c) => flatList.push(c)));
     return { groups: grouped, flat: flatList };
-  }, [commands, q]);
+  }, [commands, searchCommands, q]);
 
   const selIdx = Math.min(sel, Math.max(0, flat.length - 1));
 
@@ -199,6 +314,7 @@ export default function CommandPalette() {
     if (!open) return;
     setQ("");
     setSel(0);
+    setHits([]);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
@@ -259,13 +375,10 @@ export default function CommandPalette() {
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) setOpen(false);
       }}
-      // Light, barely-blurred scrim — the app stays visible behind so the palette
-      // reads as a layer ON TOP, not the screen dimming shut.
       style={{ animation: "cmdk-backdrop-in 130ms ease-out" }}
       className="fixed inset-0 z-[70] flex items-start justify-center bg-black/30 px-4 pt-[11vh] backdrop-blur-[2px]"
     >
       <div
-        // settles down from slightly above with a soft scale — "mounts on top"
         style={{ animation: "cmdk-pop-in 170ms cubic-bezier(0.16, 1, 0.3, 1)" }}
         className="relative flex max-h-[72vh] w-[720px] max-w-[94vw] flex-col rounded-xl bg-zinc-950 shadow-2xl ring-1 ring-zinc-800/60"
       >
@@ -284,7 +397,7 @@ export default function CommandPalette() {
                   setSel(0);
                 }}
                 onKeyDown={onKeyDown}
-                placeholder="Type a command, or search panels…"
+                placeholder="Type a command, or search everything…"
                 spellCheck={false}
                 className="w-full bg-transparent font-mono text-[14px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
               />
@@ -300,7 +413,7 @@ export default function CommandPalette() {
             >
               {flat.length === 0 ? (
                 <p className="px-1 py-10 text-center font-mono text-[12px] text-zinc-600">
-                  No matching commands
+                  {q.trim() ? `No results for “${q.trim()}”` : "No commands"}
                 </p>
               ) : (
                 groups.map((g, gi) => (
@@ -315,31 +428,59 @@ export default function CommandPalette() {
                       {g.items.map((cmd) => {
                         const idx = flat.indexOf(cmd);
                         const isSel = idx === selIdx;
+                        const isHit = cmd.section === "Search";
                         return (
                           <button
                             key={cmd.id}
                             data-idx={idx}
                             onMouseMove={() => setSel(idx)}
                             onClick={() => execute(cmd)}
-                            className={`flex items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors ${
+                            className={`flex gap-3 rounded-md px-2.5 py-2 text-left transition-colors ${
+                              isHit ? "items-start" : "items-center"
+                            } ${
                               isSel
                                 ? "bg-zinc-800 text-zinc-100"
                                 : "text-zinc-300 hover:bg-zinc-900"
                             }`}
                           >
                             <span
-                              className={
+                              className={`shrink-0 ${isHit ? "mt-0.5" : ""} ${
                                 isSel ? "text-orange-400" : "text-zinc-500"
-                              }
+                              }`}
                             >
                               {cmd.icon}
                             </span>
-                            <span className="flex-1 truncate font-mono text-[13px]">
-                              {cmd.title}
-                            </span>
-                            {cmd.hint && (
-                              <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-zinc-600">
-                                {cmd.hint}
+                            {isHit ? (
+                              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="truncate font-mono text-[13px]">
+                                  {cmd.title}
+                                </span>
+                                {cmd.snippet && (
+                                  <span className="truncate font-mono text-[11px] text-zinc-500">
+                                    {cmd.snippet}
+                                  </span>
+                                )}
+                                <span className="truncate font-mono text-[10px] text-zinc-600">
+                                  {[cmd.foot, cmd.meta, cmd.at ? ago(cmd.at) : null]
+                                    .filter(Boolean)
+                                    .join("  ·  ")}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="flex-1 truncate font-mono text-[13px]">
+                                {cmd.hint && (
+                                  <span className="text-zinc-500">{cmd.hint}/</span>
+                                )}
+                                {cmd.title}
+                              </span>
+                            )}
+                            {isHit && cmd.kind && (
+                              <span
+                                className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${kindTag(
+                                  cmd.kind
+                                )}`}
+                              >
+                                {cmd.kind}
                               </span>
                             )}
                           </button>
@@ -354,7 +495,7 @@ export default function CommandPalette() {
             {/* footer */}
             <div className="flex items-center justify-between border-t border-dashed border-zinc-800 pt-2.5 font-mono text-[10px] text-zinc-600">
               <span>
-                {flat.length} command{flat.length === 1 ? "" : "s"}
+                {flat.length} result{flat.length === 1 ? "" : "s"}
               </span>
               <span>↑↓ navigate · ↵ open · esc close</span>
             </div>
