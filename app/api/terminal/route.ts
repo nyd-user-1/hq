@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
+import { sessionCwd } from "@/lib/transcript";
 
 export const maxDuration = 300; // Vercel hobby cap; locally the dev server has no limit
 
@@ -114,6 +115,10 @@ export async function POST(req: Request) {
     return new NextResponse("no usable prompt or image", { status: 400 });
   }
 
+  // `claude --resume <id>` resolves the conversation relative to the CURRENT
+  // project, so run it from the SESSION'S OWN cwd — not $HOME, which only finds
+  // sessions in the home project and otherwise reports "No conversation found".
+  const cwd = sessionCwd(sessionId) ?? process.env.HOME;
   try {
     const out = await new Promise<string>((resolve, reject) => {
       const child = execFile(
@@ -126,7 +131,7 @@ export async function POST(req: Request) {
           finalPrompt,
         ],
         {
-          cwd: process.env.HOME,
+          cwd,
           timeout: 590_000,
           maxBuffer: 32 * 1024 * 1024,
           env: { ...process.env },
@@ -137,6 +142,9 @@ export async function POST(req: Request) {
           else resolve(stdout);
         }
       );
+      // The prompt is an argv arg, not piped — close stdin so `claude -p` doesn't
+      // sit for 3s waiting on a pipe ("no stdin data received in 3s").
+      child.stdin?.end();
       running.set(sessionId, child);
     });
     return NextResponse.json({ ok: true, output: out });

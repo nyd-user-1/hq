@@ -1922,33 +1922,6 @@ export default function Terminal({
       )}
 
       <div className="flex flex-col gap-1.5">
-        {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {attachments.map((a) => (
-              <div key={a.id} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`data:${a.mime};base64,${a.data}`}
-                  alt={a.name}
-                  className="h-14 w-14 rounded-md border border-zinc-700 object-cover"
-                />
-                <button
-                  onClick={() =>
-                    setAttachments((list) => list.filter((x) => x.id !== a.id))
-                  }
-                  title="remove"
-                  aria-label="Remove image"
-                  className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-[10px] text-zinc-400 transition-colors hover:text-zinc-100"
-                >
-                  ✕
-                </button>
-                <span className="absolute inset-x-0 bottom-0 rounded-b-md bg-black/60 px-1 text-center text-[9px] text-zinc-300">
-                  {Math.max(1, Math.round(a.bytes / 1024))}kb
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
         {/* textarea + controls; ↵ sends / ⇧↵ newline. Drops are caught at the
             pane root (the whole basin); paste + 📎 still funnel through addFiles. */}
         {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
@@ -1962,6 +1935,35 @@ export default function Terminal({
           <span className="absolute -top-2.5 right-3 z-10">
             <BoundaryChip label="send-box.tsx" copyText="app/ui/terminal.tsx" />
           </span>
+          {/* Attached images ride INSIDE the box (Claude-chat shape), above the
+              textarea — same size/styling as before, just relocated in. */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((a) => (
+                <div key={a.id} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`data:${a.mime};base64,${a.data}`}
+                    alt={a.name}
+                    className="h-14 w-14 rounded-md border border-zinc-700 object-cover"
+                  />
+                  <button
+                    onClick={() =>
+                      setAttachments((list) => list.filter((x) => x.id !== a.id))
+                    }
+                    title="remove"
+                    aria-label="Remove image"
+                    className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-zinc-600 bg-zinc-900 text-[10px] text-zinc-400 transition-colors hover:text-zinc-100"
+                  >
+                    ✕
+                  </button>
+                  <span className="absolute inset-x-0 bottom-0 rounded-b-md bg-black/60 px-1 text-center text-[9px] text-zinc-300">
+                    {Math.max(1, Math.round(a.bytes / 1024))}kb
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={taRef}
             value={draft}
@@ -1993,7 +1995,7 @@ export default function Terminal({
                   ? "no session yet — start one in your terminal first"
                   : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
-            className="max-h-[176px] min-h-[72px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+            className="scrollbar-slim max-h-[176px] min-h-[72px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <input
             ref={fileInputRef}

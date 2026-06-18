@@ -665,6 +665,39 @@ export function lastTurnInterrupted(id: string | null): boolean {
   return false;
 }
 
+// The working directory a session belongs to (its project root), read from the
+// transcript's `cwd` field. `claude --resume <id>` resolves a conversation
+// RELATIVE TO THE CURRENT PROJECT, so a headless resume must run from here — not
+// $HOME — or it reports "No conversation found". Reads the tail and takes the
+// most recent cwd (sessions rarely move, but the latest is the truth).
+export function sessionCwd(id: string | null): string | null {
+  const sid = id ?? latestSessionId();
+  if (!sid) return null;
+  let text: string;
+  try {
+    const file = sessionFilePath(sid);
+    const st = fs.statSync(file);
+    const startAt = Math.max(0, st.size - TAIL_BYTES);
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(st.size - startAt);
+    fs.readSync(fd, buf, 0, buf.length, startAt);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return null;
+  }
+  for (const line of text.split("\n").reverse()) {
+    if (!line) continue;
+    try {
+      const e = JSON.parse(line);
+      if (typeof e.cwd === "string" && e.cwd) return e.cwd;
+    } catch {
+      // partial/garbled tail line — keep walking back
+    }
+  }
+  return null;
+}
+
 export type CommandRun = {
   command: string; // "/code-review"
   arg: string; // trailing args, if any
