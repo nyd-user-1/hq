@@ -267,12 +267,29 @@ function recentFiles(): { file: string; mtime: number }[] {
 // "interactive" = real terminals (entrypoint "cli"), the Recents list; "sdk" =
 // Agent SDK runs (entrypoint "sdk-cli"), kept out of Recents and shown in the
 // Activity → SDK panel instead.
+// Sessions HQ drives are spawned via `claude -p` (entrypoint "sdk-cli"), but
+// they're real interactive sessions you steer — so they belong in Recents, not
+// hidden as ephemeral SDK runs. lib/repl records their ids here.
+function hqDrivenIds(): Set<string> {
+  try {
+    const raw = fs.readFileSync(
+      path.join(os.homedir(), ".claude", "hq", "repl-sessions.json"),
+      "utf8",
+    );
+    return new Set<string>(JSON.parse(raw));
+  } catch {
+    return new Set();
+  }
+}
+
 function sessionsOfKind(kind: "interactive" | "sdk", limit: number): RecentSession[] {
   const meta = getSessionsMeta();
+  const driven = hqDrivenIds();
   const out: RecentSession[] = [];
   for (const { file, mtime } of recentFiles()) {
     const m = sessionMeta(file, mtime, meta);
-    const isSdk = m.entrypoint === "sdk-cli";
+    // an HQ-driven session counts as interactive even though it's sdk-cli
+    const isSdk = m.entrypoint === "sdk-cli" && !driven.has(m.id);
     if (kind === "sdk" ? !isSdk : isSdk) continue;
     out.push(m);
     if (out.length >= limit) break;

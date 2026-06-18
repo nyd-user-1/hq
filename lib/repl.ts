@@ -13,8 +13,25 @@
 // the TUI, drive from HQ" — one active writer at a time. stopRepl() releases it.
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { sessionCwd } from "@/lib/transcript";
+
+// HQ-driven sessions are spawned via `claude -p`, so their transcript entrypoint
+// is "sdk-cli" — which Recents filters out. Record the ids we drive in a sidecar
+// so lib/sessions can surface them in Recents as the real sessions they are.
+function recordDriven(id: string) {
+  if (!id || id.startsWith("new:")) return;
+  try {
+    const dir = path.join(os.homedir(), ".claude", "hq");
+    fs.mkdirSync(dir, { recursive: true });
+    const p = path.join(dir, "repl-sessions.json");
+    let arr: string[] = [];
+    try { arr = JSON.parse(fs.readFileSync(p, "utf8")); } catch { /* fresh */ }
+    if (!arr.includes(id)) fs.writeFileSync(p, JSON.stringify([...arr, id].slice(-300)));
+  } catch { /* best-effort */ }
+}
 
 export type ReplEvent = Record<string, unknown> & { type?: string; subtype?: string };
 
@@ -128,6 +145,7 @@ function spawnRepl(
     pending: new Map(),
   };
   repls.set(key, repl);
+  recordDriven(key); // surface HQ-driven sessions in Recents despite sdk-cli entrypoint
 
   child.stdout!.on("data", (d: Buffer) => {
     repl.stdoutBuf += d.toString();
