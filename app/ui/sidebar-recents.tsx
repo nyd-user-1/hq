@@ -198,7 +198,12 @@ export default function SidebarRecents() {
   const [editField, setEditField] = useState<"title" | "project" | "related">("title");
   const [editValue, setEditValue] = useState("");
   const [menuFor, setMenuFor] = useState<string | null>(null); // row whose ⋮ menu is open
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const [copiedId, setCopiedId] = useState(false); // ⋮-menu "copy id" feedback
   const menuRef = useRef<HTMLDetailsElement>(null);
 
   // Restore the saved grouping (client-only → useEffect, no hydration mismatch).
@@ -319,6 +324,7 @@ export default function SidebarRecents() {
   const openMenu = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
+    setCopiedId(false);
     // Toggle: clicking the ⋮ of the already-open row closes it. (stopPropagation
     // above means the window outside-click listener never fires for the kebab, so
     // the close has to happen here.)
@@ -327,12 +333,15 @@ export default function SidebarRecents() {
       setMenuPos(null);
       return;
     }
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    // Right-align the menu to the kebab and open leftward so its w-52 body stays
-    // inside the sidebar column instead of overflowing (and being clipped) at the
-    // column's right edge.
-    const MENU_W = 208; // w-52
-    setMenuPos({ top: r.bottom + 4, left: Math.max(8, r.right - MENU_W) });
+    const btn = e.currentTarget as HTMLElement;
+    const row = (btn.closest(".group") as HTMLElement) ?? btn;
+    const r = row.getBoundingClientRect();
+    // Match the menu width to the session row so it drops straight down WITHIN
+    // the sidebar — no right-edge cut-off, no item forced to two lines. (It's a
+    // fixed overlay, so it's never clipped by the scroll container.)
+    const w = r.width;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    setMenuPos({ top: r.bottom + 4, left, width: w });
     setMenuFor(id);
   };
   const closeMenu = () => {
@@ -439,20 +448,16 @@ export default function SidebarRecents() {
                       }`}
                     >
                       <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                        {/* just the id (or custom title) — project + branch moved
+                            to the ⋮ menu */}
                         {s.customTitle ? (
-                          // Renamed → the name IS the label (id moves to the ⋮ menu).
                           <span className="min-w-0 break-words font-mono text-xs text-zinc-200">
                             {s.customTitle}
                           </span>
                         ) : (
-                          <>
-                            <span className="shrink-0 font-mono text-xs">
-                              {s.id.slice(0, 8)}
-                            </span>
-                            <span className="min-w-0 break-words text-xs text-zinc-600">
-                              {s.project}
-                            </span>
-                          </>
+                          <span className="min-w-0 break-words font-mono text-xs">
+                            {s.id.slice(0, 8)}
+                          </span>
                         )}
                         {s.related?.length > 0 && (
                           <span
@@ -463,15 +468,6 @@ export default function SidebarRecents() {
                           </span>
                         )}
                       </span>
-                      {s.branch && (
-                        <span
-                          className="flex shrink-0 items-center gap-0.5 font-mono text-[10px] text-zinc-600"
-                          title={`branch: ${s.branch}`}
-                        >
-                          <BranchIcon />
-                          <span className="max-w-[5rem] truncate">{s.branch}</span>
-                        </span>
-                      )}
                       {/* green = active within the cache window */}
                       <span
                         className={`size-1.5 shrink-0 rounded-full ${
@@ -519,9 +515,25 @@ export default function SidebarRecents() {
         <div
           role="menu"
           onClick={(e) => e.stopPropagation()}
-          style={{ top: menuPos.top, left: menuPos.left }}
-          className="fixed z-50 flex w-52 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+          style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="fixed z-50 flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
         >
+          {/* read-only context — project + branch (moved out of the row) */}
+          <div className="flex flex-col gap-0.5 px-2 pb-1.5 pt-1">
+            <span className="min-w-0 truncate text-xs text-zinc-300">
+              {menuSession.project || "Unassigned"}
+            </span>
+            {menuSession.branch && (
+              <span
+                className="flex items-center gap-1 font-mono text-[10px] text-zinc-500"
+                title={`branch: ${menuSession.branch}`}
+              >
+                <BranchIcon />
+                <span className="min-w-0 truncate">{menuSession.branch}</span>
+              </span>
+            )}
+          </div>
+          <div className="my-1 h-px bg-zinc-800" />
           <button
             role="menuitem"
             onClick={() => {
@@ -598,12 +610,16 @@ export default function SidebarRecents() {
             role="menuitem"
             onClick={() => {
               navigator.clipboard.writeText(menuSession.id);
-              closeMenu();
+              setCopiedId(true);
+              window.setTimeout(() => setCopiedId(false), 1200);
             }}
-            title="click to copy the full session id"
+            title={`click to copy ${menuSession.id}`}
             className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left font-mono text-[10px] text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-300"
           >
-            <span className="min-w-0 truncate">{menuSession.id}</span>
+            {/* show the first segment; the click copies the FULL id */}
+            <span className="min-w-0 truncate">
+              {copiedId ? "copied ✓" : `${menuSession.id.slice(0, 8)}…`}
+            </span>
           </button>
         </div>
       )}
