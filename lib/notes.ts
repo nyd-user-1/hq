@@ -20,8 +20,10 @@ export type NoteInput = {
 export type NoteMeta = { name: string; title: string; savedAt: number };
 
 // Strip the --- frontmatter --- block, return the first non-empty body line.
+// Tolerates a closing --- with no trailing newline (older saves glued the body
+// to the delimiter), so the title is the first BODY line, not the "---" fence.
 export function noteTitle(content: string): string {
-  const body = content.replace(/^---[\s\S]*?---\n/, "").trim();
+  const body = content.replace(/^---[\s\S]*?\n---\s*/, "").trim();
   return (body.split("\n").find((l) => l.trim()) || "note").slice(0, 60);
 }
 
@@ -40,11 +42,13 @@ export function saveNote(input: NoteInput): string {
     input.project ? `project: ${input.project}` : "",
     input.at ? `sourceAt: ${input.at}` : "",
     "---",
-    "",
   ]
     .filter(Boolean)
     .join("\n");
-  fs.writeFileSync(path.join(NOTES_DIR, name), `${fm}${text}\n`);
+  // Blank line AFTER the closing --- so the body never glues to the delimiter.
+  // (A trailing "" in the array used to do this, but .filter(Boolean) — needed
+  // to drop the optional fields — ate it too, which broke noteTitle's strip.)
+  fs.writeFileSync(path.join(NOTES_DIR, name), `${fm}\n\n${text}\n`);
   return name;
 }
 

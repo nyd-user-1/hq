@@ -6,15 +6,13 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { PANELS } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
-import { CHIP_CLASS } from "@/app/ui/boundary-chip";
 import { usePlanner } from "@/app/ui/planner-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 
-// The "panels" dropdown, restyled as a boundary chip so it sits on the terminal
-// boundary line (just after the terminal.tsx path chip, before the search icon).
-// Not click-to-copy — a ▾ marks it as a menu. The menu echoes the boundary
-// aesthetic: a dashed border + an info-circle chip on its top-right corner (same
-// pattern as the app panel's ✕).
+// The "panels" dropdown. Its trigger is the layout-grid icon (the planner chip's
+// former icon), styled like the header's bare search button — it now lives IN the
+// terminal header, just left of the per-session search. The menu keeps its
+// boundary aesthetic: a dashed border + an info-circle chip on its top-right.
 export default function PanelMenu() {
   const params = useSearchParams();
   const pathname = usePathname();
@@ -37,14 +35,27 @@ export default function PanelMenu() {
     <details ref={ref} className="relative shrink-0">
       <summary
         title="open a panel"
-        // a BoundaryChip VARIANT: the shared chip shell + a ▾ marking the menu.
-        // Labelled with its file name (panel-menu.tsx), consistent with the
-        // other boundary chips.
-        className={`${CHIP_CLASS} flex list-none items-center gap-1 marker:content-none [&::-webkit-details-marker]:hidden`}
+        // The layout-grid icon, styled like the header's bare search button.
+        className="flex shrink-0 cursor-pointer list-none items-center rounded-md p-1.5 text-zinc-400 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:bg-zinc-800 hover:text-zinc-200"
       >
-        panel-menu <span className="text-[7px]">▼</span>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
       </summary>
-      <div className="absolute left-0 top-full z-20 mt-3 flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
+      <div className="absolute left-0 top-full z-20 mt-1.5 flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
         {/* info-circle chip on the top-right corner — same pattern as the app
             panel's ✕, straddling the dashed top border */}
         <div className="absolute -top-2.5 right-2 z-10">

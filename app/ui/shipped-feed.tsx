@@ -3,15 +3,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import SearchField from "@/app/ui/search-field";
+import { ago } from "@/lib/ago";
 import type { Ship } from "@/lib/shipped";
+
+// Strip a conventional-commit prefix ("type(scope)!: ") and capitalize, so the
+// row reads as prose instead of "feat(search): fold…". Non-conventional subjects
+// pass through unchanged. Local + pure so the client bundle never pulls lib/
+// shipped (and its git child_process) in for it.
+function humanSubject(subject: string): string {
+  const m = subject.match(/^[a-z]+(?:\([^)]+\))?(?:!)?:\s*(.+)$/i);
+  const s = m ? m[1].trim() : subject;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // The commit feed, client-side so search + the project filter narrow it live.
 // Header model (matches To Do / Components): a full-width SearchField, then a
 // control row with the "Filter" (by project/repo) on the RIGHT, its dropdown
-// opening bottom-right. No sort, no "+". Each row IS the Skills row — green dot
-// (a landed commit) · sha · subject · repo; a row opens that commit's diff
-// in-panel, the href carrying the terminal pins (pinTail). The "*Click a commit…"
-// caption lives in a footer on the page (outside this scroll area).
+// opening bottom-right. No sort, no "+". Each row: green dot (a landed commit) ·
+// sha · human-readable subject · time; repo stays a SEARCHABLE field but is no
+// longer shown in the row. A row opens that commit's diff in-panel, the href
+// carrying the terminal pins (pinTail). The "*Click a commit…" caption lives in a
+// footer on the page (outside this scroll area).
 export default function ShippedFeed({
   ships,
   pinTail,
@@ -141,10 +153,10 @@ export default function ShippedFeed({
                   </span>
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
-                  {s.subject}
+                  {humanSubject(s.subject)}
                 </span>
                 <span className="shrink-0 font-mono text-[11px] text-zinc-600">
-                  {s.repo}
+                  {ago(s.at)}
                 </span>
               </Link>
             </li>

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Markdown from "@/app/ui/md";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
+import PanelMenu from "@/app/ui/panel-menu";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
@@ -1268,7 +1269,8 @@ export default function Terminal({
 
   // ctx % — a fuel gauge by % of the 1M window LEFT: hidden until it drops to
   // 50%, then green (50–26) → amber (25–11) → red (≤10) → red-blink (≤5). Sits
-  // just after the session id. The bar still appears past 75% used.
+  // just LEFT of the cache meter (dock when wide, footer when focused). The bar
+  // still appears past 75% used.
   const ctxColor =
     ctxLeftPct <= 10
       ? "text-red-400"
@@ -1360,7 +1362,16 @@ export default function Terminal({
         </div>
       )}
       {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
-      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800 pb-3">
+      <div className="mb-2 border-b border-zinc-800 pb-3">
+        {/* The whole header row — session metadata (dot · project · id · search ·
+            lineage) AND the layout toggle — rides the SAME centered column as the
+            message stream when FOCUSED (the colWrap: mx-auto max-w-3xl px-4), so
+            they all move together; full-width left in WIDE screen. */}
+        <div
+          className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${
+            centered ? "mx-auto w-full max-w-3xl px-4" : ""
+          }`}
+        >
         <span className="flex items-center gap-1.5 text-xs">
           {/* Activity dot, same vocabulary as the session cards: blinking =
               writing right now, solid = active within the cache window (5 min),
@@ -1406,8 +1417,10 @@ export default function Terminal({
         ) : (
           <span className="font-mono text-[11px] text-zinc-600">—</span>
         )}
-        {/* ctx % rides right after the session id (it's a property of THIS id). */}
-        {ctxMeter}
+        {/* Panels menu — the layout-grid icon opens Activity/Metrics/Console/
+            Compose/Planner/Text. Lives here in the header, just left of search
+            (its former boundary-trail chip was removed). */}
+        <PanelMenu />
         {/* Search — bare icon-button (send-box standard) just after the session
             id. Click expands it into the SearchField primitive (animated width)
             that filters THIS session's transcript; the icon morphs to ×. */}
@@ -1545,26 +1558,23 @@ export default function Terminal({
             </div>
           </details>
         )}
-        {/* min-w-0 + wrap so this cluster never overflows under the app panel */}
-        <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-          {/* Layout toggle — flips this live session between two real modes:
-              "wide screen" (default) and "focus mode" (the centered conversation
-              shell). Bare icon-button matching the send-box buttons: minimize-2
-              while wide (shrink into focus), maximize-2 while focused (expand back
-              out). Only offered when a real session is pinned; empty state is
-              already centered. */}
-          {resolvedId && !notConnected && (
-            <button
-              type="button"
-              onClick={() => setFocusMode((f) => !f)}
-              aria-label={focusMode ? "Wide screen" : "Focus mode"}
-              title={
-                focusMode
-                  ? "in focus mode — click to expand to wide screen"
-                  : "in wide screen — click for focus mode"
-              }
-              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
+        {/* Layout toggle — flips this live session between two real modes: "wide
+            screen" (default) and "focus mode" (the centered conversation shell).
+            Part of the header cluster (ml-auto → its right edge), so it rides the
+            centered column WITH the metadata when focused. minimize-2 while wide
+            (shrink into focus), maximize-2 while focused. Pinned session only. */}
+        {resolvedId && !notConnected && (
+          <button
+            type="button"
+            onClick={() => setFocusMode((f) => !f)}
+            aria-label={focusMode ? "Wide screen" : "Focus mode"}
+            title={
+              focusMode
+                ? "in focus mode — click to expand to wide screen"
+                : "in wide screen — click for focus mode"
+            }
+            className="ml-auto flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+          >
               {focusMode ? (
                 // lucide maximize-2 — expand back out to wide screen
                 <svg
@@ -1602,7 +1612,7 @@ export default function Terminal({
               )}
             </button>
           )}
-        </span>
+        </div>
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div
@@ -2034,8 +2044,10 @@ export default function Terminal({
             </button>
             {/* right cluster, bottom-right: cache + model + todo + send. */}
             <div className="ml-auto flex items-center gap-2">
-              {/* cache meter — in wide screen it lives here, just before the model
-                  selector (in the centered shell it stays in the footer instead). */}
+              {/* ctx % then cache meter — in wide screen they live here, just
+                  before the model selector (in the centered shell they move to the
+                  footer instead). ctx sits immediately to the left of cache. */}
+              {!centered && ctxMeter}
               {!centered && meter}
               {/* model picker — defaults to the model read from the transcript;
                   your pick rides on the send as `claude --model <id>`, which sets
@@ -2163,6 +2175,7 @@ export default function Terminal({
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-mono text-[11px] text-zinc-600">
           <span>HQ: The disk is the database.</span>
           <span className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {ctxMeter}
             {meter}
           </span>
         </div>
