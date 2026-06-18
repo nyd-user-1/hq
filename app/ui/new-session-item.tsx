@@ -1,18 +1,22 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSidebar } from "@/app/ui/sidebar-state";
 
-// The sidebar's primary action (where "Search" used to sit): start a fresh,
-// context-free session. Nothing is spawned — a session only exists once you type
-// in a Claude terminal — so this stages the terminal (?session=new), which
-// auto-flips to the newborn session the moment its transcript appears.
+// The sidebar's primary action: stage a fresh session (?session=new) — where you
+// pick a project and HQ drives a new session right there. Also collapses the
+// sidebar so the staging view gets the full width (you're done with the rail).
 export default function NewSessionItem() {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const staged = useSearchParams().get("session") === "new";
+  const { open, toggle } = useSidebar();
   return (
     <button
-      onClick={() => router.push(`${pathname}?session=new`, { scroll: false })}
+      onClick={() => {
+        router.push(`${pathname}?session=new`, { scroll: false });
+        if (open) toggle(); // collapse the rail; the staging view takes over
+      }}
       className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
         staged
           ? "bg-blue-600 text-white"

@@ -510,7 +510,18 @@ export default function Terminal({
   // Live REPL — only Terminal 1 drives, and only a real pinned session. When
   // `driveMode` is on, the send box routes here (warm process) instead of the
   // one-shot -p; tokens stream back live and tool permissions surface as cards.
+  const drivenSessionRef = useRef<string | null>(null); // which session drive was turned on FOR
   const repl = useRepl(resolvedId, driveMode && paramKey === "session");
+  // Drive is PER-SESSION: switching the pinned session turns it back off, so HQ
+  // never auto-drives whatever you click (which spawned orphan processes + churned
+  // Recents). Re-enable per session via the pill. `pinned` is immediate (URL), so
+  // it doesn't false-trip during the birth→navigate handoff to the new id.
+  useEffect(() => {
+    if (driveMode && pinned && drivenSessionRef.current && pinned !== drivenSessionRef.current) {
+      setDriveMode(false);
+      drivenSessionRef.current = null;
+    }
+  }, [pinned, driveMode]);
 
   // In-session find-in-page. `q` is the DEBOUNCED query — the heavy DOM walk +
   // highlight build runs off this, so typing into the box stays instant even on a
@@ -1256,6 +1267,7 @@ export default function Terminal({
       if (!res.ok) throw new Error((await res.text()) || `error ${res.status}`);
       const data = await res.json();
       if (data?.sessionId) {
+        drivenSessionRef.current = data.sessionId; // bind drive to the newborn (survives the navigate)
         setDriveMode(true);
         router.push(hrefFor(data.sessionId), { scroll: false });
       } else {
@@ -1655,7 +1667,8 @@ export default function Terminal({
             onClick={() =>
               setDriveMode((d) => {
                 const next = !d;
-                if (!next) repl.stop(); // releasing → stop the process
+                if (next) drivenSessionRef.current = resolvedId; // bind drive to THIS session
+                else { repl.stop(); drivenSessionRef.current = null; } // releasing → stop
                 return next;
               })
             }
