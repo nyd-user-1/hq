@@ -16,7 +16,6 @@ import {
   queryTokens,
   SCOPES,
   type SearchScope,
-  type SearchKind,
   type SortDir,
   type SearchHit,
 } from "@/lib/search";
@@ -28,22 +27,8 @@ import { getProjectSessions } from "@/lib/projects";
 import { getTodos } from "@/lib/todo";
 import { COMPONENTS, readComponentSource } from "@/lib/components";
 import DraggableCard from "@/app/ui/draggable-card";
-
-// Per-kind badge tint — one accent per corpus so the result list reads at a glance.
-const KIND_BADGE: Record<SearchKind, string> = {
-  transcript: "bg-emerald-500/15 text-emerald-300",
-  session: "bg-emerald-500/15 text-emerald-300",
-  sdk: "bg-teal-500/15 text-teal-300",
-  file: "bg-sky-500/15 text-sky-300",
-  component: "bg-cyan-500/15 text-cyan-300",
-  commit: "bg-orange-500/15 text-orange-300",
-  todo: "bg-yellow-500/15 text-yellow-300",
-  project: "bg-fuchsia-500/15 text-fuchsia-300",
-  memory: "bg-violet-500/15 text-violet-300",
-  note: "bg-blue-500/15 text-blue-300",
-  script: "bg-amber-500/15 text-amber-300",
-  skill: "bg-rose-500/15 text-rose-300",
-};
+import SearchScopeFilter from "@/app/ui/search-scope-filter";
+import { KIND_TAG } from "@/app/ui/search-tags";
 
 // The footer's left slot — the result's identity: a short session id, else the
 // file path, else the bare ref.
@@ -498,26 +483,15 @@ export default async function Search({
     ? search(q, scope, sortDir)
     : { hits: recent(scope, sortDir), building: false };
 
-  const scopeChip = (label: string, value: SearchScope) => (
-    <Link
-      key={value}
-      href={`/search?q=${encodeURIComponent(q)}&scope=${value}&sort=${sortDir}${pinTail}`}
-      scroll={false}
-      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-        scope === value
-          ? "bg-blue-600 text-white"
-          : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-      }`}
-    >
-      {label}
-    </Link>
-  );
-
   return (
     <Boundary label="@panel/search/page.tsx">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {SCOPES.map((s) => scopeChip(s.label, s.value))}
+      {/* Header mirrors the Components panel: search box on top, then a Filter
+          dropdown (left, the 13 scopes as colored chips) + sort button (right).
+          The active scope rides on the Filter face, so the old chip row is gone. */}
+      <div className="flex flex-col gap-1.5">
+        <SearchInput initial={q} scope={scope} sort={sortDir} pins={tail} />
+        <div className="flex items-center gap-2">
+          <SearchScopeFilter scope={scope} q={q} sort={sortDir} pins={tail} />
           <Link
             href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
               sortDir === "new" ? "old" : "new"
@@ -529,12 +503,11 @@ export default async function Search({
                 ? "Newest first — click for oldest"
                 : "Oldest first — click for newest"
             }
-            className="ml-auto flex shrink-0 items-center rounded-md bg-zinc-800 px-2 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
+            className="ml-auto flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           >
             <SortIcon dir={sortDir} />
           </Link>
         </div>
-        <SearchInput initial={q} scope={scope} sort={sortDir} pins={tail} />
       </div>
 
       {!q && (
@@ -584,7 +557,7 @@ export default async function Search({
                   {h.title}
                 </span>
                 <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${KIND_BADGE[h.kind]}`}
+                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${KIND_TAG[h.kind]}`}
                 >
                   {h.kind}
                 </span>
