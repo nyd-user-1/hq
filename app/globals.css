@@ -107,15 +107,15 @@
   }
 }
 
-/* Claude-style slim scrollbar with an INVISIBLE track ("guardrails"): just a
-   thin rounded zinc thumb floating over a transparent gutter. The 2px transparent
-   border + padding-box clip slims the thumb and insets it. */
+/* Claude-style slim scrollbar: a thin (6px) rounded zinc thumb on a fully
+   transparent track — no gutter, no guard-rail, no inset border. The thumb fills
+   the whole 6px width so it reads as a clean long pill. */
 @utility scrollbar-slim {
   scrollbar-width: thin;
   scrollbar-color: #3f3f46 transparent; /* thumb zinc-700 · track transparent */
   &::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
   &::-webkit-scrollbar-track {
     background: transparent;
@@ -123,8 +123,6 @@
   &::-webkit-scrollbar-thumb {
     background-color: #3f3f46; /* zinc-700 */
     border-radius: 9999px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
   }
   &::-webkit-scrollbar-thumb:hover {
     background-color: #52525b; /* zinc-600 */
