@@ -29,10 +29,13 @@ function highlightApi(): { reg: HighlightRegistry; Ctor: HighlightCtor } | null 
 // globals.css — the pulse below references them across the same document.)
 const TERMINAL_RUNTIME_CSS = `
 /* Turn-state border: orange while awaiting a complete response, green when done,
-   red when the user hard-interrupted (stays until the next input). */
-.boundary-flash.is-thinking { border-color: #f97316; }
-.boundary-flash.is-done { border-color: #22c55e; }
-.boundary-flash.is-interrupted { border-color: #ef4444; }
+   red when the user hard-interrupted (stays until the next input). !important so
+   the state beats the 1.2s boundary-flash LOAD animation — without it, refreshing
+   mid-turn shows blue→grey→state (the animation outranks normal rules until it
+   ends); with it the state wins immediately (blue flash → state, no grey gap). */
+.boundary-flash.is-thinking { border-color: #f97316 !important; }
+.boundary-flash.is-done { border-color: #22c55e !important; }
+.boundary-flash.is-interrupted { border-color: #ef4444 !important; }
 /* Traveling pulse — shared shell, color per state. */
 .boundary-flash.is-thinking::after,
 .boundary-flash.is-done::after,
@@ -55,9 +58,9 @@ const TERMINAL_RUNTIME_CSS = `
    a blue-600 chip bg + white text): the chip BACKGROUND takes the state color in a
    600 shade for crisp white text, while the border stays the vivid 500. Orange
    thinking, green done, red interrupted. */
-.boundary-flash.is-thinking .boundary-flash-chip { background-color: #ea580c; color: #fff; }
-.boundary-flash.is-done .boundary-flash-chip { background-color: #16a34a; color: #fff; }
-.boundary-flash.is-interrupted .boundary-flash-chip { background-color: #dc2626; color: #fff; }
+.boundary-flash.is-thinking .boundary-flash-chip { background-color: #ea580c !important; color: #fff !important; }
+.boundary-flash.is-done .boundary-flash-chip { background-color: #16a34a !important; color: #fff !important; }
+.boundary-flash.is-interrupted .boundary-flash-chip { background-color: #dc2626 !important; color: #fff !important; }
 /* Find-in-page: a crisp white × on a dark circle for the native clear button. */
 .hq-find-field::-webkit-search-cancel-button {
   -webkit-appearance: none; appearance: none;
@@ -70,12 +73,19 @@ const TERMINAL_RUNTIME_CSS = `
 ::highlight(hq-search-active-session),
 ::highlight(hq-search-active-pair) { background-color: #facc15; color: #18181b; }`;
 function ensureTerminalRuntimeStyle() {
+  if (typeof document === "undefined") return;
   const ID = "hq-terminal-runtime-style";
-  if (typeof document === "undefined" || document.getElementById(ID)) return;
-  const style = document.createElement("style");
-  style.id = ID;
-  style.textContent = TERMINAL_RUNTIME_CSS;
-  document.head.appendChild(style);
+  // Find-or-create + always sync the content. NOT an id-guarded early return:
+  // that left a stale <style> in the tab across HMR edits (the source/bundle
+  // updated, the injected CSS didn't), which masked fixes during dev iteration.
+  let style = document.getElementById(ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = ID;
+    document.head.appendChild(style);
+  }
+  if (style.textContent !== TERMINAL_RUNTIME_CSS)
+    style.textContent = TERMINAL_RUNTIME_CSS;
 }
 
 // The persistent heart. Mounted once in the shell (root layout) so it NEVER
@@ -1887,6 +1897,10 @@ export default function Terminal({
         </div>
       ) : sending ? (
         <p className="font-mono text-xs text-zinc-500">starting…</p>
+      ) : interrupted ? (
+        <p className="font-mono text-xs text-red-400">
+          ⊘ interrupted — send a message to redirect
+        </p>
       ) : !loading && lastWrite && now > 0 ? (
         <p className="font-mono text-xs text-zinc-600">
           ◦ idle — nothing running
