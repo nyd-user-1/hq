@@ -94,3 +94,81 @@ export function getCalls(limit = 25): Call[] {
   }
   return calls.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
 }
+
+// Every call from the last 48h (rolling), uncapped. Scans every transcript
+// touched in that window and reads it in full (the tail/file caps in getCalls
+// would silently drop older calls), keeping calls timestamped within 48h.
+const WINDOW_MS = 48 * 60 * 60 * 1000;
+
+export function getRecentCalls(): Call[] {
+  const cutoffMs = Date.now() - WINDOW_MS;
+
+  let dirs: fs.Dirent[];
+  try {
+    dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const calls: Call[] = [];
+  for (const dir of dirs) {
+    if (!dir.isDirectory()) continue;
+    const dirPath = path.join(PROJECTS_ROOT, dir.name);
+    for (const f of fs.readdirSync(dirPath)) {
+      if (!f.endsWith(".jsonl")) continue;
+      const file = path.join(dirPath, f);
+      let st;
+      try {
+        st = fs.statSync(file);
+      } catch {
+        continue; // vanished mid-scan
+      }
+      if (st.mtimeMs < cutoffMs) continue; // untouched in 48h → nothing in window
+      let content;
+      try {
+        content = fs.readFileSync(file, "utf8");
+      } catch {
+        continue;
+      }
+      let project = "";
+      for (const line of content.split("\n")) {
+        if (!line) continue;
+        let e;
+        try {
+          e = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (!project && typeof e.cwd === "string")
+          project =
+            e.cwd === os.homedir() ? "Unassigned" : path.basename(e.cwd);
+        const u = e?.message?.usage;
+        if (!u || !e.timestamp) continue;
+        if (new Date(e.timestamp).getTime() < cutoffMs) continue;
+        const t = {
+          input: u.input_tokens ?? 0,
+          cacheCreate: u.cache_creation_input_tokens ?? 0,
+          cacheRead: u.cache_read_input_tokens ?? 0,
+          output: u.output_tokens ?? 0,
+          messages: 1,
+        };
+        const { usd, premium } = callCost({
+          model: e.message?.model,
+          input: t.input,
+          cacheCreate: t.cacheCreate,
+          cacheRead: t.cacheRead,
+          output: t.output,
+        });
+        calls.push({
+          at: e.timestamp,
+          project,
+          output: t.output,
+          raw: t.input + t.cacheCreate + t.cacheRead + t.output,
+          weightedTokens: weighted(t),
+          cost: usd,
+          premium,
+        });
+      }
+    }
+  }
+  return calls.sort((a, b) => b.at.localeCompare(a.at));
+}

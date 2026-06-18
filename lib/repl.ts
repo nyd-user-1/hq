@@ -58,14 +58,19 @@ type Repl = {
   events: ReplEvent[]; // ring buffer for late SSE subscribers
   subscribers: Set<(e: ReplEvent) => void>;
   pending: Map<string, PendingPermission>; // permission asks keyed by tool_use_id
+  reapTimer?: ReturnType<typeof setTimeout>; // disconnect-grace kill (cleared on reconnect)
 };
 
 // Survive Next dev HMR (module re-eval) so we never orphan a running process.
-const g = globalThis as unknown as { __hqRepls?: Map<string, Repl> };
+const g = globalThis as unknown as {
+  __hqRepls?: Map<string, Repl>;
+  __hqReaper?: ReturnType<typeof setInterval>;
+};
 const repls: Map<string, Repl> = g.__hqRepls ?? (g.__hqRepls = new Map());
 
 const EVENT_CAP = 1500;
 const IDLE_MS = 30 * 60 * 1000; // reap a REPL untouched for 30 min
+const DISCONNECT_GRACE_MS = 20 * 1000; // browser gone this long (no turn running) → release
 const PERMISSION_TIMEOUT_MS = 10 * 60 * 1000; // deny if unanswered for 10 min
 
 function shimPath(): string {
@@ -161,6 +166,7 @@ function spawnRepl(
   child.on("exit", (code, sig) => {
     repl.alive = false;
     repl.busy = false;
+    if (repl.reapTimer) { clearTimeout(repl.reapTimer); repl.reapTimer = undefined; }
     emit(repl, { type: "hq_exit", code, signal: sig });
     // fail any outstanding permission asks closed
     for (const [, p] of repl.pending) { clearTimeout(p.timer); p.resolve({ behavior: "deny", message: "session ended" }); }
@@ -235,14 +241,31 @@ export function sendTurn(
 export function subscribe(requestedId: string, cb: (e: ReplEvent) => void): () => void {
   const r = repls.get(requestedId);
   if (!r) return () => {};
+  // A (re)connect cancels any pending disconnect-reap — a brief nav gap shouldn't kill the process.
+  if (r.reapTimer) { clearTimeout(r.reapTimer); r.reapTimer = undefined; }
   for (const e of r.events) { try { cb(e); } catch { /* ignore */ } }
   r.subscribers.add(cb);
-  return () => { r.subscribers.delete(cb); };
+  return () => {
+    r.subscribers.delete(cb);
+    // Last browser gone → release the warm process after a short grace (unless mid-turn,
+    // which the idle reaper will collect once it finishes). The grace absorbs page nav.
+    if (r.subscribers.size === 0 && !r.reapTimer) {
+      r.reapTimer = setTimeout(() => {
+        const cur = repls.get(requestedId);
+        if (!cur) return;
+        cur.reapTimer = undefined;
+        if (cur.subscribers.size > 0 || cur.busy) return;
+        stopRepl(requestedId);
+        repls.delete(requestedId);
+      }, DISCONNECT_GRACE_MS);
+    }
+  };
 }
 
 export function stopRepl(requestedId: string): boolean {
   const r = repls.get(requestedId);
   if (!r) return false;
+  if (r.reapTimer) { clearTimeout(r.reapTimer); r.reapTimer = undefined; }
   try { r.child.kill("SIGTERM"); } catch { /* already gone */ }
   r.alive = false;
   return true;
@@ -283,7 +306,7 @@ export function resolvePermission(
   return true;
 }
 
-// Reap idle REPLs (called opportunistically from routes).
+// Reap idle REPLs. Called opportunistically from routes AND on the timer below.
 export function reapIdle() {
   const now = Date.now();
   for (const [id, r] of repls) {
@@ -291,3 +314,11 @@ export function reapIdle() {
     if (now - r.lastActivity > IDLE_MS) { stopRepl(id); repls.delete(id); }
   }
 }
+
+// Background reaper. reapIdle() also runs opportunistically on each POST, but if
+// the browser closes there are no more POSTs — so without this a warm process
+// would linger until the dev server dies (the orphaned-PID-3930 pattern). Guard
+// with a global handle so dev HMR re-eval never stacks intervals.
+if (g.__hqReaper) clearInterval(g.__hqReaper);
+g.__hqReaper = setInterval(reapIdle, 60 * 1000);
+(g.__hqReaper as unknown as { unref?: () => void }).unref?.();

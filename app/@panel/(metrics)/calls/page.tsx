@@ -1,5 +1,5 @@
 import Boundary from "@/app/ui/boundary";
-import { getCalls } from "@/lib/calls";
+import { getRecentCalls } from "@/lib/calls";
 import { getSpend } from "@/lib/usage";
 import { fmtUSD } from "@/lib/pricing";
 
@@ -15,7 +15,7 @@ function fmt(n: number): string {
 // header (session / today / week). Tokens are demoted to the dim detail; the
 // $ is the headline. Premium calls (past the 200k cliff, ~2x) are flagged.
 export default function Calls() {
-  const calls = getCalls();
+  const calls = getRecentCalls();
   const spend = getSpend();
   return (
     <Boundary topOnly bleedX label="@panel/calls/page.tsx">
@@ -62,7 +62,7 @@ export default function Calls() {
         ))}
       </ul>
       <p className="text-xs text-zinc-600">
-        last {calls.length} calls priced (est.) · 2× = past the 200k cliff ·
+        {calls.length} calls · last 48h (est.) · 2× = past the 200k cliff ·
         rates in lib/pricing.ts
       </p>
     </Boundary>
