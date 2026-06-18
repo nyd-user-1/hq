@@ -7,6 +7,7 @@ import Markdown from "@/app/ui/md";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
 import PanelMenu from "@/app/ui/panel-menu";
+import { useRepl } from "@/app/ui/use-repl";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
@@ -456,6 +457,7 @@ export default function Terminal({
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const [focusMode, setFocusMode] = useState(false); // centered "conversation shell" toggle for a live session (the not-connected state forces it on)
+  const [driveMode, setDriveMode] = useState(false); // "Drive from HQ": route the send box to the live REPL (Terminal 1 only)
   const [searchOpen, setSearchOpen] = useState(false); // header search expanded?
   const [searchQuery, setSearchQuery] = useState(""); // raw input — updates instantly so typing never lags
   const [appliedQuery, setAppliedQuery] = useState(""); // debounced — what the (heavy) DOM walk actually runs
@@ -503,6 +505,11 @@ export default function Terminal({
   const dismissRef = useRef<(() => void) | null>(null); // detaches the held-green engagement listeners
   const working = status !== null;
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
+
+  // Live REPL — only Terminal 1 drives, and only a real pinned session. When
+  // `driveMode` is on, the send box routes here (warm process) instead of the
+  // one-shot -p; tokens stream back live and tool permissions surface as cards.
+  const repl = useRepl(resolvedId, driveMode && paramKey === "session");
 
   // In-session find-in-page. `q` is the DEBOUNCED query — the heavy DOM walk +
   // highlight build runs off this, so typing into the box stays instant even on a
@@ -1145,6 +1152,26 @@ export default function Terminal({
 
   async function doSend() {
     if (staged) return; // staging view — no session exists to send to
+    // Drive mode: route to the warm live REPL (streams back over SSE) instead of
+    // the one-shot -p. Optimistic user turn shows immediately; the reply streams
+    // into the live overlay, then lands via the transcript poll like any turn.
+    if (driveMode) {
+      const prompt = draft.trim();
+      const imgs = attachments;
+      if (!prompt && imgs.length === 0) return;
+      const optimistic = [
+        prompt,
+        imgs.length ? `📎 ${imgs.length} image${imgs.length > 1 ? "s" : ""} attached` : "",
+      ].filter(Boolean).join("\n\n");
+      setItems((t) => [
+        ...t,
+        { kind: "turn", role: "user", text: optimistic, at: new Date().toISOString() },
+      ]);
+      setDraft("");
+      setAttachments([]);
+      await repl.send(prompt, imgs.map(({ data, mime }) => ({ data, mime })));
+      return;
+    }
     const target = pinned ?? resolvedId;
     const prompt = draft.trim();
     const imgs = attachments; // snapshot — survives the clear below
@@ -1588,11 +1615,49 @@ export default function Terminal({
             </div>
           </details>
         )}
+        {/* Drive toggle — "drive from HQ": route the send box to the warm live
+            REPL instead of the one-shot -p. Green pill while driving (dot pulses
+            mid-turn); releasing it stops the process so the TUI can take the wheel.
+            Terminal 1 + a real pinned session only. ml-auto pushes the whole
+            right cluster (drive · focus) to the edge. */}
+        {resolvedId && !notConnected && paramKey === "session" && (
+          <button
+            type="button"
+            onClick={() =>
+              setDriveMode((d) => {
+                const next = !d;
+                if (!next) repl.stop(); // releasing → stop the process
+                return next;
+              })
+            }
+            title={
+              driveMode
+                ? "driving from HQ — click to release (the TUI can take over)"
+                : "drive this session from HQ (minimize your TUI first)"
+            }
+            className={`ml-auto flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors ${
+              driveMode
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            <span
+              className={`size-1.5 rounded-full ${
+                driveMode
+                  ? repl.busy
+                    ? "animate-pulse bg-emerald-400"
+                    : "bg-emerald-400"
+                  : "bg-zinc-600"
+              }`}
+            />
+            {driveMode ? "driving" : "drive"}
+          </button>
+        )}
         {/* Layout toggle — flips this live session between two real modes: "wide
             screen" (default) and "focus mode" (the centered conversation shell).
-            Part of the header cluster (ml-auto → its right edge), so it rides the
-            centered column WITH the metadata when focused. minimize-2 while wide
-            (shrink into focus), maximize-2 while focused. Pinned session only. */}
+            Part of the header cluster, so it rides the centered column WITH the
+            metadata when focused. minimize-2 while wide (shrink into focus),
+            maximize-2 while focused. Pinned session only. */}
         {resolvedId && !notConnected && (
           <button
             type="button"
@@ -1603,7 +1668,7 @@ export default function Terminal({
                 ? "in focus mode — click to expand to wide screen"
                 : "in wide screen — click for focus mode"
             }
-            className="ml-auto flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            className={`${paramKey === "session" ? "" : "ml-auto "}flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200`}
           >
               {focusMode ? (
                 // lucide maximize-2 — expand back out to wide screen
@@ -1803,6 +1868,70 @@ export default function Terminal({
             </details>
           )
         )}
+        {/* Live REPL overlay (drive mode): the in-flight assistant turn streaming
+            token-by-token, the current turn's tool calls, and any pending
+            permission asks as Approve/Deny cards. Completed turns still land via
+            the transcript poll above; this is the instant layer on top. */}
+        {driveMode &&
+          (repl.liveText || repl.liveTools.length > 0 || repl.permissions.length > 0) && (
+            <div className="flex flex-col gap-2">
+              {(repl.liveText || repl.liveTools.length > 0) && (
+                <div className="flex flex-col gap-1">
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+                    <span className="mr-1.5 normal-case text-emerald-400">●</span>
+                    claude · live
+                  </span>
+                  <div className="break-words rounded-md border border-emerald-500/30 bg-zinc-900/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
+                    {repl.liveText ? <Markdown text={repl.liveText} /> : null}
+                    {repl.liveTools.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {repl.liveTools.map((tl) => (
+                          <span
+                            key={tl.id}
+                            className="rounded border border-zinc-700 px-1.5 py-px font-mono text-[10px] text-zinc-400"
+                          >
+                            {tl.name}…
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {repl.permissions.map((p) => (
+                <div
+                  key={p.toolUseId}
+                  className="flex flex-col gap-2 rounded-md border border-amber-500/50 bg-amber-500/5 p-3"
+                >
+                  <p className="font-mono text-xs text-amber-200">
+                    <span className="mr-1.5">⚠</span>approve{" "}
+                    <span className="font-semibold">{p.toolName}</span>?
+                  </p>
+                  <pre className="scrollbar-slim max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 font-mono text-[11px] text-zinc-400">
+                    {JSON.stringify(p.input, null, 2)}
+                  </pre>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => repl.answer(p.toolUseId, { behavior: "allow" })}
+                      className="rounded-md border border-emerald-500/50 bg-emerald-500/10 px-2.5 py-1 font-mono text-[11px] text-emerald-300 transition-colors hover:bg-emerald-500/20"
+                    >
+                      approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        repl.answer(p.toolUseId, { behavior: "deny", message: "denied from HQ" })
+                      }
+                      className="rounded-md border border-red-500/50 bg-red-500/10 px-2.5 py-1 font-mono text-[11px] text-red-300 transition-colors hover:bg-red-500/20"
+                    >
+                      deny
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         {/* End-of-the-line marker: this session was wrapped and continued
             elsewhere — the answer to "that was the end of 2aa29e46, where did
             it go?". Click follows the continuation. */}
