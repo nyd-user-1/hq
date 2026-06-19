@@ -1,5 +1,5 @@
 import Boundary from "@/app/ui/boundary";
-import RefreshWhile from "@/app/ui/refresh-while";
+import RefreshOnChange from "@/app/ui/refresh-on-change";
 import { firehoseFor, type FireItem, type Tone } from "@/lib/firehose";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 // FIREHOSE panel — the everything-view of a session's transcript, in-app: the
 // dashboard sibling of scripts/firehose.mjs. Raw fields, nothing computed. Reads
 // the current session by default (?session=<id> to pin another) and live-tails
-// it (RefreshWhile re-renders the server component on an interval).
+// it — RefreshOnChange re-renders the server component on an fs.watch SSE push
+// (event-driven; no idle timer).
 
 const toneClass: Record<Tone, string> = {
   add: "text-emerald-300",
@@ -142,7 +143,7 @@ export default async function FirehosePanel({
       <p className="text-xs text-zinc-600">
         every field on disk, nothing computed · raw tokens, sealed-thinking signatures, full tool I/O · read-only
       </p>
-      <RefreshWhile active ms={1500} />
+      <RefreshOnChange session={session ?? null} />
     </Boundary>
   );
 }

@@ -215,24 +215,41 @@ export default function SidebarRecents() {
 
   useEffect(() => {
     let alive = true;
-    const load = async () => {
-      try {
-        const d = await (await fetch("/api/sessions")).json();
-        if (alive) {
-          setSessions(d.sessions ?? []);
-          setLoaded(true);
-        }
-      } catch {
-        // transient (dev recompile) — the interval picks it back up
+    const apply = (d: { sessions?: Recent[] }) => {
+      if (alive && d?.sessions) {
+        setSessions(d.sessions);
+        setLoaded(true);
       }
     };
-    load();
-    const t = setInterval(load, 15000);
+    const load = async () => {
+      try {
+        apply(await (await fetch("/api/sessions")).json());
+      } catch {
+        // transient (dev recompile) — the stream / focus reload picks it up
+      }
+    };
+    load(); // fast first paint + fallback if the stream can't open
+
+    // Live updates pushed by the fs.watch-backed SSE — replaces the 15s poll:
+    // instant on real change, zero re-scans when idle.
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource("/api/sessions/stream");
+      es.addEventListener("sessions", (e) => {
+        try {
+          apply(JSON.parse((e as MessageEvent).data));
+        } catch {
+          /* malformed frame — next push reconciles */
+        }
+      });
+    } catch {
+      // EventSource unavailable — the focus reload below is the fallback
+    }
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);
     return () => {
       alive = false;
-      clearInterval(t);
+      es?.close();
       window.removeEventListener("focus", onFocus);
     };
   }, []);
@@ -268,8 +285,8 @@ export default function SidebarRecents() {
     if (menuRef.current) menuRef.current.open = false;
   };
 
-  // Optimistic local patch + fire-and-forget write to the sidecar. The 15s poll
-  // reconciles with server truth.
+  // Optimistic local patch + fire-and-forget write to the sidecar. The live SSE
+  // stream reconciles with server truth on the next push.
   const patchLocal = (id: string, patch: Partial<Recent>) =>
     setSessions((xs) => xs.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const postMeta = (id: string, body: Record<string, unknown>) => {
