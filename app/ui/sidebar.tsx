@@ -14,7 +14,7 @@ export default function Sidebar() {
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
       <Link href="/" scroll={false} className="block shrink-0">
-        <h1 className="text-base font-semibold tracking-tight">Agentic OS</h1>
+        <h1 className="text-base font-semibold tracking-tight">hq</h1>
       </Link>
 
       <div className="flex shrink-0 flex-col gap-1">
