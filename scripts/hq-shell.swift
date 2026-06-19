@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.delegate = self
         webView = WKWebView(frame: rect, configuration: WKWebViewConfiguration())
         webView.autoresizingMask = [.width, .height]
+        webView.pageZoom = max(0.5, min(3.0, (UserDefaults.standard.object(forKey: "hqZoom") as? Double) ?? 1.0))
         webView.addObserver(self, forKeyPath: "title", options: .new, context: nil)
         window.contentView = webView
         window.makeKeyAndOrderFront(nil)
@@ -177,6 +178,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func reload() { webView?.reload() }
+
+    // --- page zoom (⌘+ / ⌘- / ⌘0), persisted across launches ----------------
+    @objc func zoomIn()    { setZoom(webView.pageZoom + 0.1) }
+    @objc func zoomOut()   { setZoom(webView.pageZoom - 0.1) }
+    @objc func zoomReset() { setZoom(1.0) }
+    func setZoom(_ z: CGFloat) {
+        let clamped = max(0.5, min(3.0, z))
+        webView.pageZoom = clamped
+        UserDefaults.standard.set(Double(clamped), forKey: "hqZoom")
+    }
 }
 
 let app = NSApplication.shared
@@ -193,6 +204,16 @@ appMenu.addItem(NSMenuItem.separator())
 appMenu.addItem(withTitle: "Hide HQ", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
 appMenu.addItem(withTitle: "Quit HQ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 appItem.submenu = appMenu
+
+// View menu: real ⌘+ / ⌘- / ⌘0 page zoom.
+let viewItem = NSMenuItem(); mainMenu.addItem(viewItem)
+let viewMenu = NSMenu(title: "View")
+let zin = NSMenuItem(title: "Zoom In", action: #selector(AppDelegate.zoomIn), keyEquivalent: "+"); zin.target = delegate
+let zout = NSMenuItem(title: "Zoom Out", action: #selector(AppDelegate.zoomOut), keyEquivalent: "-"); zout.target = delegate
+let zreset = NSMenuItem(title: "Actual Size", action: #selector(AppDelegate.zoomReset), keyEquivalent: "0"); zreset.target = delegate
+viewMenu.addItem(zin); viewMenu.addItem(zout); viewMenu.addItem(zreset)
+viewItem.submenu = viewMenu
+
 app.mainMenu = mainMenu
 
 app.delegate = delegate
