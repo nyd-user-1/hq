@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AccordionTodoItem from "@/app/ui/accordion-todo-item";
+import ConfirmDialog from "@/app/ui/confirm-dialog";
 import SearchField from "@/app/ui/search-field";
 import { CATEGORIES, CAT_BY_KEY } from "@/app/ui/todo-categories";
 import type { TodoItem } from "@/lib/todo";
@@ -26,6 +27,7 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
   const tagRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false); // two-step guard for Clear completed
   const [cat, setCat] = useState<string | null>(null); // active category filter
   const [draggingId, setDraggingId] = useState<string | null>(null); // row being reordered
   const [dropTarget, setDropTarget] = useState<{
@@ -457,15 +459,34 @@ export default function TodoList({ initial }: { initial: TodoItem[] }) {
         </p>
       )}
 
-      {/* Clear completed — relocated to the foot of the list (was the caption). */}
+      {/* Clear completed — two-step guarded: the button opens a confirm dialog
+          (a delete that once wiped the list shouldn't be a passive one-click). */}
       <p className="text-xs text-zinc-600">
         <button
-          onClick={clearCompleted}
-          className="transition-colors hover:text-zinc-300"
+          onClick={() => doneCount > 0 && setConfirmClear(true)}
+          disabled={doneCount === 0}
+          className="transition-colors hover:text-red-400 disabled:opacity-50 disabled:hover:text-zinc-600"
         >
           *Clear completed ({doneCount})
         </button>
       </p>
+
+      <ConfirmDialog
+        open={confirmClear}
+        title="Clear completed to-dos?"
+        message={
+          <>
+            You&apos;re about to delete {doneCount} completed to-do
+            {doneCount === 1 ? "" : "s"}. This can&apos;t be undone — are you sure?
+          </>
+        }
+        confirmLabel={`Delete ${doneCount}`}
+        onCancel={() => setConfirmClear(false)}
+        onConfirm={() => {
+          setConfirmClear(false);
+          clearCompleted();
+        }}
+      />
     </div>
   );
 }

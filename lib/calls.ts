@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { weighted } from "./usage";
+import { weighted, modelTier } from "./usage";
 import { callCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
 
@@ -25,18 +25,17 @@ export const USAGE_PROBE_SENTINEL = "hq-usage-probe";
 // What a call was FOR, inferred from transcript signals: entrypoint (cli vs sdk-cli
 // = headless/HQ-driven), isSidechain (a subagent turn), and the probe sentinel.
 export type CallKind = "interactive" | "headless" | "subagent" | "hook/usage";
-const KIND_LABEL: Record<CallKind, string> = {
-  interactive: "",
-  headless: "headless",
-  subagent: "subagent",
-  "hook/usage": "hook · usage",
-};
 
 export type Call = {
+  id: string; // requestId (stable) — the drill-down key
   at: string;
+  session: string; // full session id (the transcript filename); UI shows first 8
   project: string;
   kind: CallKind;
-  label: string;
+  model: string; // tier label: opus | sonnet | haiku | fable | mythos | other
+  input: number;
+  cacheCreate: number;
+  cacheRead: number;
   output: number;
   raw: number;
   weightedTokens: number;
@@ -218,6 +217,46 @@ function projectOf(file: string, cwd: string, meta: SessionsMeta): string {
   return cwd && cwd !== os.homedir() ? path.basename(cwd) : "Unassigned";
 }
 
+// Shape one cached record into a priced, labeled Call.
+function toCall(file: string, r: CallRec, sentinel: boolean, project: string): Call {
+  const { usd, premium } = callCost({
+    model: r.model,
+    input: r.input,
+    cacheCreate: r.cw,
+    cacheRead: r.cr,
+    output: r.out,
+  });
+  const kind: CallKind = sentinel
+    ? "hook/usage"
+    : r.sidechain
+      ? "subagent"
+      : r.entrypoint === "sdk-cli"
+        ? "headless"
+        : "interactive";
+  return {
+    id: r.id,
+    at: r.at,
+    session: path.basename(file, ".jsonl"),
+    project,
+    kind,
+    model: modelTier(r.model).toLowerCase(),
+    input: r.input,
+    cacheCreate: r.cw,
+    cacheRead: r.cr,
+    output: r.out,
+    raw: r.input + r.cw + r.cr + r.out,
+    weightedTokens: weighted({
+      input: r.input,
+      cacheCreate: r.cw,
+      cacheRead: r.cr,
+      output: r.out,
+      messages: 1,
+    }),
+    cost: usd,
+    premium,
+  };
+}
+
 // Every API call across ALL transcripts, deduped + priced + labeled, newest first.
 // Cheap after the first build (incremental + persisted). The Calls page caps how
 // many it RENDERS and aggregates the full list for the header/footnote.
@@ -227,39 +266,19 @@ export function getRecentCalls(): Call[] {
   const calls: Call[] = [];
   for (const [file, cache] of fileCache) {
     const project = projectOf(file, cache.cwd, meta);
-    for (const r of cache.recs.values()) {
-      const { usd, premium } = callCost({
-        model: r.model,
-        input: r.input,
-        cacheCreate: r.cw,
-        cacheRead: r.cr,
-        output: r.out,
-      });
-      const kind: CallKind = cache.sentinel
-        ? "hook/usage"
-        : r.sidechain
-          ? "subagent"
-          : r.entrypoint === "sdk-cli"
-            ? "headless"
-            : "interactive";
-      calls.push({
-        at: r.at,
-        project,
-        kind,
-        label: KIND_LABEL[kind],
-        output: r.out,
-        raw: r.input + r.cw + r.cr + r.out,
-        weightedTokens: weighted({
-          input: r.input,
-          cacheCreate: r.cw,
-          cacheRead: r.cr,
-          output: r.out,
-          messages: 1,
-        }),
-        cost: usd,
-        premium,
-      });
-    }
+    for (const r of cache.recs.values()) calls.push(toCall(file, r, cache.sentinel, project));
   }
   return calls.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+// One call by its requestId — for the drill-down detail view. Searches the cache
+// directly (no 33k materialize/sort), so opening a call is instant.
+export function getCall(id: string): Call | null {
+  refreshCache();
+  const meta = getSessionsMeta();
+  for (const [file, cache] of fileCache) {
+    const r = cache.recs.get(id);
+    if (r) return toCall(file, r, cache.sentinel, projectOf(file, cache.cwd, meta));
+  }
+  return null;
 }
