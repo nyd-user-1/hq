@@ -157,11 +157,10 @@ export default async function Calls({
                 href={`/calls?call=${encodeURIComponent(c.id)}${pinTail}`}
                 prefetch={false}
                 scroll={false}
-                className="flex items-baseline gap-x-3 rounded px-1 font-mono text-xs hover:bg-zinc-900/40"
+                className="flex items-baseline gap-x-2.5 rounded px-1 font-mono text-xs hover:bg-zinc-900/40"
               >
                 <span className="w-16 shrink-0 text-zinc-600">{time}</span>
                 <span className="w-14 shrink-0 truncate text-zinc-300">{proj}</span>
-                <span className="w-16 shrink-0 text-zinc-500">{c.session.slice(0, 8)}</span>
                 <span className="min-w-0 flex-1 truncate">
                   <span className="text-zinc-400">{c.model}</span>
                   {origin && <span className={origin.cls}> · {origin.word}</span>}
