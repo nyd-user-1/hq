@@ -42,18 +42,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func buildWindow() {
-        let rect = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        // Default size: a comfortable fraction of the screen, capped, with margins
+        // so it never fills a 13" Air edge-to-edge. Centered. The autosave name
+        // remembers the user's own resize after first launch.
+        let vis = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let w = min(1320, vis.width * 0.82)
+        let h = min(860, vis.height * 0.88)
+        let rect = NSRect(x: 0, y: 0, width: w, height: h)
         window = NSWindow(contentRect: rect,
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
         window.title = "HQ"
-        window.setFrameAutosaveName("HQMainWindow")
+        window.contentMinSize = NSSize(width: 940, height: 620)
+        window.setFrameAutosaveName("HQWindow")   // new key so the tuned default applies fresh
         window.center()
         window.delegate = self
         webView = WKWebView(frame: rect, configuration: WKWebViewConfiguration())
         webView.autoresizingMask = [.width, .height]
+        webView.addObserver(self, forKeyPath: "title", options: .new, context: nil)
         window.contentView = webView
         window.makeKeyAndOrderFront(nil)
+    }
+
+    // Mirror the web page's <title> into the native title bar (falls back to "HQ").
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?,
+                               change: [NSKeyValueChangeKey: Any]?,
+                               context: UnsafeMutableRawPointer?) {
+        if keyPath == "title" {
+            let t = webView.title ?? ""
+            window.title = t.isEmpty ? "HQ" : t
+        }
     }
 
     // Poll the server until it answers, then load it (avoids a flash of error
@@ -86,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ note: Notification) {
+        webView?.removeObserver(self, forKeyPath: "title")
         server?.terminate()   // no leaked background server
     }
 
