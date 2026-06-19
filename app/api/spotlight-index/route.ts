@@ -17,24 +17,36 @@ type Item = { type: string; title: string; snippet: string; path: string };
 const go = (type: string, ref: string) =>
   `/go?type=${type}&ref=${encodeURIComponent(ref)}`;
 
+// Standardized subtitle, mirroring how Apple Notes shows "— Notes · iCloud".
+// macOS does NOT auto-label our CoreSpotlight items, so we bake it into the title.
+const LABEL: Record<string, string> = {
+  note: "Note", memory: "Memory", todo: "Todo", transcript: "Transcript", commit: "Commit",
+};
+const item = (type: string, title: string, snippet: string, ref: string): Item => ({
+  type,
+  title: `${title} — ${LABEL[type]} · hq`,
+  snippet,
+  path: go(type, ref),
+});
+
 export function GET() {
   const items: Item[] = [];
 
   // priority order: memory, todo, transcript, commit (+ notes, already live)
   for (const m of getAudit().memory)
-    items.push({ type: "memory", title: m.description || m.name, snippet: m.name, path: go("memory", path.basename(m.path)) });
+    items.push(item("memory", m.description || m.name, m.name, path.basename(m.path)));
 
   for (const t of getTodos().filter((t) => !t.done))
-    items.push({ type: "todo", title: t.text, snippet: t.body ?? "", path: go("todo", t.id) });
+    items.push(item("todo", t.text, t.body ?? "", t.id));
 
   for (const s of getRecentSessions(60))
-    items.push({ type: "transcript", title: s.customTitle || s.title || s.project || s.id, snippet: s.project, path: go("transcript", s.id) });
+    items.push(item("transcript", s.customTitle || s.title || s.project || s.id, s.project, s.id));
 
   for (const c of getShipped(80, 20))
-    items.push({ type: "commit", title: c.subject, snippet: `${c.repo} · ${c.body}`.slice(0, 300), path: go("commit", `${c.repo}/${c.sha}`) });
+    items.push(item("commit", c.subject, `${c.repo} · ${c.body}`.slice(0, 300), `${c.repo}/${c.sha}`));
 
   for (const n of getNotes())
-    items.push({ type: "note", title: n.title, snippet: "", path: go("note", n.name) });
+    items.push(item("note", n.title, "", n.name));
 
   return NextResponse.json({ count: items.length, items });
 }

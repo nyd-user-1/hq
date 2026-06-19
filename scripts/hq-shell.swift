@@ -260,15 +260,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         img.lockFocus()
         color.setFill()
         NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: side, height: side), xRadius: 28, yRadius: 28).fill()
-        let p = NSMutableParagraphStyle(); p.alignment = .center
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.boldSystemFont(ofSize: 72),
+        // "hq" is the hero — large, centered
+        let hqAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 54),
             .foregroundColor: NSColor.white,
-            .paragraphStyle: p,
         ]
-        let s = letter as NSString
-        let h = s.size(withAttributes: attrs).height
-        s.draw(in: NSRect(x: 0, y: (side - h) / 2, width: side, height: h), withAttributes: attrs)
+        let hq = "hq" as NSString
+        let hqSize = hq.size(withAttributes: hqAttrs)
+        hq.draw(at: NSPoint(x: (side - hqSize.width) / 2, y: (side - hqSize.height) / 2 + 4), withAttributes: hqAttrs)
+        // the type letter is a small accent, lower-LEFT (the macOS app badge sits lower-right)
+        let lAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 30),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.85),
+        ]
+        (letter as NSString).draw(at: NSPoint(x: 12, y: 8), withAttributes: lAttrs)
         img.unlockFocus()
         guard let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
         return rep.representation(using: .png, properties: [:])
