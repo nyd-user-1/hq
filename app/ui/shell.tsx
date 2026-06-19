@@ -11,6 +11,8 @@ import PanelWrapper from "@/app/ui/panel-wrapper";
 import PairColumn from "@/app/ui/pair-column";
 import { PlannerProvider } from "@/app/ui/planner-state";
 import PlannerPanel from "@/app/ui/planner-panel";
+import { ApiProvider } from "@/app/ui/api-state";
+import ApiPanel from "@/app/ui/api-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
@@ -38,6 +40,7 @@ export default async function Shell({
           and the app panel brings its own ml-4, so closed = truly full width */}
       <CommandProvider>
       <PlannerProvider>
+      <ApiProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -76,6 +79,9 @@ export default async function Shell({
           {/* The independent Batch Planner's own portal root — a second panel
               that can be open AT THE SAME TIME as #app-panel-root. */}
           <div id="planner-panel-root" className="flex h-full min-w-0" />
+          {/* The independent API (usage) panel's own portal root — another peer
+              that can sit open alongside the route panel and the planner. */}
+          <div id="api-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -84,8 +90,10 @@ export default async function Shell({
 
       <PanelWrapper panel={panel} />
       <PlannerPanel />
+      <ApiPanel />
       <TextEditor />
       </TextEditorProvider>
+      </ApiProvider>
       </PlannerProvider>
       </CommandProvider>
     </div>

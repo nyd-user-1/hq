@@ -7,6 +7,7 @@ import { PANELS } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import { usePlanner } from "@/app/ui/planner-state";
+import { useApi } from "@/app/ui/api-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 
 // The "panels" dropdown. Its trigger is the layout-grid icon (the planner chip's
@@ -17,6 +18,7 @@ export default function PanelMenu() {
   const params = useSearchParams();
   const pathname = usePathname();
   const { open: plannerOpen, toggle: togglePlanner } = usePlanner();
+  const { open: apiOpen, toggle: toggleApi } = useApi();
   const { open: textOpen, toggle: toggleText } = useTextEditor();
   const ref = useRef<HTMLDetailsElement>(null);
   const close = () => {
@@ -111,6 +113,20 @@ export default function PanelMenu() {
           }`}
         >
           Planner
+        </button>
+        {/* API — like Planner, an independent client-state toggle with its own
+            panel root; HQ's read of the CLI /usage screen (session/week meters,
+            burn, spend), live-polled. Sits after Planner. */}
+        <button
+          onClick={() => {
+            toggleApi();
+            close();
+          }}
+          className={`rounded px-2 py-1 text-left font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
+            apiOpen ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          API
         </button>
         {/* Text — like Planner, an independent client-state toggle (a full-screen
             capture modal, not a route panel), so it's a button. Sits last. */}

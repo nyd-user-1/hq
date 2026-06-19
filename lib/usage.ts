@@ -64,6 +64,22 @@ export function modelWeight(model?: string): number {
   return 1.0;
 }
 
+// Display-tier label for the same model families — the human bucket the /usage
+// screen groups by ("Current week (Opus)", the model-mix breakdown).
+const TIER_LABEL: Array<[string, string]> = [
+  ["opus", "Opus"],
+  ["sonnet", "Sonnet"],
+  ["haiku", "Haiku"],
+  ["fable", "Fable"],
+  ["mythos", "Mythos"],
+];
+export function modelTier(model?: string): string {
+  if (!model) return "Other";
+  const m = model.toLowerCase();
+  for (const [key, label] of TIER_LABEL) if (m.includes(key)) return label;
+  return "Other";
+}
+
 // One deduped record per requestId.
 type Rec = {
   ts: number;
@@ -72,6 +88,7 @@ type Rec = {
   cw: number;
   cr: number;
   out: number;
+  sidechain: boolean; // a subagent turn (isSidechain) — for the /usage breakdown
 };
 type FileCache = { offset: number; recs: Map<string, Rec> };
 
@@ -116,6 +133,7 @@ function parseNewLines(file: string, cache: FileCache): void {
       cw: usage.cache_creation_input_tokens ?? 0,
       cr: usage.cache_read_input_tokens ?? 0,
       out: usage.output_tokens ?? 0,
+      sidechain: entry?.isSidechain === true,
     });
   }
 }
@@ -174,6 +192,14 @@ function* allRecs(): Generator<Rec> {
 // model-agnostic numbers; these replace them. Recalibrate when /usage disagrees.
 export const SESSION_LIMIT_WEIGHTED = 212_000_000;
 export const WEEK_LIMIT_WEIGHTED = 4_300_000_000;
+
+// The plan's SEPARATE, lower weekly Opus cap (/usage shows it as "Current week
+// (Opus)"). The real ceiling lives in the API rate-limit headers, which never
+// reach disk — so this is an UNCALIBRATED placeholder. It defaults to the
+// all-models weekly cap (⇒ the Opus meter under-reports vs the true sub-cap);
+// drop it to the real number the moment /usage shows the Opus %. The Opus meter
+// carries calibrated:false so the panel flags it as an estimate.
+export const WEEK_OPUS_LIMIT_WEIGHTED = 4_300_000_000;
 
 const BLOCK_MS = 5 * 60 * 60 * 1000;
 
@@ -348,5 +374,171 @@ export function getForecast(): Forecast {
     blockReset: block.reset,
     projectedCapAt,
     underCap: projectedCapAt === null,
+  };
+}
+
+// ── /usage states ─────────────────────────────────────────────────────────
+// One composite payload mirroring the CLI's `/usage` screen, modeled entirely
+// from local transcripts. The live screen reads the API rate-limit HEADERS
+// (5h/weekly windows, reset clocks, overage) which are consumed in-process and
+// never written to disk — so HQ can't read the true values. What it CAN do is
+// what lib/usage already does: a calibrated estimate of each window. This bundles
+// every state the panel surfaces so the API route is a single read.
+
+export type MeterState = "ok" | "approaching" | "reached";
+
+// A /usage meter row: a capped % bar against a (modeled) limit, its rolling or
+// block reset, and the ok/approaching/reached state the CLI colors it by.
+export type UsageMeter = {
+  key: "session" | "weekAll" | "weekOpus";
+  label: string;
+  span: string; // "5h block" / "trailing 7d"
+  usedWeighted: number;
+  rawTokens: number;
+  messages: number;
+  limit: number;
+  pct: number; // 0..100, capped for the bar
+  rawPct: number; // uncapped — > 100 once a modeled cap is blown
+  resetsAt: number | null; // ms; null = rolling window (no fixed reset on disk)
+  state: MeterState;
+  calibrated: boolean; // false ⇒ limit is an uncalibrated estimate (Opus week)
+};
+
+export type ModelShare = { tier: string; weighted: number; pct: number };
+export type UsageInsight = { key: string; label: string; pct: number };
+
+export type UsageStates = {
+  meters: UsageMeter[];
+  forecast: Forecast;
+  spend: Spend;
+  byModel: ModelShare[]; // weighted model mix over the week (the /usage breakdown)
+  insights: UsageInsight[]; // long-context + subagent shares of weekly usage
+  generatedAt: number;
+};
+
+// CLI /usage flips a meter to "Approaching" near the cap; mirror that at 80%.
+const APPROACHING_PCT = 80;
+function meterState(rawPct: number): MeterState {
+  if (rawPct >= 100) return "reached";
+  if (rawPct >= APPROACHING_PCT) return "approaching";
+  return "ok";
+}
+
+export function getUsageStates(): UsageStates {
+  refreshCache();
+  const now = Date.now();
+  const block = sessionBlock();
+  const weekStart = now - WEEK_MS;
+
+  let sessW = 0,
+    sessRaw = 0,
+    sessMsg = 0;
+  let weekW = 0,
+    weekRaw = 0,
+    weekMsg = 0;
+  let opusW = 0,
+    opusRaw = 0,
+    opusMsg = 0;
+  let long150 = 0, // weighted at >150k context
+    long100 = 0, // weighted on >100k-token turns
+    subW = 0; // weighted from subagent (sidechain) turns
+  const modelW = new Map<string, number>();
+
+  for (const r of allRecs()) {
+    if (r.ts < weekStart) continue;
+    const raw = r.input + r.cw + r.cr + r.out;
+    const ew = shape(r.input, r.cw, r.cr, r.out) * modelWeight(r.model);
+    const ctx = r.input + r.cw + r.cr;
+    const tier = modelTier(r.model);
+
+    weekW += ew;
+    weekRaw += raw;
+    weekMsg += 1;
+    modelW.set(tier, (modelW.get(tier) ?? 0) + ew);
+    if (ctx > 150_000) long150 += ew;
+    if (r.input + r.cw + r.cr + r.out > 100_000) long100 += ew;
+    if (r.sidechain) subW += ew;
+    if (tier === "Opus") {
+      opusW += ew;
+      opusRaw += raw;
+      opusMsg += 1;
+    }
+    if (r.ts >= block.start) {
+      sessW += ew;
+      sessRaw += raw;
+      sessMsg += 1;
+    }
+  }
+
+  const sessPct = (sessW / SESSION_LIMIT_WEIGHTED) * 100;
+  const weekPct = (weekW / WEEK_LIMIT_WEIGHTED) * 100;
+  const opusPct = (opusW / WEEK_OPUS_LIMIT_WEIGHTED) * 100;
+
+  const meters: UsageMeter[] = [
+    {
+      key: "session",
+      label: "Current session",
+      span: "5h block",
+      usedWeighted: sessW,
+      rawTokens: sessRaw,
+      messages: sessMsg,
+      limit: SESSION_LIMIT_WEIGHTED,
+      pct: Math.min(sessPct, 100),
+      rawPct: sessPct,
+      resetsAt: block.reset,
+      state: meterState(sessPct),
+      calibrated: true,
+    },
+    {
+      key: "weekAll",
+      label: "Current week · all models",
+      span: "trailing 7d",
+      usedWeighted: weekW,
+      rawTokens: weekRaw,
+      messages: weekMsg,
+      limit: WEEK_LIMIT_WEIGHTED,
+      pct: Math.min(weekPct, 100),
+      rawPct: weekPct,
+      resetsAt: null,
+      state: meterState(weekPct),
+      calibrated: true,
+    },
+    {
+      key: "weekOpus",
+      label: "Current week · Opus",
+      span: "trailing 7d",
+      usedWeighted: opusW,
+      rawTokens: opusRaw,
+      messages: opusMsg,
+      limit: WEEK_OPUS_LIMIT_WEIGHTED,
+      pct: Math.min(opusPct, 100),
+      rawPct: opusPct,
+      resetsAt: null,
+      state: meterState(opusPct),
+      calibrated: false,
+    },
+  ];
+
+  const byModel: ModelShare[] = [...modelW.entries()]
+    .map(([tier, weighted]) => ({
+      tier,
+      weighted,
+      pct: weekW ? (weighted / weekW) * 100 : 0,
+    }))
+    .sort((a, b) => b.weighted - a.weighted);
+
+  const insights: UsageInsight[] = [
+    { key: "long150", label: "at >150k context", pct: weekW ? (long150 / weekW) * 100 : 0 },
+    { key: "long100", label: "on >100k-token turns", pct: weekW ? (long100 / weekW) * 100 : 0 },
+    { key: "subagent", label: "from subagents", pct: weekW ? (subW / weekW) * 100 : 0 },
+  ];
+
+  return {
+    meters,
+    forecast: getForecast(),
+    spend: getSpend(),
+    byModel,
+    insights,
+    generatedAt: now,
   };
 }
