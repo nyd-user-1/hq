@@ -402,6 +402,7 @@ export type UsageMeter = {
   resetsAt: number | null; // ms; null = rolling window (no fixed reset on disk)
   state: MeterState;
   calibrated: boolean; // false ⇒ limit is an uncalibrated estimate (Opus week)
+  source: "live" | "modeled"; // live = real %/reset from a fresh hook snapshot
 };
 
 export type ModelShare = { tier: string; weighted: number; pct: number };
@@ -413,7 +414,42 @@ export type UsageStates = {
   spend: Spend;
   byModel: ModelShare[]; // weighted model mix over the week (the /usage breakdown)
   insights: UsageInsight[]; // long-context + subagent shares of weekly usage
+  snapshotAt: number | null; // ms a fresh live snapshot was captured; null = all modeled
   generatedAt: number;
+};
+
+// ── live snapshot ───────────────────────────────────────────────────────────
+// The SessionStart usage-capture hook harvests the REAL /usage windows (which
+// never otherwise hit disk) into this sidecar. When one is fresh we overlay its
+// true utilization/reset/status onto the modeled meters; otherwise the model
+// stands alone. See scripts/hooks/usage-capture.mjs.
+const SNAPSHOT = path.join(os.homedir(), ".claude", "hq", "usage-snapshot.json");
+const LIVE_TTL_MS = 2 * 60 * 60 * 1000; // older than this ⇒ fall back to the model
+
+type SnapWindow = { utilization?: number; resetsAt?: number; status?: string };
+type Snapshot = { capturedAt: number; windows: Record<string, SnapWindow> };
+
+function readSnapshot(): Snapshot | null {
+  try {
+    const s = JSON.parse(fs.readFileSync(SNAPSHOT, "utf8"));
+    if (s && typeof s.capturedAt === "number" && s.windows) return s as Snapshot;
+  } catch {
+    /* no snapshot — modeled only */
+  }
+  return null;
+}
+
+// /usage `status` enum → the meter state machine.
+const STATUS_STATE: Record<string, MeterState> = {
+  allowed: "ok",
+  allowed_warning: "approaching",
+  rejected: "reached",
+};
+// meter.key → the rateLimitType the hook records it under.
+const LIVE_KEY: Record<UsageMeter["key"], string> = {
+  session: "five_hour",
+  weekAll: "seven_day",
+  weekOpus: "seven_day_opus",
 };
 
 // CLI /usage flips a meter to "Approaching" near the cap; mirror that at 80%.
@@ -488,6 +524,7 @@ export function getUsageStates(): UsageStates {
       resetsAt: block.reset,
       state: meterState(sessPct),
       calibrated: true,
+      source: "modeled",
     },
     {
       key: "weekAll",
@@ -502,6 +539,7 @@ export function getUsageStates(): UsageStates {
       resetsAt: null,
       state: meterState(weekPct),
       calibrated: true,
+      source: "modeled",
     },
     {
       key: "weekOpus",
@@ -516,8 +554,25 @@ export function getUsageStates(): UsageStates {
       resetsAt: null,
       state: meterState(opusPct),
       calibrated: false,
+      source: "modeled",
     },
   ];
+
+  // Overlay the real values from a fresh hook snapshot, per window.
+  const snap = readSnapshot();
+  const liveFresh = snap && now - snap.capturedAt < LIVE_TTL_MS ? snap : null;
+  if (liveFresh) {
+    for (const m of meters) {
+      const w = liveFresh.windows[LIVE_KEY[m.key]];
+      if (!w || typeof w.utilization !== "number") continue;
+      m.source = "live";
+      m.rawPct = w.utilization * 100;
+      m.pct = Math.min(m.rawPct, 100);
+      if (typeof w.resetsAt === "number") m.resetsAt = w.resetsAt;
+      m.state = (w.status && STATUS_STATE[w.status]) || meterState(m.rawPct);
+      if (m.key === "weekOpus") m.calibrated = true; // live ⇒ the real cap, not an estimate
+    }
+  }
 
   const byModel: ModelShare[] = [...modelW.entries()]
     .map(([tier, weighted]) => ({
@@ -539,6 +594,7 @@ export function getUsageStates(): UsageStates {
     spend: getSpend(),
     byModel,
     insights,
+    snapshotAt: liveFresh ? liveFresh.capturedAt : null,
     generatedAt: now,
   };
 }

@@ -64,6 +64,23 @@ function Meter({ m }: { m: UsageMeter }) {
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <span className="flex items-center gap-2 text-sm text-zinc-300">
           {m.label}
+          <span
+            title={
+              m.source === "live"
+                ? "real value from a fresh /usage hook snapshot"
+                : "calibrated estimate from local transcripts (no fresh snapshot)"
+            }
+            className={`flex items-center gap-1 font-mono text-[8px] uppercase tracking-wider ${
+              m.source === "live" ? "text-green-400" : "text-zinc-600"
+            }`}
+          >
+            <span
+              className={`size-1.5 rounded-full ${
+                m.source === "live" ? "bg-green-400" : "bg-zinc-600"
+              }`}
+            />
+            {m.source}
+          </span>
           {!m.calibrated && (
             <span
               title="limit is an uncalibrated estimate — the real Opus weekly cap lives in API headers, off disk"
@@ -160,8 +177,15 @@ export default function ApiPanel() {
 
         {/* header — live state, synced stamp, refresh */}
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">
-            usage · modeled
+          <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-zinc-600">
+            usage ·{" "}
+            {data?.snapshotAt ? (
+              <span className="text-green-400" title={`live snapshot captured ${clock(data.snapshotAt)}`}>
+                live {fmtDur(Date.now() - data.snapshotAt)} old
+              </span>
+            ) : (
+              <span>modeled</span>
+            )}
           </span>
           <div className="flex items-center gap-2 font-mono text-[10px] text-zinc-600">
             <span>{syncedAt ? `synced ${clock(syncedAt)}` : loading ? "loading…" : ""}</span>
@@ -302,11 +326,13 @@ export default function ApiPanel() {
 
             {/* ── FOOTNOTE — the honest provenance ── */}
             <p className="border-t border-dashed border-zinc-800 pt-3 text-xs leading-relaxed text-zinc-600">
-              modeled from local transcripts — the live /usage windows are read from
-              API rate-limit headers in-process and never hit disk, so these are HQ&apos;s
-              calibrated estimate, not the raw values. weighted = input-equivalents
-              (cache read ×0.1, output ×5) × per-model tier (opus ×5). session/week
-              limits calibrated to /usage 2026-06-11; Opus weekly cap uncalibrated.
+              meters tagged <span className="text-green-400">live</span> are the real
+              /usage values, captured by the SessionStart usage hook (the windows never
+              hit disk otherwise); <span className="text-zinc-500">modeled</span> meters
+              are HQ&apos;s calibrated estimate from local transcripts — weighted =
+              input-equivalents (cache read ×0.1, output ×5) × per-model tier (opus ×5),
+              limits calibrated to /usage 2026-06-11; Opus weekly cap uncalibrated until
+              a live snapshot lands.
             </p>
           </div>
         )}

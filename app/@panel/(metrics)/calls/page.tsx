@@ -43,6 +43,17 @@ export default function Calls() {
               {new Date(c.at).toLocaleTimeString()}
             </span>
             <span className="text-zinc-300">{c.project}</span>
+            {c.label && (
+              <span
+                className={`rounded px-1 py-px text-[10px] ${
+                  c.kind === "hook/usage"
+                    ? "bg-blue-500/15 text-blue-300"
+                    : "bg-zinc-800/70 text-zinc-400"
+                }`}
+              >
+                {c.label}
+              </span>
+            )}
             <span className="ml-auto flex items-baseline gap-2">
               <span className="text-zinc-600">
                 {fmt(c.output)} out · {fmt(c.raw)} raw
