@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var statusItem: NSStatusItem!
     var hotKeyRef: EventHotKeyRef?
     var serverUp = false
-    var pendingNoteName: String?   // a Spotlight tap that arrived before the webview was ready
+    var pendingPath: String?       // a deep-link tap that arrived before the webview was ready
 
     func standaloneDir() -> String {
         (Bundle.main.resourcePath ?? ".") + "/standalone"
@@ -101,12 +101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             DispatchQueue.main.async {
                 self.serverUp = true
-                if let n = self.pendingNoteName {          // a Spotlight tap is waiting
-                    self.pendingNoteName = nil
-                    self.loadNote(n)
+                if let p = self.pendingPath {              // a deep-link tap is waiting
+                    self.pendingPath = nil
+                    self.loadPath(p)
                 } else {
                     self.webView.load(URLRequest(url: url))
                 }
+                self.fetchAndIndex()                       // publish HQ content to Spotlight
             }
         }
     }
@@ -117,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         waitForServerThenLoad()
         setupStatusItem()
         installGlobalHotKey()
-        indexNotes()                 // publish ~/.claude/hq/notes to system Spotlight
+        AppDelegate.warmIcons()      // precompute per-type Spotlight icons (main thread)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -202,81 +203,101 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         UserDefaults.standard.set(Double(clamped), forKey: "hqZoom")
     }
 
-    // --- Spotlight: publish ~/.claude/hq/notes/*.md -------------------------
-    static let noteDomain = "com.nysgpt.hq.notes"
-
-    // Title = first non-empty body line after the --- frontmatter --- (mirrors
-    // lib/notes.ts noteTitle); body used for the searchable snippet.
-    func noteTitleAndBody(_ content: String) -> (String, String) {
-        var body = content
-        if content.hasPrefix("---") {
-            let lines = content.components(separatedBy: "\n")
-            var i = 1
-            while i < lines.count && lines[i] != "---" { i += 1 }
-            if i < lines.count { body = lines[(i + 1)...].joined(separator: "\n") }
-        }
-        body = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        let title = body.split(separator: "\n").first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
-            .map { String($0.prefix(60)) } ?? "note"
-        return (title, body)
-    }
-
-    func indexNotes() {
-        let dir = (NSHomeDirectory() as NSString).appendingPathComponent(".claude/hq/notes")
-        let fm = FileManager.default
-        let names = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
-        var items: [CSSearchableItem] = []
-        for name in names where name.hasSuffix(".md") {
-            let full = (dir as NSString).appendingPathComponent(name)
-            guard let content = try? String(contentsOfFile: full, encoding: .utf8) else { continue }
-            let (title, body) = noteTitleAndBody(content)
-            let attr = CSSearchableItemAttributeSet(contentType: .text)
-            attr.title = title
-            attr.displayName = title
-            attr.contentDescription = String(body.prefix(500))
-            attr.keywords = ["hq", "note"]
-            items.append(CSSearchableItem(uniqueIdentifier: name,
-                                          domainIdentifier: AppDelegate.noteDomain,
-                                          attributeSet: attr))
-        }
-        let index = CSSearchableIndex.default()
-        // wipe the domain first so deleted notes don't linger, then republish
-        index.deleteSearchableItems(withDomainIdentifiers: [AppDelegate.noteDomain]) { _ in
-            index.indexSearchableItems(items) { err in
-                NSLog("HQ: Spotlight indexed \(items.count) notes\(err != nil ? " (error: \(err!))" : "")")
+    // --- Spotlight: publish HQ content (memory/todo/transcript/commit/note) --
+    // Driven by the server's /api/spotlight-index, so adding a content type is a
+    // server-only change. Each item's CoreSpotlight uniqueIdentifier IS its /go
+    // open path, so a tap navigates straight to it.
+    func fetchAndIndex() {
+        guard let url = URL(string: "http://localhost:\(PORT)/api/spotlight-index") else { return }
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data,
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let rows = obj["items"] as? [[String: Any]] else { return }
+            var items: [CSSearchableItem] = []
+            for r in rows {
+                guard let path = r["path"] as? String, let title = r["title"] as? String else { continue }
+                let type = (r["type"] as? String) ?? "item"
+                let attr = CSSearchableItemAttributeSet(contentType: .text)
+                attr.title = title
+                attr.displayName = title
+                attr.contentDescription = (r["snippet"] as? String) ?? ""
+                attr.keywords = ["hq", type]
+                if let icon = AppDelegate.icon(for: type) { attr.thumbnailData = icon }
+                items.append(CSSearchableItem(uniqueIdentifier: path,          // = the /go path
+                                              domainIdentifier: "com.nysgpt.hq.\(type)",
+                                              attributeSet: attr))
             }
-        }
+            let index = CSSearchableIndex.default()
+            index.deleteAllSearchableItems { _ in          // wipe everything HQ indexed, then republish
+                index.indexSearchableItems(items) { err in
+                    NSLog("HQ: Spotlight indexed \(items.count) items\(err != nil ? " (error: \(err!))" : "")")
+                }
+            }
+        }.resume()
     }
 
-    // --- open a note (from a Spotlight tap or hq://note/<name>) --------------
-    func loadNote(_ name: String) {
-        var c = URLComponents()
-        c.scheme = "http"; c.host = "localhost"; c.port = PORT; c.path = "/search"
-        c.queryItems = [URLQueryItem(name: "openNote", value: name)]
-        if let url = c.url { webView.load(URLRequest(url: url)) }
+    // --- per-type Spotlight icons (rounded colored tile + letter) ------------
+    static var iconCache: [String: Data] = [:]
+    static func warmIcons() { for t in ["note", "memory", "todo", "transcript", "commit"] { _ = icon(for: t) } }
+    static func icon(for type: String) -> Data? {
+        if let c = iconCache[type] { return c }
+        let (letter, color): (String, NSColor) = {
+            switch type {
+            case "memory":     return ("M", NSColor(red: 0.39, green: 0.40, blue: 0.95, alpha: 1)) // indigo
+            case "todo":       return ("T", NSColor(red: 0.06, green: 0.72, blue: 0.51, alpha: 1)) // emerald
+            case "transcript": return ("S", NSColor(red: 0.05, green: 0.65, blue: 0.91, alpha: 1)) // sky
+            case "commit":     return ("C", NSColor(red: 0.96, green: 0.62, blue: 0.07, alpha: 1)) // amber
+            default:           return ("N", NSColor(red: 0.16, green: 0.16, blue: 0.18, alpha: 1)) // note: zinc
+            }
+        }()
+        let data = makeIcon(letter, color)
+        if let d = data { iconCache[type] = d }
+        return data
+    }
+    static func makeIcon(_ letter: String, _ color: NSColor) -> Data? {
+        let side: CGFloat = 128
+        let img = NSImage(size: NSSize(width: side, height: side))
+        img.lockFocus()
+        color.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: side, height: side), xRadius: 28, yRadius: 28).fill()
+        let p = NSMutableParagraphStyle(); p.alignment = .center
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 72),
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: p,
+        ]
+        let s = letter as NSString
+        let h = s.size(withAttributes: attrs).height
+        s.draw(in: NSRect(x: 0, y: (side - h) / 2, width: side, height: h), withAttributes: attrs)
+        img.unlockFocus()
+        guard let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
     }
 
-    func openNote(_ name: String) {
+    // --- open a deep-linked item (Spotlight tap or hq://go?...) --------------
+    func loadPath(_ path: String) {
+        if let url = URL(string: "http://localhost:\(PORT)\(path)") { webView.load(URLRequest(url: url)) }
+    }
+    func openPath(_ path: String) {
         showWindow()
-        if serverUp && webView != nil { loadNote(name) } else { pendingNoteName = name }
+        if serverUp && webView != nil { loadPath(path) } else { pendingPath = path }
     }
 
-    // Spotlight result tapped -> open that note.
+    // Spotlight result tapped -> navigate to its /go path (= the uniqueIdentifier).
     func application(_ application: NSApplication, continue userActivity: NSUserActivity,
                      restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
         if userActivity.activityType == CSSearchableItemActionType,
            let id = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
-            openNote(id)
+            openPath(id)
             return true
         }
         return false
     }
 
-    // hq://note/<name> URL scheme (automation / Shortcuts hook).
+    // hq://go?type=&ref=  URL scheme (automation / Shortcuts hook).
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls where url.scheme == "hq" && url.host == "note" {
-            let name = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
-            if !name.isEmpty { openNote(name) }
+        for url in urls where url.scheme == "hq" && url.host == "go" {
+            openPath("/go?\(url.query ?? "")")
         }
     }
 }
