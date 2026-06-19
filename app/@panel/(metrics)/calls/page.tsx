@@ -11,11 +11,20 @@ function fmt(n: number): string {
   return `${Math.round(n)}`;
 }
 
-// Ledger: the most recent API round-trips priced in dollars, with a spend
-// header (session / today / week). Tokens are demoted to the dim detail; the
-// $ is the headline. Premium calls (past the 200k cliff, ~2x) are flagged.
+// How many rows to actually render. The index is ALL-TIME (deduped) — tens of
+// thousands of calls — but the DOM only gets the most-recent slice; the footnote
+// carries the full-history count + total. Bump it if you want deeper scrollback.
+const RENDER_CAP = 2000;
+
+// Ledger: deduped API round-trips across ALL history, priced in dollars, with a
+// spend header (session / today / week). Tokens are demoted to the dim detail; the
+// $ is the headline. Premium calls (past the 200k cliff, ~2x) are flagged. The
+// data layer is incremental + persisted (lib/calls.ts), so this opens instantly
+// after the one-time index build.
 export default function Calls() {
-  const calls = getRecentCalls();
+  const all = getRecentCalls();
+  const calls = all.slice(0, RENDER_CAP);
+  const totalCost = all.reduce((s, c) => s + c.cost, 0);
   const spend = getSpend();
   return (
     <Boundary topOnly bleedX label="@panel/calls/page.tsx">
@@ -73,8 +82,10 @@ export default function Calls() {
         ))}
       </ul>
       <p className="text-xs text-zinc-600">
-        {calls.length} calls · last 7d (est.) · 2× = past the 200k cliff · rates
-        in lib/pricing.ts
+        {all.length.toLocaleString()} calls · all-time (est.) · ~{fmtUSD(totalCost)} total
+        {all.length > RENDER_CAP &&
+          ` · showing recent ${RENDER_CAP.toLocaleString()}`}{" "}
+        · 2× = past the 200k cliff · rates in lib/pricing.ts
       </p>
     </Boundary>
   );
