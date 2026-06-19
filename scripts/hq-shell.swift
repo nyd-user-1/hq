@@ -6,6 +6,8 @@
 import AppKit
 import WebKit
 import Carbon.HIToolbox   // RegisterEventHotKey — a true global hotkey, no a11y permission
+import CoreSpotlight      // publish notes to system Spotlight (⌘Space)
+import UniformTypeIdentifiers
 
 let PORT = 3009
 let URLSTR = "http://localhost:\(PORT)/"
@@ -24,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var server: Process?
     var statusItem: NSStatusItem!
     var hotKeyRef: EventHotKeyRef?
+    var serverUp = false
+    var pendingNoteName: String?   // a Spotlight tap that arrived before the webview was ready
 
     func standaloneDir() -> String {
         (Bundle.main.resourcePath ?? ".") + "/standalone"
@@ -95,7 +99,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 if ok { break }
                 Thread.sleep(forTimeInterval: 0.4)
             }
-            DispatchQueue.main.async { self.webView.load(URLRequest(url: url)) }
+            DispatchQueue.main.async {
+                self.serverUp = true
+                if let n = self.pendingNoteName {          // a Spotlight tap is waiting
+                    self.pendingNoteName = nil
+                    self.loadNote(n)
+                } else {
+                    self.webView.load(URLRequest(url: url))
+                }
+            }
         }
     }
 
@@ -105,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         waitForServerThenLoad()
         setupStatusItem()
         installGlobalHotKey()
+        indexNotes()                 // publish ~/.claude/hq/notes to system Spotlight
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -187,6 +200,84 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let clamped = max(0.5, min(3.0, z))
         webView.pageZoom = clamped
         UserDefaults.standard.set(Double(clamped), forKey: "hqZoom")
+    }
+
+    // --- Spotlight: publish ~/.claude/hq/notes/*.md -------------------------
+    static let noteDomain = "com.nysgpt.hq.notes"
+
+    // Title = first non-empty body line after the --- frontmatter --- (mirrors
+    // lib/notes.ts noteTitle); body used for the searchable snippet.
+    func noteTitleAndBody(_ content: String) -> (String, String) {
+        var body = content
+        if content.hasPrefix("---") {
+            let lines = content.components(separatedBy: "\n")
+            var i = 1
+            while i < lines.count && lines[i] != "---" { i += 1 }
+            if i < lines.count { body = lines[(i + 1)...].joined(separator: "\n") }
+        }
+        body = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = body.split(separator: "\n").first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+            .map { String($0.prefix(60)) } ?? "note"
+        return (title, body)
+    }
+
+    func indexNotes() {
+        let dir = (NSHomeDirectory() as NSString).appendingPathComponent(".claude/hq/notes")
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
+        var items: [CSSearchableItem] = []
+        for name in names where name.hasSuffix(".md") {
+            let full = (dir as NSString).appendingPathComponent(name)
+            guard let content = try? String(contentsOfFile: full, encoding: .utf8) else { continue }
+            let (title, body) = noteTitleAndBody(content)
+            let attr = CSSearchableItemAttributeSet(contentType: .text)
+            attr.title = title
+            attr.displayName = title
+            attr.contentDescription = String(body.prefix(500))
+            attr.keywords = ["hq", "note"]
+            items.append(CSSearchableItem(uniqueIdentifier: name,
+                                          domainIdentifier: AppDelegate.noteDomain,
+                                          attributeSet: attr))
+        }
+        let index = CSSearchableIndex.default()
+        // wipe the domain first so deleted notes don't linger, then republish
+        index.deleteSearchableItems(withDomainIdentifiers: [AppDelegate.noteDomain]) { _ in
+            index.indexSearchableItems(items) { err in
+                NSLog("HQ: Spotlight indexed \(items.count) notes\(err != nil ? " (error: \(err!))" : "")")
+            }
+        }
+    }
+
+    // --- open a note (from a Spotlight tap or hq://note/<name>) --------------
+    func loadNote(_ name: String) {
+        var c = URLComponents()
+        c.scheme = "http"; c.host = "localhost"; c.port = PORT; c.path = "/search"
+        c.queryItems = [URLQueryItem(name: "openNote", value: name)]
+        if let url = c.url { webView.load(URLRequest(url: url)) }
+    }
+
+    func openNote(_ name: String) {
+        showWindow()
+        if serverUp && webView != nil { loadNote(name) } else { pendingNoteName = name }
+    }
+
+    // Spotlight result tapped -> open that note.
+    func application(_ application: NSApplication, continue userActivity: NSUserActivity,
+                     restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        if userActivity.activityType == CSSearchableItemActionType,
+           let id = userActivity.userInfo?[CSSearchableItemActivityIdentifier] as? String {
+            openNote(id)
+            return true
+        }
+        return false
+    }
+
+    // hq://note/<name> URL scheme (automation / Shortcuts hook).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme == "hq" && url.host == "note" {
+            let name = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+            if !name.isEmpty { openNote(name) }
+        }
     }
 }
 

@@ -94,13 +94,24 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSAppTransportSecurity</key>
   <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>com.nysgpt.hq</string>
+      <key>CFBundleURLSchemes</key><array><string>hq</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST
 
 # compile the native shell into the app's executable
-swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit -framework Carbon
+swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit -framework Carbon -framework CoreSpotlight
 chmod +x "$APP/Contents/MacOS/hq"
+
+# ad-hoc code signature — required for CoreSpotlight's XPC (an unsigned binary
+# fails with NSCocoaErrorDomain 4097). Free, local, no Apple account.
+codesign --force --sign - "$APP" 2>/dev/null && echo "ad-hoc signed" || echo "WARN: codesign failed"
 
 # register so Spotlight indexes it now
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
