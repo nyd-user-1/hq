@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# hq-offline — launch the SELF-CONTAINED offline build of HQ (Door 2).
+#
+# Runs the standalone server bundle (.next/standalone/server.js) under plain
+# `node` — no dev toolchain, no `npm install`, no internet. This is the
+# "packaged" HQ: build it once (with a network connection) via
+# `npm run build:offline`, then this launcher serves it forever offline.
+#
+# Door 1 (`bin/hq` -> `npm run dev` on :3002) is unchanged and still works.
+# This is the either/or you asked for: `hq` = dev server, `hq-offline` = the
+# self-contained offline app. Both read the same local ~/.claude files.
+
+set -uo pipefail
+
+# Resolve our own location (following any npm bin symlink) so we find the app
+# wherever it's installed. Override with HQ_DIR=... if it lives somewhere odd.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  dir="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [ "${SOURCE#/}" = "$SOURCE" ] && SOURCE="$dir/$SOURCE"
+done
+SELF_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+HQ_DIR="${HQ_DIR:-$(cd "$SELF_DIR/.." && pwd)}"
+HQ_PORT="${HQ_PORT:-3002}"
+BASE="http://localhost:${HQ_PORT}"
+STANDALONE="$HQ_DIR/.next/standalone"
+SERVER="$STANDALONE/server.js"
+
+up() { curl -sf -o /dev/null --max-time 2 "$BASE/"; }
+
+if [ ! -f "$SERVER" ]; then
+  printf 'No offline build found at %s\n' "$SERVER"
+  printf 'Build it first (needs network once):\n  (cd "%s" && npm run build:offline)\n' "$HQ_DIR"
+  exit 1
+fi
+
+# Pin to the launching Claude Code session when we have its id.
+sid="${CLAUDE_CODE_SESSION_ID:-}"
+url="$BASE/"
+[ -n "$sid" ] && url="$BASE/?session=$sid"
+
+ready=1
+if ! up; then
+  echo "Starting offline HQ on $BASE (no internet needed) ..."
+  # Standalone server resolves ./public and ./.next/static relative to itself,
+  # so we launch it from inside the bundle dir.
+  ( cd "$STANDALONE" && PORT="$HQ_PORT" HOSTNAME=127.0.0.1 \
+      nohup node server.js >/tmp/hq-offline.log 2>&1 & ) >/dev/null 2>&1
+  ready=0
+  for _ in $(seq 1 40); do
+    if up; then ready=1; break; fi
+    sleep 0.5
+  done
+fi
+
+if command -v open >/dev/null 2>&1; then
+  open "$url"
+elif command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$url"
+fi
+
+if [ "$ready" = 1 ]; then
+  printf '\nOffline HQ is open on %s — fully self-contained, no internet.\n' "$BASE"
+else
+  printf '\nOffline HQ is starting on %s — give it a moment and refresh.\n' "$BASE"
+fi
+printf 'Stop it later with:  pkill -f ".next/standalone/server.js"\n'
