@@ -99,7 +99,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 
 # compile the native shell into the app's executable
-swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit
+swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit -framework Carbon
 chmod +x "$APP/Contents/MacOS/hq"
 
 # register so Spotlight indexes it now

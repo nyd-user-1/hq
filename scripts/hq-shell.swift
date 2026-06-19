@@ -5,6 +5,7 @@
 // Compiled into HQ.app/Contents/MacOS/hq by scripts/make-macos-app-native.sh.
 import AppKit
 import WebKit
+import Carbon.HIToolbox   // RegisterEventHotKey — a true global hotkey, no a11y permission
 
 let PORT = 3009
 let URLSTR = "http://localhost:\(PORT)/"
@@ -21,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow!
     var webView: WKWebView!
     var server: Process?
+    var statusItem: NSStatusItem!
+    var hotKeyRef: EventHotKeyRef?
 
     func standaloneDir() -> String {
         (Bundle.main.resourcePath ?? ".") + "/standalone"
@@ -53,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
         window.title = "HQ"
+        window.isReleasedWhenClosed = false   // closing hides; HQ stays in the menu bar
         window.contentMinSize = NSSize(width: 940, height: 620)
         window.setFrameAutosaveName("HQWindow")   // new key so the tuned default applies fresh
         window.center()
@@ -98,10 +102,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         startServer()
         buildWindow()
         waitForServerThenLoad()
+        setupStatusItem()
+        installGlobalHotKey()
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    // Stay alive in the menu bar when the window is closed (ambient app).
+    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { false }
+
+    // Click the Dock icon with no window open -> re-show it.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { showWindow() }
+        return true
+    }
+
+    // --- menu-bar item -------------------------------------------------------
+    func setupStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let b = statusItem.button {
+            b.title = "hq"
+            b.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+            b.toolTip = "HQ — click to show/hide  (⌃⌥⌘H)"
+            b.target = self
+            b.action = #selector(statusClicked(_:))
+            b.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+    }
+
+    @objc func statusClicked(_ sender: Any?) {
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            let m = NSMenu()
+            m.addItem(withTitle: "Show HQ", action: #selector(showWindow), keyEquivalent: "")
+            m.addItem(withTitle: "Reload", action: #selector(reload), keyEquivalent: "")
+            m.addItem(.separator())
+            m.addItem(withTitle: "Quit HQ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+            statusItem.menu = m
+            statusItem.button?.performClick(nil)   // open it
+            statusItem.menu = nil                   // clear so left-click toggles again
+        } else {
+            toggleWindow()
+        }
+    }
+
+    // --- summon / dismiss ----------------------------------------------------
+    @objc func showWindow() {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func toggleWindow() {
+        if NSApp.isActive && window.isVisible && window.isKeyWindow {
+            NSApp.hide(nil)
+        } else {
+            showWindow()
+        }
+    }
+
+    // --- global hotkey: ⌃⌥⌘H (no Accessibility permission needed) -------------
+    func installGlobalHotKey() {
+        let id = EventHotKeyID(signature: OSType(0x48514B59), id: 1)  // 'HQKY'
+        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                                 eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { (_, _, _) -> OSStatus in
+            DispatchQueue.main.async { (NSApp.delegate as? AppDelegate)?.toggleWindow() }
+            return noErr
+        }, 1, &spec, nil, nil)
+        let mods = UInt32(controlKey | optionKey | cmdKey)
+        RegisterEventHotKey(UInt32(kVK_ANSI_H), mods, id, GetApplicationEventTarget(), 0, &hotKeyRef)
+    }
 
     func applicationWillTerminate(_ note: Notification) {
         webView?.removeObserver(self, forKeyPath: "title")
