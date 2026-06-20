@@ -1254,7 +1254,7 @@ export default function Terminal({
   // New-session-from-HQ: birth a fresh `claude` in the project dir via the REPL
   // backend, then pin + drive it — no TUI, no copy-paste. The route returns the
   // real session id once the process inits; we navigate the pane to it (drive on).
-  async function birthAndDrive(project?: string) {
+  async function birthAndDrive(project?: string, firstPrompt?: string) {
     if (starting) return;
     setStarting(project ?? "here");
     setError(null);
@@ -1269,6 +1269,21 @@ export default function Terminal({
       if (data?.sessionId) {
         drivenSessionRef.current = data.sessionId; // bind drive to the newborn (survives the navigate)
         setDriveMode(true);
+        // A first message typed in the send box rides straight into the newborn
+        // (ensureRepl by id is idempotent — finds this exact warm process).
+        const first = (firstPrompt ?? "").trim();
+        if (first) {
+          setItems((t) => [
+            ...t,
+            { kind: "turn", role: "user", text: first, at: new Date().toISOString() },
+          ]);
+          setDraft("");
+          await fetch("/api/terminal/repl", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ action: "send", session: data.sessionId, text: first }),
+          });
+        }
         router.push(hrefFor(data.sessionId), { scroll: false });
       } else {
         throw new Error("no session id returned");
@@ -1790,7 +1805,7 @@ export default function Terminal({
                     key={p}
                     type="button"
                     disabled={!!starting}
-                    onClick={() => birthAndDrive(p)}
+                    onClick={() => birthAndDrive(p, draft)}
                     title={`start a session in ~/code/${p} and drive it from HQ`}
                     className={`rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors disabled:opacity-50 ${
                       starting === p
@@ -2200,18 +2215,21 @@ export default function Terminal({
               }
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              // In staged (new-session) mode there's no session to send to yet —
+              // Enter makes a newline so you can compose a first message, then a
+              // project chip starts it. Otherwise Enter sends.
+              if (e.key === "Enter" && !e.shiftKey && !staged) {
                 e.preventDefault();
                 doSend();
               }
             }}
             rows={1}
-            disabled={staged || notConnected}
+            disabled={notConnected}
             placeholder={
               notConnected
                 ? "run HQ locally and open a session to chat here"
                 : staged
-                  ? "no session yet — start one in your terminal first"
+                  ? "write your first message, then pick a project above to start it ↑"
                   : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
             className="scrollbar-slim max-h-[176px] min-h-[100px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
