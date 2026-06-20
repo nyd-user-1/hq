@@ -6,6 +6,7 @@ import RefreshWhile from "@/app/ui/refresh-while";
 import CopyText from "@/app/ui/copy-text";
 import { ago } from "@/lib/ago";
 import { turnsFor } from "@/lib/transcript";
+import { retainedTranscriptText } from "@/lib/archive";
 import {
   search,
   recent,
@@ -20,6 +21,7 @@ import {
   type SearchHit,
 } from "@/lib/search";
 import { getNoteFile } from "@/lib/notes";
+import { readDoc, warmDocs } from "@/lib/docs";
 import { getRepoFile } from "@/lib/files";
 import { getCommit } from "@/lib/shipped";
 import { readSkillDoc } from "@/lib/skills";
@@ -188,6 +190,7 @@ export default async function Search({
     openTodo?: string;
     openProject?: string;
     openSkill?: string;
+    openDoc?: string;
     session?: string;
     pair?: string;
   }>;
@@ -206,6 +209,7 @@ export default async function Search({
     openTodo,
     openProject,
     openSkill,
+    openDoc,
     session,
     pair,
   } = await searchParams;
@@ -221,6 +225,10 @@ export default async function Search({
     .join("&");
   const pinTail = tail ? `&${tail}` : "";
   const back = `/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${sortDir}${pinTail}`;
+
+  // Keep the offline docs mirror fresh (deduped, daily, out-of-process) — no-ops
+  // while current; on first-ever load with no mirror it spawns the fetcher.
+  warmDocs();
 
   // ── opened memory file ──────────────────────────────────────────────────
   if (open) {
@@ -258,6 +266,9 @@ export default async function Search({
   // than hijacking the terminal. Clean user/assistant text only — no tool noise.
   if (openSession) {
     const { turns, project } = turnsFor(openSession, 250);
+    // If the .jsonl is gone (Claude Code's 30-day sweep), fall back to the text
+    // HQ retained in its search index — archived, flat, but not lost.
+    const archived = turns.length === 0 ? retainedTranscriptText(openSession) : null;
     return (
       <Boundary label="@panel/search/page.tsx">
         <div className="flex items-baseline gap-3">
@@ -277,7 +288,16 @@ export default async function Search({
         </div>
         <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto text-sm">
           {turns.length === 0 ? (
-            <p className="text-xs text-zinc-600">transcript not found</p>
+            archived ? (
+              <div className="flex flex-col gap-1">
+                <span className="font-mono text-[10px] uppercase tracking-wide text-amber-400">
+                  archived · source transcript swept from disk
+                </span>
+                <div className="whitespace-pre-wrap text-zinc-300">{archived}</div>
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-600">transcript not found</p>
+            )
           ) : (
             turns.map((t, i) => (
               <div key={i} className="flex flex-col gap-1">
@@ -476,6 +496,26 @@ export default async function Search({
     );
   }
 
+  // ── opened doc (Claude Code docs mirror) ──────────────────────────────────
+  if (openDoc) {
+    const content = readDoc(openDoc);
+    return (
+      <ReaderShell
+        back={back}
+        label={`docs/${openDoc}`}
+        copy={`https://code.claude.com/docs/en/${openDoc}`}
+      >
+        {content ? (
+          <div className="text-sm">
+            <Markdown text={content} />
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-600">doc not found — try refreshing the mirror</p>
+        )}
+      </ReaderShell>
+    );
+  }
+
   // ── query + results ─────────────────────────────────────────────────────
   // No query → browse the most-recent transcripts + memory as cards (honors the
   // scope chips + sort toggle). With a query → ranked search hits.
@@ -539,7 +579,9 @@ export default async function Search({
                             ? `openTodo=${encodeURIComponent(h.ref)}`
                             : h.kind === "project"
                               ? `openProject=${encodeURIComponent(h.ref)}`
-                              : `openSkill=${encodeURIComponent(h.ref)}`;
+                              : h.kind === "skill"
+                                ? `openSkill=${encodeURIComponent(h.ref)}`
+                                : `openDoc=${encodeURIComponent(h.ref)}`;
           const href = `${back}&${op}`;
           // anything with a path drags into a terminal (drops the path)
           const drag =

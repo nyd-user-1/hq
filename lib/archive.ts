@@ -130,6 +130,18 @@ function loadIndex(): Loaded | null {
   }
 }
 
+// Fallback reader for a transcript whose .jsonl has been swept off disk (Claude
+// Code's `cleanupPeriodDays` cleanup, default 30 days). The builder retains such
+// entries, so their text outlives the file — turnsFor() can't read it, but the
+// index still holds the cleaned user+assistant text. Returns null when the index
+// has no record (never built / never indexed before the file aged out).
+export function retainedTranscriptText(id: string): string | null {
+  const idx = loadIndex();
+  if (!idx) return null;
+  const e = idx.entries.find((x) => x.id === id);
+  return e && e.text.trim() ? e.text : null;
+}
+
 // Spawn the out-of-process builder (deduped). Detached so the 2GB extract runs
 // off the server's event loop; it writes the index atomically and exits.
 function triggerBuild(): void {

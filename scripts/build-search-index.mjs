@@ -106,6 +106,20 @@ for (const d of dirs) {
   }
 }
 
+// Retain entries whose source transcript has since vanished from disk — Claude
+// Code deletes transcripts older than `cleanupPeriodDays` (default 30) on
+// startup. The disk walk above only re-adds files that still exist, so without
+// this a swept session's text would drop out on the next rebuild — exactly the
+// history HQ exists to preserve. The `text` already lives in the prev entry, so
+// we just carry it forward, tagged `retained` so the reader knows the .jsonl is
+// gone and renders from the index instead of 404-ing.
+const onDisk = new Set(entries.map((e) => e.file));
+for (const [file, e] of prev) {
+  if (onDisk.has(file)) continue; // still present (freshly extracted or reused)
+  if (fs.existsSync(file)) continue; // skipped this pass (size 0 / stat error), not deleted
+  entries.push(e.retained ? e : { ...e, retained: true });
+}
+
 // Atomic write so the server never reads a half-built index.
 const tmp = OUT + ".tmp";
 fs.writeFileSync(tmp, JSON.stringify({ version: VERSION, builtMaxMtime, entries }));

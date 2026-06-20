@@ -15,6 +15,7 @@ import { getProjects } from "./projects";
 import { getSkills } from "./skills";
 import { getFiles } from "./files";
 import { COMPONENTS, REGISTRY_CREATED_AT } from "./components";
+import { listDocs, docsText, DOCS_DIR } from "./docs";
 
 // Universal search over everything HQ can see. Two flavors of corpus:
 //  • CONTENT — full text of the thing (transcripts via the persisted index;
@@ -51,7 +52,8 @@ export type SearchScope =
   | "memory"
   | "notes"
   | "scripts"
-  | "skills";
+  | "skills"
+  | "docs";
 
 export type SearchKind =
   | "transcript"
@@ -65,7 +67,8 @@ export type SearchKind =
   | "memory"
   | "note"
   | "script"
-  | "skill";
+  | "skill"
+  | "doc";
 
 // All scopes except the "all" umbrella — the literal source for the chip row +
 // the param validator, so adding a corpus is one edit here, not three.
@@ -83,6 +86,7 @@ export const SCOPES: { value: SearchScope; label: string }[] = [
   { value: "memory", label: "Memory" },
   { value: "scripts", label: "Scripts" },
   { value: "skills", label: "Skills" },
+  { value: "docs", label: "Docs" },
 ];
 
 export type SortDir = "new" | "old"; // result order: newest-first (default) / oldest-first
@@ -239,6 +243,36 @@ function searchScripts(toks: string[]): SearchHit[] {
       at: mtime,
       score: mt.score,
       phrase: mt.phrase,
+    });
+  }
+  return hits;
+}
+
+// Docs — the local Claude Code documentation mirror (~/.claude/hq/docs), HQ's
+// offline best-practice corpus. Full-text like memory/notes (content is already
+// MDX-stripped by the fetcher). Click opens the page in-panel. Reference
+// material, so it rides "all" SEARCH but not the recency browse (like files/
+// components) — surfaced there only when its own scope is picked.
+function searchDocs(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const d of docsText()) {
+    const mt = scoreNorm(normalize(d.text), toks);
+    if (mt.score === 0) continue;
+    let at = 0;
+    try {
+      at = fs.statSync(path.join(DOCS_DIR, d.id)).mtimeMs;
+    } catch {
+      // page vanished mid-scan
+    }
+    hits.push({
+      kind: "doc",
+      ref: d.id,
+      title: d.title,
+      snippet: snippetAround(d.text, toks[0]),
+      at,
+      score: mt.score,
+      phrase: mt.phrase,
+      meta: d.id.includes("/") ? d.id.split("/")[0] : "docs",
     });
   }
   return hits;
@@ -461,6 +495,7 @@ export function search(
   const td = scope === "all" || scope === "todos" ? searchTodos(toks) : [];
   const proj = scope === "all" || scope === "projects" ? searchProjects(toks) : [];
   const sk = scope === "all" || scope === "skills" ? searchSkills(toks) : [];
+  const dc = scope === "all" || scope === "docs" ? searchDocs(toks) : [];
 
   // Phrase is a hard tier: if the contiguous phrase matched anywhere, show ONLY
   // phrase hits — searching a full phrase is a NARROWING act (find the needle),
@@ -468,7 +503,7 @@ export function search(
   // the phrase appears nowhere (e.g. two words never adjacent).
   const all = [
     ...t.hits, ...m, ...n, ...s,
-    ...sess, ...sdk, ...fil, ...comp, ...com, ...td, ...proj, ...sk,
+    ...sess, ...sdk, ...fil, ...comp, ...com, ...td, ...proj, ...sk, ...dc,
   ];
   const anyPhrase = all.some((h) => h.phrase);
   // Default newest-first; the UI toggle flips to oldest-first (so the ORIGINAL
@@ -672,6 +707,18 @@ export function recent(
         phrase: false,
         path: k.path,
         meta: `/${k.name}`,
+      });
+  if (scope === "docs")
+    for (const d of listDocs())
+      out.push({
+        kind: "doc",
+        ref: d.id,
+        title: d.title,
+        snippet: d.id,
+        at: d.mtime,
+        score: 0,
+        phrase: false,
+        meta: d.group || "docs",
       });
   const dir = sort === "old" ? 1 : -1;
   return out.sort((a, b) => dir * (a.at - b.at)).slice(0, limit);
