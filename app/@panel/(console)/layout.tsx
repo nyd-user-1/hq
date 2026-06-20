@@ -16,6 +16,7 @@ export default function ConsoleLayout({
     <Boundary label="@panel/(console)/layout.tsx">
       <TabNav
         tabs={[
+          { title: "Tree", href: "/tree", segment: "tree" },
           { title: "Skills", href: "/skills", segment: "skills" },
           { title: "CMD", href: "/cmd", segment: "cmd" },
           { title: "Routines", href: "/routines", segment: "routines" },

@@ -13,7 +13,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
   { title: "Activity", href: "/projects", routes: ["/projects", "/todo", "/components", "/shipped"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/calls", "/guardrails", "/savings", "/audit"] },
-  { title: "Console", href: "/skills", routes: ["/skills", "/cmd", "/routines", "/firehose"] },
+  { title: "Console", href: "/tree", routes: ["/tree", "/skills", "/cmd", "/routines", "/firehose"] },
   { title: "Compose", href: "/compose", routes: ["/compose"] },
 ];
 
@@ -45,6 +45,7 @@ export const NAV_TARGETS: NavTarget[] = [
   { title: "Savings", href: "/savings", group: "Metrics", keywords: "efficiency saved" },
   { title: "Memory Audit", href: "/audit", group: "Metrics", keywords: "memory notes audit" },
   // Console
+  { title: "Tree", href: "/tree", group: "Console", keywords: "agents subagents hierarchy background dispatched jobs teams sidechain explore" },
   { title: "Skills", href: "/skills", group: "Console", keywords: "skills launcher commands" },
   { title: "CMD", href: "/cmd", group: "Console", keywords: "slash commands cli reference" },
   { title: "Routines", href: "/routines", group: "Console", keywords: "cron scheduled jobs" },
