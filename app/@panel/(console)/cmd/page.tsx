@@ -80,10 +80,67 @@ const COMMANDS: { cmd: string; desc: string }[] = [
   { cmd: "workflows", desc: "Browse running and completed workflows" },
 ];
 
+// OPT-IN session-event hooks. Pasting this into ~/.claude/settings.json wires
+// Claude Code to POST SessionStart/SessionEnd into HQ's durable event sink
+// (~/.claude/hq/events.ndjson via /api/events). HQ NEVER writes this for you —
+// it's yours to add and remove. SessionStart can't be a type:"http" hook, so it
+// routes through the command script; SessionEnd points straight at the sink.
+const EVENT_HOOKS_SNIPPET = `{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /Users/brendanstanton/code/hq/scripts/hooks/session-events.mjs"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://localhost:3002/api/events"
+          }
+        ]
+      }
+    ]
+  }
+}`;
+
 export default function Cmd() {
   return (
     <Boundary topOnly bleedX label="@panel/(console)/cmd/page.tsx">
-      <p className="text-xs text-zinc-400">
+      <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-400">
+            Session-event hooks · opt-in
+          </span>
+          <span className="font-mono text-[10px] text-zinc-600">
+            ~/.claude/settings.json
+          </span>
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+          Records SessionStart/SessionEnd to HQ&apos;s durable event log via{" "}
+          <code className="font-mono text-zinc-300">/api/events</code>. Add it
+          yourself, remove it anytime — HQ never edits your settings.
+        </p>
+        <CopyText
+          text={EVENT_HOOKS_SNIPPET}
+          title="Copy the settings.json hooks snippet"
+          className="mt-2 block w-full rounded border border-zinc-800 bg-zinc-950/60 p-2.5 hover:border-zinc-700"
+        >
+          <pre className="scrollbar-none overflow-x-auto whitespace-pre font-mono text-[10px] leading-snug text-zinc-400">
+            {EVENT_HOOKS_SNIPPET}
+          </pre>
+          <span className="mt-1.5 block font-mono text-[10px] text-zinc-600">
+            click to copy
+          </span>
+        </CopyText>
+      </div>
+      <p className="mt-3 text-xs text-zinc-400">
         Claude Code's built-in slash commands. They act on your live session (or
         open a TUI), so — unlike Skills — they can't run via{" "}
         <code className="font-mono text-zinc-300">claude -p</code>. Copy one, paste
