@@ -13,6 +13,18 @@ export function normalize(s: string): string {
 
 export type Match = { score: number; phrase: boolean };
 
+// Count word-start prefix occurrences of `t` in normalized text: a hit is at
+// position 0 or right after a space (normalize() single-spaces everything), so
+// "agen" hits "agentic" but NOT "magenta" — same word-boundary semantics as
+// FTS5's `agen*` prefix token. Used by the prefix (type-ahead) match mode so the
+// live-scan recall matches the FTS5 index's.
+function prefixHits(norm: string, t: string): number {
+  let n = 0;
+  for (let i = norm.indexOf(t); i !== -1; i = norm.indexOf(t, i + 1))
+    if (i === 0 || norm[i - 1] === " ") n++;
+  return n;
+}
+
 // Match already-NORMALIZED text against normalized query tokens. Returns BOTH a
 // score and whether it was a contiguous-phrase hit — because phrase is a hard
 // TIER, not a weight: the search layer keeps only phrase hits whenever any
@@ -23,7 +35,18 @@ export type Match = { score: number; phrase: boolean };
 // tier: phrase hits → phrase occurrences; term hits → total token occurrences.
 // 0 unless the phrase OR every token is present. The phrase is tokens joined by
 // a single space, which equals normalize(query) by construction.
-export function scoreNorm(norm: string, tokens: string[]): Match {
+//
+// `opts.prefix` (default false → unchanged legacy behavior): the AND-of-tokens
+// tier counts each token as a WORD-START PREFIX (FTS5 `tok*` semantics) instead
+// of a literal whole-token substring, so the transcript live-scan recalls the
+// same docs the FTS5 index does ("agen" finds "agentic"). The PHRASE tier is
+// left exact-contiguous in both modes — phrase is the narrowing tier and must
+// stay faithful (a partial-word prefix is not a phrase match).
+export function scoreNorm(
+  norm: string,
+  tokens: string[],
+  opts: { prefix?: boolean } = {}
+): Match {
   if (tokens.length === 0) return { score: 0, phrase: false };
 
   const phrase = tokens.join(" ");
@@ -34,8 +57,7 @@ export function scoreNorm(norm: string, tokens: string[]): Match {
   // per-token occurrences; bail the moment a token is absent (AND semantics)
   let termHits = 0;
   for (const t of tokens) {
-    let n = 0;
-    for (let i = norm.indexOf(t); i !== -1; i = norm.indexOf(t, i + t.length)) n++;
+    const n = opts.prefix ? prefixHits(norm, t) : countSubstr(norm, t);
     if (n === 0) return { score: 0, phrase: false };
     termHits += n;
   }
@@ -43,6 +65,13 @@ export function scoreNorm(norm: string, tokens: string[]): Match {
   return phraseHits > 0
     ? { score: phraseHits, phrase: true }
     : { score: termHits, phrase: false };
+}
+
+// Non-overlapping substring occurrences (legacy whole-token match).
+function countSubstr(norm: string, t: string): number {
+  let n = 0;
+  for (let i = norm.indexOf(t); i !== -1; i = norm.indexOf(t, i + t.length)) n++;
+  return n;
 }
 
 // ~160 chars of context around the first hit of `tok`, on the ORIGINAL-case

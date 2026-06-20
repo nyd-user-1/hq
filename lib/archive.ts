@@ -4,21 +4,26 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { sessionMeta, cleanText, type RecentSession } from "./sessions";
 import { scoreNorm, snippetAround, normalize } from "./text-search";
+import { openSearchDb } from "./sqlite";
 
 // Index format version — bump to force a clean full rebuild when the stored
 // shape changes (incremental reuse keys on file mtime, not on extract logic,
 // so a logic change like "stop lowercasing" must invalidate via version).
-export const INDEX_VERSION = 2;
+// MUST equal VERSION in scripts/build-search-index.mjs. v3 = the SQLite FTS5
+// sink (was a JSON file through v2).
+export const INDEX_VERSION = 3;
 
 // The Session Archive: every Claude Code session ever (not the 7-day Recents
 // window), browseable and full-text searchable. ~106 transcripts / ~2GB here.
 //
 // Browse = cached head-reads (incremental by mtime). Search would love ripgrep,
 // but this machine has only slow BSD grep (22s) and an undocumented bundled
-// ugrep — so instead we keep a tiny in-memory text index: the user+assistant
-// text of each session (system-reminders stripped, lowercased) is only ~17MB
-// total and extracts in ~8s. Built incrementally (changed files only) and warmed
-// in the background while you browse, so searches are then instant.
+// ugrep — so instead we keep a persisted text index: the user+assistant text of
+// each session (system-reminders stripped) lives in a SQLite FTS5 table
+// (~/.claude/hq/search.db, built out-of-process in ~8s via node:sqlite, a Node
+// BUILT-IN — zero npm deps). FTS5 gives prefix/type-ahead recall + bm25 ranking;
+// the index is built incrementally (changed files only) and warmed in the
+// background while you browse, so searches are then instant.
 
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
 
@@ -84,62 +89,53 @@ export function getArchiveSessions(): ArchiveSession[] {
   return out;
 }
 
-// ---- Search: persisted text index, built by a detached child --------------
+// ---- Search: persisted FTS5 index, built by a detached child ---------------
 
-const INDEX_FILE = path.join(os.homedir(), ".claude", "hq-archive-index.json");
 const BUILD_SCRIPT = path.join(process.cwd(), "scripts", "build-search-index.mjs");
-
-type Loaded = {
-  fileMtime: number;
-  builtMaxMtime: number;
-  // `text` is original-case (for readable snippets); `norm` is derived once at
-  // load (lowercased, punctuation collapsed) so phrase matching never has to
-  // normalize 16MB per search.
-  entries: { id: string; text: string; norm: string }[];
-};
-let loaded: Loaded | null = null;
 let building = false;
 
-// Read the persisted index (cached until the file's mtime changes). A
-// version mismatch is treated as "not built" → triggers a clean rebuild.
-function loadIndex(): Loaded | null {
-  let st: fs.Stats;
+// The stored format version of search.db (meta.version). Cached by db file mtime
+// so a rebuild (atomic rename → new mtime) is re-read on the next query. Null
+// when the db is missing, node:sqlite is unavailable, or the version != current.
+type DbMeta = { builtMaxMtime: number };
+function dbMeta(): DbMeta | null {
+  const db = openSearchDb();
+  if (!db) return null;
   try {
-    st = fs.statSync(INDEX_FILE);
+    const v = db.prepare("SELECT v FROM meta WHERE k = ?").get("version");
+    if (!v || Number(v.v) !== INDEX_VERSION) return null; // stale shape → rebuild
+    const b = db.prepare("SELECT v FROM meta WHERE k = ?").get("builtMaxMtime");
+    return { builtMaxMtime: b ? Number(b.v) : 0 };
   } catch {
-    return null; // not built yet
+    return null; // mid-rename / corrupt — the next poll catches the new file
   }
-  if (loaded && loaded.fileMtime === st.mtimeMs) return loaded;
-  try {
-    const j = JSON.parse(fs.readFileSync(INDEX_FILE, "utf8"));
-    if ((j.version ?? 1) !== INDEX_VERSION) return null; // stale shape → rebuild
-    loaded = {
-      fileMtime: st.mtimeMs,
-      builtMaxMtime: j.builtMaxMtime ?? 0,
-      entries: (j.entries ?? []).map(
-        (e: { id: string; text: string }): Loaded["entries"][number] => ({
-          id: e.id,
-          text: e.text,
-          norm: normalize(e.text),
-        })
-      ),
-    };
-    return loaded;
-  } catch {
-    return null; // mid-write / corrupt — the next poll will catch the rename
-  }
+}
+
+// Build the FTS5 MATCH expression for AND-of-prefix recall: each query token
+// becomes a `tok*` prefix term (type-ahead), double-quoted so punctuation/
+// reserved chars can't inject FTS5 syntax. Tokens are already normalized to
+// [a-z0-9] runs by queryTokens(), so this is belt-and-suspenders.
+function ftsMatch(tokens: string[]): string {
+  return tokens.map((t) => `"${t.replace(/"/g, "")}"*`).join(" ");
 }
 
 // Fallback reader for a transcript whose .jsonl has been swept off disk (Claude
 // Code's `cleanupPeriodDays` cleanup, default 30 days). The builder retains such
-// entries, so their text outlives the file — turnsFor() can't read it, but the
-// index still holds the cleaned user+assistant text. Returns null when the index
-// has no record (never built / never indexed before the file aged out).
+// rows (retained=1), so their text outlives the file — turnsFor() can't read it,
+// but the index still holds the cleaned user+assistant text. Returns null when
+// the index has no record (never built / never indexed before the file aged out).
 export function retainedTranscriptText(id: string): string | null {
-  const idx = loadIndex();
-  if (!idx) return null;
-  const e = idx.entries.find((x) => x.id === id);
-  return e && e.text.trim() ? e.text : null;
+  const db = openSearchDb();
+  if (!db) return null;
+  try {
+    const row = db
+      .prepare("SELECT body FROM transcripts WHERE id = ?")
+      .get(id);
+    const body = row && typeof row.body === "string" ? row.body : "";
+    return body.trim() ? body : null;
+  } catch {
+    return null;
+  }
 }
 
 // Spawn the out-of-process builder (deduped). Detached so the 2GB extract runs
@@ -172,12 +168,12 @@ function newestSessionMtime(): number {
   return m;
 }
 
-// Called on browse: build if missing, or refresh if a session is newer than the
-// index (so new/updated sessions become searchable). Deduped + cheap.
+// Called on browse: build if missing/stale, or refresh if a session is newer
+// than the index (so new/updated sessions become searchable). Deduped + cheap.
 export function warmIndex(): void {
-  const idx = loadIndex();
-  if (!idx) triggerBuild();
-  else if (newestSessionMtime() > idx.builtMaxMtime + 1) triggerBuild();
+  const meta = dbMeta();
+  if (!meta) triggerBuild();
+  else if (newestSessionMtime() > meta.builtMaxMtime + 1) triggerBuild();
 }
 
 export type TranscriptHit = { id: string; score: number; phrase: boolean; snippet: string };
@@ -217,42 +213,73 @@ function liveEntry(file: string, mtime: number): { text: string; norm: string } 
   return entry;
 }
 
-// Synchronous full-text search over EVERY session's text. The 2GB archive comes
-// from the prebuilt index; sessions NEWER than the index snapshot — the one you're
-// typing in, mid-conversation — are LIVE-SCANNED fresh and merged ON TOP, so the
-// active session is instantly searchable with no rebuild lag (the same read-per-
-// query idea notes/memory use). Zero extra work when the index is current.
-// `building` true → no index yet (first run); the caller shows an "indexing" state.
+// Full-text search over EVERY session's text. The 2GB archive comes from the
+// prebuilt FTS5 index (prefix/type-ahead recall + bm25 candidate ranking);
+// sessions NEWER than the index snapshot — the one you're typing in, mid-
+// conversation — are LIVE-SCANNED fresh and merged ON TOP, so the active session
+// is instantly searchable with no rebuild lag. Zero extra work when current.
+// `building` true → no usable db yet (first run / version bump); the caller shows
+// an "indexing" state.
+//
+// FTS5 supplies the candidate set + bm25 order, but the authoritative `phrase`
+// (the hard narrowing TIER) and `score` come from scoreNorm() over each
+// candidate's stored body — IDENTICAL semantics to the live-scan and to the
+// pre-FTS5 JSON index, so the search layer's per-corpus phrase narrowing is
+// unchanged. (FTS5's own phrase op is word-bounded + would diverge; we don't
+// trust it for the tier.) bm25 maps to score only as a fallback for rare
+// prefix-only hits where the literal token never appears verbatim.
 export function searchTranscriptIndex(tokens: string[]): {
   hits: TranscriptHit[];
   building: boolean;
 } {
   if (tokens.length === 0) return { hits: [], building: false };
-  const idx = loadIndex();
-  if (!idx) {
+  const meta = dbMeta();
+  const db = meta ? openSearchDb() : null;
+  if (!meta || !db) {
     triggerBuild();
     return { hits: [], building: true };
   }
-  // Keyed by id so a live re-scan can override a stale index entry.
+  // Keyed by id so a live re-scan can override a stale index row.
   const byId = new Map<string, TranscriptHit>();
-  for (const e of idx.entries) {
-    const m = scoreNorm(e.norm, tokens);
-    if (m.score === 0) continue;
-    byId.set(e.id, {
-      id: e.id,
-      score: m.score,
-      phrase: m.phrase,
-      snippet: snippetAround(e.text, tokens[0]),
-    });
+  try {
+    // FTS5 prefix-AND candidates, bm25-ordered (lower=better, negative). We cap
+    // generously — final order is recency-then-score in the search layer; this
+    // just bounds the per-query scoreNorm pass over candidate bodies.
+    const rows = db
+      .prepare(
+        "SELECT id, body, bm25(transcripts) AS rank FROM transcripts " +
+          "WHERE transcripts MATCH ? ORDER BY rank LIMIT 500"
+      )
+      .all(ftsMatch(tokens));
+    for (const r of rows) {
+      const id = String(r.id);
+      const body = typeof r.body === "string" ? r.body : "";
+      const m = scoreNorm(normalize(body), tokens, { prefix: true });
+      // score = the authoritative occurrence count; for a prefix-only hit (no
+      // verbatim token) that's still ≥1 via prefixHits. Fall back to -bm25 so a
+      // matched-but-uncounted row (defensive) still sorts sanely.
+      const score = m.score > 0 ? m.score : -Number(r.rank ?? 0);
+      byId.set(id, {
+        id,
+        score,
+        phrase: m.phrase,
+        snippet: snippetAround(body, tokens[0]),
+      });
+    }
+  } catch {
+    // db vanished/locked mid-query (a concurrent rebuild rename) — fall through
+    // to the live-scan; warmIndex()/the next poll re-opens the fresh db.
+    triggerBuild();
   }
   // Bridge the staleness window: any session modified since the index was built
   // (usually just the active one) is read fresh and merged. Only OVERRIDES on a
   // live hit — never deletes — so a slight extraction diff can't drop a valid
   // index hit (and transcripts are append-only, so that hit stays valid anyway).
+  // Prefix-matched to stay consistent with the FTS5 index's recall.
   eachSessionFile((full, st) => {
-    if (st.mtimeMs <= idx.builtMaxMtime + 1) return; // index already covers it
+    if (st.mtimeMs <= meta.builtMaxMtime + 1) return; // index already covers it
     const { text, norm } = liveEntry(full, st.mtimeMs);
-    const m = scoreNorm(norm, tokens);
+    const m = scoreNorm(norm, tokens, { prefix: true });
     if (m.score === 0) return;
     const id = path.basename(full, ".jsonl");
     byId.set(id, { id, score: m.score, phrase: m.phrase, snippet: snippetAround(text, tokens[0]) });
