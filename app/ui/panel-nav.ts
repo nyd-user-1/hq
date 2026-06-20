@@ -12,7 +12,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 // `routes` = every tab under it, for active-state + the open-panel test.
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
   { title: "Activity", href: "/projects", routes: ["/projects", "/todo", "/components", "/shipped"] },
-  { title: "Metrics", href: "/metrics", routes: ["/metrics", "/calls", "/savings", "/audit"] },
+  { title: "Metrics", href: "/metrics", routes: ["/metrics", "/calls", "/guardrails", "/savings", "/audit"] },
   { title: "Console", href: "/skills", routes: ["/skills", "/cmd", "/routines", "/firehose"] },
   { title: "Compose", href: "/compose", routes: ["/compose"] },
 ];
@@ -41,6 +41,7 @@ export const NAV_TARGETS: NavTarget[] = [
   // Metrics
   { title: "Usage & Burn", href: "/metrics", group: "Metrics", keywords: "tokens usage burn meter context cost" },
   { title: "Calls", href: "/calls", group: "Metrics", keywords: "ledger dollars cost spend api" },
+  { title: "Guardrails", href: "/guardrails", group: "Metrics", keywords: "cost cap budget burn rate limit spend alarm projection otel" },
   { title: "Savings", href: "/savings", group: "Metrics", keywords: "efficiency saved" },
   { title: "Memory Audit", href: "/audit", group: "Metrics", keywords: "memory notes audit" },
   // Console

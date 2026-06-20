@@ -19,6 +19,7 @@ export default function MetricsLayout({
         tabs={[
           { title: "Usage & Burn", href: "/metrics", segment: "metrics" },
           { title: "Calls", href: "/calls", segment: "calls" },
+          { title: "Guardrails", href: "/guardrails", segment: "guardrails" },
           { title: "Savings", href: "/savings", segment: "savings" },
           { title: "Memory Audit", href: "/audit", segment: "audit" },
         ]}
