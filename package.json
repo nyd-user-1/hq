@@ -15,7 +15,8 @@
     "build:check": "HQ_BUILD_DIR=.next-build next build",
     "build:offline": "next build && rm -rf .next/standalone/.next/static .next/standalone/public && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:channel": "node --experimental-strip-types --test lib/channel-policy.test.mts"
   },
   "dependencies": {
     "next": "16.2.9",

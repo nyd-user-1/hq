@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+# the channel sidecar keeps its OWN isolated deps (so HQ's root stays at 3 deps);
+# commit only its package.json + package-lock.json + source, never its node_modules.
+/scripts/channel/node_modules
 /.pnp
 .pnp.*
 .yarn/*

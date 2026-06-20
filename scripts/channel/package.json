@@ -1,0 +1,17 @@
+{
+  "name": "hq-channel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HQ Channel sidecar — the MCP channel server Claude Code spawns over stdio so HQ can push prompts and relay permission verdicts into a driven session. Isolated from HQ's 3-dep root.",
+  "bin": {
+    "hq-channel": "./hq-channel.mjs"
+  },
+  "scripts": {
+    "start": "node ./hq-channel.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0"
+  }
+}
