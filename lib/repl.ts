@@ -17,6 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sessionCwd } from "@/lib/transcript";
+import { classify } from "@/lib/permission-policy";
 
 // HQ-driven sessions are spawned via `claude -p`, so their transcript entrypoint
 // is "sdk-cli" — which Recents filters out. Record the ids we drive in a sidecar
@@ -276,6 +277,27 @@ export function stopRepl(requestedId: string): boolean {
 export function registerPermission(requestedId: string, request: ReplEvent): Promise<PermissionDecision> {
   const r = repls.get(requestedId);
   const toolUseId = String(request.tool_use_id ?? request.toolUseId ?? Math.random());
+
+  // AUTO-MODE CLASSIFIER: decide the safe/known calls (read-only tools, read-only
+  // Bash) per ~/.claude/hq/permission-policy.json so the operator isn't pinged on
+  // every call. Only an "ask" verdict surfaces an Approve/Deny card; allow/deny
+  // resolve immediately and are logged (hq_permission_auto) for the activity feed.
+  const verdict = classify({
+    tool_name: typeof request.tool_name === "string" ? request.tool_name : undefined,
+    input:
+      request.input && typeof request.input === "object"
+        ? (request.input as Record<string, unknown>)
+        : undefined,
+  });
+  if (verdict !== "ask") {
+    if (r) emit(r, { type: "hq_permission_auto", tool_use_id: toolUseId, behavior: verdict, request });
+    return Promise.resolve(
+      verdict === "allow"
+        ? { behavior: "allow" }
+        : { behavior: "deny", message: "auto-denied by HQ permission policy" },
+    );
+  }
+
   return new Promise<PermissionDecision>((resolve) => {
     const timer = setTimeout(() => {
       r?.pending.delete(toolUseId);
