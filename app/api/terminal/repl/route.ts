@@ -38,8 +38,8 @@ export async function POST(req: Request) {
   // the real session id once the process inits; the UI pins + drives by it.
   if (action === "new") {
     const project: string | undefined = body.project;
-    const cwd: string | undefined = body.cwd ?? (project ? join(homedir(), "code", project) : undefined);
-    if (!cwd) return new NextResponse("project or cwd required", { status: 400 });
+    // No project + no cwd → start in the home dir (the bare-`claude` new session).
+    const cwd: string = body.cwd ?? (project ? join(homedir(), "code", project) : homedir());
     if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
       return new NextResponse(`no such project dir: ${cwd}`, { status: 400 });
     }

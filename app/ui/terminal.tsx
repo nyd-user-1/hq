@@ -1163,7 +1163,15 @@ export default function Terminal({
   }
 
   async function doSend() {
-    if (staged) return; // staging view — no session exists to send to
+    if (staged) {
+      // New-session view: Enter / the send arrow STARTS a session. With no project
+      // picked we default to the home dir (the bare-`claude` equivalent); a project
+      // chip starts it in that project instead. The typed draft becomes turn one.
+      const first = draft.trim();
+      if (!first && attachments.length === 0) return;
+      await birthAndDrive(undefined, first);
+      return;
+    }
     // Drive mode: route to the warm live REPL (streams back over SSE) instead of
     // the one-shot -p. Optimistic user turn shows immediately; the reply streams
     // into the live overlay, then lands via the transcript poll like any turn.
@@ -1354,7 +1362,7 @@ export default function Terminal({
   // The send (↑) button is live only when there's something to send to a real
   // session; while a run is in flight it morphs into the red stop button.
   const canSend =
-    !staged && !notConnected && (draft.trim() !== "" || attachments.length > 0);
+    (draft.trim() !== "" || attachments.length > 0) && (staged || !notConnected);
 
   // The cache meter — top-right in the header (and the footer in the centered
   // shell). ctx moved out to sit beside the session id (ctxMeter, below).
@@ -2215,10 +2223,9 @@ export default function Terminal({
               }
             }}
             onKeyDown={(e) => {
-              // In staged (new-session) mode there's no session to send to yet —
-              // Enter makes a newline so you can compose a first message, then a
-              // project chip starts it. Otherwise Enter sends.
-              if (e.key === "Enter" && !e.shiftKey && !staged) {
+              // Enter sends — or, in the new-session view, STARTS the session
+              // (doSend → birthAndDrive in the home dir). ⇧↵ is a newline.
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 doSend();
               }
@@ -2229,7 +2236,7 @@ export default function Terminal({
               notConnected
                 ? "run HQ locally and open a session to chat here"
                 : staged
-                  ? "write your first message, then pick a project above to start it ↑"
+                  ? "write your first message — ↵ starts it (or pick a project above)"
                   : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
             className="scrollbar-slim max-h-[176px] min-h-[100px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
