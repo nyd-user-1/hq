@@ -497,20 +497,22 @@ export function search(
   const sk = scope === "all" || scope === "skills" ? searchSkills(toks) : [];
   const dc = scope === "all" || scope === "docs" ? searchDocs(toks) : [];
 
-  // Phrase is a hard tier: if the contiguous phrase matched anywhere, show ONLY
-  // phrase hits — searching a full phrase is a NARROWING act (find the needle),
-  // so scattered-term cards are noise. AND-of-tokens results survive only when
-  // the phrase appears nowhere (e.g. two words never adjacent).
-  const all = [
-    ...t.hits, ...m, ...n, ...s,
-    ...sess, ...sdk, ...fil, ...comp, ...com, ...td, ...proj, ...sk, ...dc,
-  ];
-  const anyPhrase = all.some((h) => h.phrase);
+  // Phrase is a hard tier, but applied PER CORPUS — never globally. Searching a
+  // full phrase IS a narrowing act, so within a corpus a contiguous-phrase hit
+  // drops that corpus's scattered-term cards. But a verbatim match in ONE corpus
+  // (say a transcript) must NOT blank a DIFFERENT corpus (say a doc page that has
+  // every word but not the literal phrase) — that was the relevance trap, where
+  // "understand the agentic loop" hid the agent-loop doc behind a chat transcript.
+  // Narrow each corpus on its own, then merge.
+  const corpora = [t.hits, m, n, s, sess, sdk, fil, comp, com, td, proj, sk, dc];
+  const narrowed = corpora.flatMap((group) =>
+    group.some((h) => h.phrase) ? group.filter((h) => h.phrase) : group
+  );
   // Default newest-first; the UI toggle flips to oldest-first (so the ORIGINAL
   // occurrence of a phrase rises to the top). Recency is primary; score breaks
   // ties (effectively never, since `at` is ms).
   const dir = sort === "old" ? 1 : -1;
-  const hits = (anyPhrase ? all.filter((h) => h.phrase) : all)
+  const hits = narrowed
     .sort((a, b) => dir * (a.at - b.at) || b.score - a.score)
     .slice(0, limit);
   return { hits, building: t.building };
