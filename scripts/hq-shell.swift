@@ -317,6 +317,23 @@ appMenu.addItem(withTitle: "Hide HQ", action: #selector(NSApplication.hide(_:)),
 appMenu.addItem(withTitle: "Quit HQ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 appItem.submenu = appMenu
 
+// Edit menu: the standard text-editing commands, wired to the responder chain
+// (target nil → the focused WKWebView text field handles them). Without this menu
+// ⌘A/⌘C/⌘V/⌘X/⌘Z are dead app-wide — which is why Select All never worked in the
+// search fields. AppKit only enables these shortcuts when the menu items exist.
+let editItem = NSMenuItem(); mainMenu.addItem(editItem)
+let editMenu = NSMenu(title: "Edit")
+editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+let redoItem = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+redoItem.keyEquivalentModifierMask = [.command, .shift]
+editMenu.addItem(redoItem)
+editMenu.addItem(NSMenuItem.separator())
+editMenu.addItem(withTitle: "Cut", action: Selector(("cut:")), keyEquivalent: "x")
+editMenu.addItem(withTitle: "Copy", action: Selector(("copy:")), keyEquivalent: "c")
+editMenu.addItem(withTitle: "Paste", action: Selector(("paste:")), keyEquivalent: "v")
+editMenu.addItem(withTitle: "Select All", action: Selector(("selectAll:")), keyEquivalent: "a")
+editItem.submenu = editMenu
+
 // View menu: real ⌘+ / ⌘- / ⌘0 page zoom.
 let viewItem = NSMenuItem(); mainMenu.addItem(viewItem)
 let viewMenu = NSMenu(title: "View")

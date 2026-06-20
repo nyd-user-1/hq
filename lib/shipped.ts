@@ -18,7 +18,17 @@ export type Ship = {
   at: number; // committer time, ms
 };
 
+// Commits come from `git log` across every ~/code repo — far too slow to re-run
+// on every search keystroke. Memoize the assembled feed briefly (commits don't
+// move mid-search); a short TTL turns N git spawns per keystroke into one scan
+// per few seconds, which is what makes corpus search feel instant.
+let shipCache: { key: string; at: number; feed: Ship[] } | null = null;
+const SHIP_TTL_MS = 5000;
+
 export function getShipped(limit = 40, perRepo = 15): Ship[] {
+  const cacheKey = `${limit}:${perRepo}`;
+  if (shipCache && shipCache.key === cacheKey && Date.now() - shipCache.at < SHIP_TTL_MS)
+    return shipCache.feed;
   let dirs: fs.Dirent[];
   try {
     dirs = fs.readdirSync(CODE_ROOT, { withFileTypes: true });
@@ -81,6 +91,7 @@ export function getShipped(limit = 40, perRepo = 15): Ship[] {
     if (!covered.has(repo)) feed.push(ship);
   }
   feed.sort((a, b) => b.at - a.at);
+  shipCache = { key: cacheKey, at: Date.now(), feed };
   return feed;
 }
 

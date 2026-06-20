@@ -23,10 +23,10 @@ import { ago } from "@/lib/ago";
 // The ⌘K command palette — a top-anchored launcher + universal search over a
 // blurred backdrop. Three sections: ACTIONS (the client-state tools), NAVIGATE
 // (every panel — labelled Group/Title, pin-carrying via withPins), and a live
-// SEARCH section that debounce-queries /api/search as you type and deep-links a
+// SEARCH section that debounce-queries /api/command-search as you type and deep-links a
 // hit into the /search reader for that exact item. Hand-built — no cmdk/radix,
 // per HQ's three-runtime-dep rule. State + the global hotkey live in
-// command-state.tsx; the search engine is lib/search via /api/search (so this
+// command-state.tsx; the search engine is lib/search via /api/command-search (so this
 // client component never imports node:fs).
 
 type Section = "Actions" | "Navigate" | "Search";
@@ -190,7 +190,9 @@ function openHref(h: Hit, q: string): string {
                     ? `openTodo=${e(h.ref)}`
                     : h.kind === "project"
                       ? `openProject=${e(h.ref)}`
-                      : `openSkill=${e(h.ref)}`;
+                      : h.kind === "skill"
+                        ? `openSkill=${e(h.ref)}`
+                        : `openDoc=${e(h.ref)}`;
   const sp = new URLSearchParams(window.location.search);
   const pins = (["session", "pair"] as const)
     .map((k) => (sp.get(k) ? `${k}=${sp.get(k)}` : ""))
@@ -221,7 +223,8 @@ export default function CommandPalette() {
     [router]
   );
 
-  // Debounced universal search as you type → /api/search (lib/search engine).
+  // Debounced universal search as you type → /api/command-search (corpus-balanced,
+  // so Docs + every corpus surface, not just the newest few).
   useEffect(() => {
     const query = q.trim();
     if (!query) {
@@ -232,7 +235,7 @@ export default function CommandPalette() {
     const t = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/search?q=${encodeURIComponent(query)}&limit=8`
+          `/api/command-search?q=${encodeURIComponent(query)}&limit=16`
         );
         const data = await res.json();
         if (alive) setHits(Array.isArray(data?.hits) ? data.hits : []);
