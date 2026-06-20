@@ -89,7 +89,11 @@ export const SCOPES: { value: SearchScope; label: string }[] = [
   { value: "docs", label: "Docs" },
 ];
 
-export type SortDir = "new" | "old"; // result order: newest-first (default) / oldest-first
+// Result order. "rel" = most relevant first (score-ranked — the default for a
+// query, so the FTS5/occurrence ranking actually surfaces); "new"/"old" =
+// chronological (newest-first / oldest-first), the browse + "when did I first
+// say X" modes.
+export type SortDir = "new" | "old" | "rel";
 
 export type SearchHit = {
   kind: SearchKind;
@@ -508,12 +512,17 @@ export function search(
   const narrowed = corpora.flatMap((group) =>
     group.some((h) => h.phrase) ? group.filter((h) => h.phrase) : group
   );
-  // Default newest-first; the UI toggle flips to oldest-first (so the ORIGINAL
-  // occurrence of a phrase rises to the top). Recency is primary; score breaks
-  // ties (effectively never, since `at` is ms).
-  const dir = sort === "old" ? 1 : -1;
+  // "rel" ranks by score (occurrence count / FTS5 bm25 candidate order, with the
+  // phrase tier already applied by the per-corpus narrowing above) — recency only
+  // breaks ties. "new"/"old" rank chronologically with score as the tiebreak (so
+  // the original/latest occurrence of a phrase rises). Since the /search page
+  // queries each corpus on its own, "rel" effectively ranks WITHIN each corpus.
   const hits = narrowed
-    .sort((a, b) => dir * (a.at - b.at) || b.score - a.score)
+    .sort(
+      sort === "rel"
+        ? (a, b) => b.score - a.score || b.at - a.at
+        : (a, b) => (sort === "old" ? 1 : -1) * (a.at - b.at) || b.score - a.score,
+    )
     .slice(0, limit);
   return { hits, building: t.building };
 }

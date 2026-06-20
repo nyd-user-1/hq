@@ -83,8 +83,10 @@ export const dynamic = "force-dynamic";
 // Sort-direction glyph (no icon lib in HQ): bars + an arrow that points down for
 // newest-first (default) and up for oldest-first.
 function SortIcon({ dir }: { dir: SortDir }) {
+  // "rel" = bars only (a ranked list, no chronological direction); "new"/"old" add
+  // a down/up arrow.
   const arrow =
-    dir === "new" ? (
+    dir === "rel" ? null : dir === "new" ? (
       <>
         <path d="M6 5v13" />
         <path d="m3 15 3 3 3-3" />
@@ -162,7 +164,15 @@ export default async function Search({
   const scope: SearchScope = SCOPES.some((s) => s.value === rawScope)
     ? (rawScope as SearchScope)
     : "all";
-  const sortDir: SortDir = rawSort === "old" ? "old" : "new";
+  // Relevance is the default WHEN there's a query (you searched → best match first,
+  // so the per-corpus score ranking surfaces); browsing (no query) defaults to
+  // newest. An explicit ?sort always wins.
+  const sortDir: SortDir =
+    rawSort === "old" || rawSort === "new" || rawSort === "rel"
+      ? (rawSort as SortDir)
+      : q
+        ? "rel"
+        : "new";
   // Carry the terminal pins on every in-panel nav. Dropping ?session/?pair
   // un-pins the terminal, which then self-re-pins via router.replace and wipes
   // the search query (q/scope/sort) — the "scope tab snaps back to All" bug.
@@ -529,19 +539,21 @@ export default async function Search({
           )}
           <Link
             href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
-              sortDir === "new" ? "old" : "new"
+              sortDir === "rel" ? "new" : sortDir === "new" ? "old" : "rel"
             }${pinTail}`}
             scroll={false}
             aria-label="Toggle sort order"
             title={
-              sortDir === "new"
-                ? "Newest first — click for oldest"
-                : "Oldest first — click for newest"
+              sortDir === "rel"
+                ? "Most relevant — click for newest"
+                : sortDir === "new"
+                  ? "Newest first — click for oldest"
+                  : "Oldest first — click for most relevant"
             }
             className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 font-mono text-[10px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           >
             <SortIcon dir={sortDir} />
-            <span>{sortDir === "new" ? "newest" : "oldest"}</span>
+            <span>{sortDir === "rel" ? "relevant" : sortDir === "new" ? "newest" : "oldest"}</span>
           </Link>
         </div>
       </div>
