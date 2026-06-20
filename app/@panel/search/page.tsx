@@ -14,7 +14,6 @@ import {
   memoryFilePath,
   getScriptFile,
   scriptFilePath,
-  queryTokens,
   SCOPES,
   type SearchScope,
   type SortDir,
@@ -28,20 +27,12 @@ import { readSkillDoc } from "@/lib/skills";
 import { getProjectSessions } from "@/lib/projects";
 import { getTodos } from "@/lib/todo";
 import { COMPONENTS, readComponentSource } from "@/lib/components";
-import DraggableCard from "@/app/ui/draggable-card";
-import SearchScopeFilter from "@/app/ui/search-scope-filter";
-import { KIND_TAG } from "@/app/ui/search-tags";
+import { CORPORA, type Corpus } from "@/app/ui/search-corpus";
+import SearchCorpusRail from "@/app/ui/search-corpus-rail";
+import SearchResultGroup from "@/app/ui/search-result-group";
 
-// The footer's left slot — the result's identity: a short session id, else the
-// file path, else the bare ref.
-function footRef(h: SearchHit): string {
-  if (h.kind === "transcript" || h.kind === "session" || h.kind === "sdk")
-    return h.ref.slice(0, 8);
-  return h.path ?? h.ref;
-}
-
-// Shared chrome for the new in-panel readers (file/component/commit/todo/
-// project/skill): the "← results" back link + a click-to-copy path header over a
+// Shared chrome for the in-panel readers (file/component/commit/todo/project/
+// skill/doc): the "← results" back link + a click-to-copy path header over a
 // scroll body. The original memory/transcript/note/script readers predate this
 // and keep their inline shells; new corpora share this one.
 function ReaderShell({
@@ -89,52 +80,6 @@ const CODE_BODY =
 
 export const dynamic = "force-dynamic";
 
-// Mark WHY a snippet matched. Prefer the contiguous phrase — the query tokens
-// in order with any punctuation/whitespace between them — so "wow..you did it"
-// lights up as one span. If the phrase isn't contiguous here (the AND-of-tokens
-// fallback case), mark each token instead. Tokens are normalized (lowercase,
-// alphanumeric) so the joined pattern needs no escaping.
-function highlight(text: string, query: string): React.ReactNode {
-  const toks = queryTokens(query);
-  if (toks.length === 0) return text;
-
-  let ranges: [number, number][] = [];
-  const phraseRe = new RegExp(toks.join("[^a-z0-9]+"), "ig");
-  for (let m = phraseRe.exec(text); m; m = phraseRe.exec(text)) {
-    ranges.push([m.index, m.index + m[0].length]);
-    if (m.index === phraseRe.lastIndex) phraseRe.lastIndex++; // guard zero-width
-  }
-  if (ranges.length === 0) {
-    const lower = text.toLowerCase();
-    for (const t of toks)
-      for (let p = lower.indexOf(t); p !== -1; p = lower.indexOf(t, p + t.length))
-        ranges.push([p, p + t.length]);
-    ranges.sort((a, b) => a[0] - b[0]);
-    const merged: [number, number][] = [];
-    for (const r of ranges) {
-      const last = merged[merged.length - 1];
-      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
-      else merged.push([...r]);
-    }
-    ranges = merged;
-  }
-
-  const out: React.ReactNode[] = [];
-  let i = 0;
-  let k = 0;
-  for (const [s, e] of ranges) {
-    if (s > i) out.push(text.slice(i, s));
-    out.push(
-      <mark key={k++} className="rounded-sm bg-blue-500/30 px-0.5 text-zinc-100">
-        {text.slice(s, e)}
-      </mark>
-    );
-    i = e;
-  }
-  out.push(text.slice(i));
-  return out;
-}
-
 // Sort-direction glyph (no icon lib in HQ): bars + an arrow that points down for
 // newest-first (default) and up for oldest-first.
 function SortIcon({ dir }: { dir: SortDir }) {
@@ -171,8 +116,9 @@ function SortIcon({ dir }: { dir: SortDir }) {
 }
 
 // Universal search over everything HQ can see — transcripts, sessions, sdk runs,
-// files, components, commits, todos, projects, memory, notes, scripts, skills.
-// Result click opens the thing in-panel (read it where it lives).
+// files, components, commits, todos, projects, memory, notes, scripts, skills,
+// docs. A query groups its hits PER corpus (Docs first); clicking a result opens
+// the thing in-panel (read it where it lives).
 export default async function Search({
   searchParams,
 }: {
@@ -516,22 +462,71 @@ export default async function Search({
     );
   }
 
-  // ── query + results ─────────────────────────────────────────────────────
-  // No query → browse the most-recent transcripts + memory as cards (honors the
-  // scope chips + sort toggle). With a query → ranked search hits.
-  const { hits, building } = q
-    ? search(q, scope, sortDir)
-    : { hits: recent(scope, sortDir), building: false };
+  // ── query + grouped results ───────────────────────────────────────────────
+  // Per the brief: never let one corpus blank another, keep Docs first-class. So
+  // the overview queries EACH corpus on its own (the global recency sort can't
+  // crowd a low-volume corpus out) and stacks them in CORPORA order — Docs lead.
+  // A scoped view drills into a single corpus at full depth. Per-corpus calls cost
+  // ≈ one search("all") since each only searches its own corpus.
+  const PER_CORPUS = 5;
+  type Group = { corpus: Corpus; hits: SearchHit[]; count: string; drill?: string };
+  const groups: Group[] = [];
+  const counts: Record<string, string> = {};
+  let building = false;
+
+  if (!q) {
+    // Empty → browse the most-recent cards (transcripts + memory), grouped by
+    // corpus for consistency. The rail itself is the "hub" the eye lands on.
+    const rec = recent(scope, sortDir);
+    for (const c of CORPORA) {
+      const hits = rec.filter((h) => h.kind === c.kind);
+      if (hits.length) groups.push({ corpus: c, hits, count: "" });
+    }
+  } else if (scope === "all") {
+    for (const c of CORPORA) {
+      const { hits, building: b } = search(q, c.scope, sortDir, PER_CORPUS + 1);
+      building ||= b;
+      if (!hits.length) continue;
+      const capped = hits.length > PER_CORPUS;
+      const label = capped ? `${PER_CORPUS}+` : String(hits.length);
+      counts[c.scope] = label;
+      groups.push({
+        corpus: c,
+        hits: hits.slice(0, PER_CORPUS),
+        count: label,
+        drill: capped
+          ? `/search?q=${encodeURIComponent(q)}&scope=${c.scope}&sort=${sortDir}${pinTail}`
+          : undefined,
+      });
+    }
+  } else {
+    const c = CORPORA.find((x) => x.scope === scope);
+    if (c) {
+      const { hits, building: b } = search(q, scope, sortDir, 60);
+      building = b;
+      if (hits.length) {
+        counts[c.scope] = String(hits.length);
+        groups.push({ corpus: c, hits, count: String(hits.length) });
+      }
+    }
+  }
+
+  const summary = !q
+    ? "recent"
+    : scope === "all"
+      ? `${groups.length} ${groups.length === 1 ? "corpus" : "corpora"}`
+      : "";
 
   return (
     <Boundary label="@panel/search/page.tsx">
-      {/* Header mirrors the Components panel: search box on top, then a Filter
-          dropdown (left, the 13 scopes as colored chips) + sort button (right).
-          The active scope rides on the Filter face, so the old chip row is gone. */}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <SearchInput initial={q} scope={scope} sort={sortDir} pins={tail} />
-        <div className="flex items-center gap-2">
-          <SearchScopeFilter scope={scope} q={q} sort={sortDir} pins={tail} />
+        <div className="flex items-center gap-2 px-0.5">
+          {summary && (
+            <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+              {summary}
+            </span>
+          )}
           <Link
             href={`/search?q=${encodeURIComponent(q)}&scope=${scope}&sort=${
               sortDir === "new" ? "old" : "new"
@@ -543,108 +538,53 @@ export default async function Search({
                 ? "Newest first — click for oldest"
                 : "Oldest first — click for newest"
             }
-            className="ml-auto flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 font-mono text-[10px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           >
             <SortIcon dir={sortDir} />
+            <span>{sortDir === "new" ? "newest" : "oldest"}</span>
           </Link>
         </div>
       </div>
 
-      {!q && (
-        <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-          recent
-        </p>
-      )}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
+        <div className="scrollbar-none shrink-0 sm:w-36 sm:overflow-y-auto">
+          <SearchCorpusRail
+            active={scope}
+            counts={counts}
+            dimEmpty={!!q && scope === "all"}
+            q={q}
+            sort={sortDir}
+            pins={tail}
+          />
+        </div>
+        <div className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
+          {groups.map((g) => (
+            <SearchResultGroup
+              key={g.corpus.scope}
+              corpus={g.corpus}
+              hits={g.hits}
+              q={q}
+              back={back}
+              count={g.count}
+              drillHref={g.drill}
+            />
+          ))}
+          {groups.length === 0 && (
+            <p className="text-xs text-zinc-600">
+              {building
+                ? "building the search index (first time, ~10s)…"
+                : q
+                  ? "no matches"
+                  : "nothing here yet"}
+            </p>
+          )}
+        </div>
+      </div>
 
-      <ul className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
-        {hits.map((h) => {
-          // route each kind to its in-panel reader (session/sdk reuse the
-          // transcript reader; project lists its sessions).
-          const op =
-            h.kind === "transcript" || h.kind === "session" || h.kind === "sdk"
-              ? `openSession=${h.ref}`
-              : h.kind === "note"
-                ? `openNote=${encodeURIComponent(h.ref)}`
-                : h.kind === "script"
-                  ? `openScript=${encodeURIComponent(h.ref)}`
-                  : h.kind === "memory"
-                    ? `open=${encodeURIComponent(h.ref)}`
-                    : h.kind === "file"
-                      ? `openFile=${encodeURIComponent(h.ref)}`
-                      : h.kind === "component"
-                        ? `openComponent=${encodeURIComponent(h.ref)}`
-                        : h.kind === "commit"
-                          ? `openCommit=${encodeURIComponent(h.ref)}`
-                          : h.kind === "todo"
-                            ? `openTodo=${encodeURIComponent(h.ref)}`
-                            : h.kind === "project"
-                              ? `openProject=${encodeURIComponent(h.ref)}`
-                              : h.kind === "skill"
-                                ? `openSkill=${encodeURIComponent(h.ref)}`
-                                : `openDoc=${encodeURIComponent(h.ref)}`;
-          const href = `${back}&${op}`;
-          // anything with a path drags into a terminal (drops the path)
-          const drag =
-            h.kind === "script"
-              ? scriptFilePath(h.ref)
-              : h.kind === "file" || h.kind === "component"
-                ? h.path ?? null
-                : null;
-          const cardCls =
-            "flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50";
-          const inner = (
-            <>
-              <div className="flex items-center gap-2.5">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">
-                  {h.title}
-                </span>
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide ${KIND_TAG[h.kind]}`}
-                >
-                  {h.kind}
-                </span>
-              </div>
-              {h.snippet && (
-                <p className="break-words text-xs text-zinc-400">
-                  {highlight(h.snippet, q)}
-                </p>
-              )}
-              {/* footer — identity · descriptor · time, all at the bottom */}
-              <div className="flex items-center gap-2 font-mono text-[10px] text-zinc-600">
-                <span className="min-w-0 truncate">{footRef(h)}</span>
-                {h.meta && <span className="shrink-0 text-zinc-500">{h.meta}</span>}
-                <span className="ml-auto shrink-0">{ago(h.at)}</span>
-              </div>
-            </>
-          );
-          return (
-            <li key={`${h.kind}:${h.ref}`}>
-              {drag ? (
-                // draggable into a terminal (drops the path) + click-to-open
-                <DraggableCard href={href} drag={drag} className={cardCls}>
-                  {inner}
-                </DraggableCard>
-              ) : (
-                <Link href={href} scroll={false} className={cardCls}>
-                  {inner}
-                </Link>
-              )}
-            </li>
-          );
-        })}
-        {hits.length === 0 && (
-          <li className="text-xs text-zinc-600">
-            {building
-              ? "building the search index (first time, ~10s)…"
-              : q
-                ? "no matches"
-                : "nothing here yet"}
-          </li>
-        )}
-      </ul>
-      <p className="text-xs text-zinc-600">
-        universal search — sessions · files · components · commits · todos ·
-        memory · notes &amp; more · click a result to read it here
+      <p className="font-mono text-[10px] text-zinc-600">
+        <span className="text-zinc-500">/</span> focus ·{" "}
+        <span className="text-zinc-500">↵</span> open ·{" "}
+        <span className="text-zinc-500">⎋</span> clear · click a result to read it here
         {building && <span className="text-amber-400"> · indexing…</span>}
       </p>
       <RefreshWhile active={building} />
