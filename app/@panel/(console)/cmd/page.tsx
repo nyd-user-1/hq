@@ -80,35 +80,53 @@ const COMMANDS: { cmd: string; desc: string }[] = [
   { cmd: "workflows", desc: "Browse running and completed workflows" },
 ];
 
-// OPT-IN session-event hooks. Pasting this into ~/.claude/settings.json wires
-// Claude Code to POST SessionStart/SessionEnd into HQ's durable event sink
-// (~/.claude/hq/events.ndjson via /api/events). HQ NEVER writes this for you —
-// it's yours to add and remove. SessionStart can't be a type:"http" hook, so it
-// routes through the command script; SessionEnd points straight at the sink.
-const EVENT_HOOKS_SNIPPET = `{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /Users/brendanstanton/code/hq/scripts/hooks/session-events.mjs"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "http",
-            "url": "http://localhost:3002/api/events"
-          }
-        ]
-      }
-    ]
-  }
-}`;
+// OPT-IN hook event stream. Pasting this into ~/.claude/settings.json wires Claude
+// Code to push its real-time STATE TRANSITIONS into HQ's durable event sink
+// (~/.claude/hq/events.ndjson via /api/events) — turn start/stop, stop-on-rate-limit,
+// subagent fan-out/in, task + teammate lifecycle, compaction boundaries, cwd changes.
+// HQ NEVER writes this for you. SessionStart can't be a type:"http" hook so it routes
+// through the command bridge; everything else POSTs straight to the sink. (We
+// deliberately DON'T wire PostToolUse — it fires per tool call, a firehose.)
+const HTTP_EVENTS = [
+  "SessionEnd",
+  "UserPromptSubmit",
+  "Stop",
+  "StopFailure",
+  "SubagentStart",
+  "SubagentStop",
+  "TaskCreated",
+  "TaskCompleted",
+  "TeammateIdle",
+  "PreCompact",
+  "PostCompact",
+  "CwdChanged",
+  "Notification",
+];
+const EVENT_HOOKS_SNIPPET = JSON.stringify(
+  {
+    hooks: {
+      SessionStart: [
+        {
+          hooks: [
+            {
+              type: "command",
+              command:
+                "node /Users/brendanstanton/code/hq/scripts/hooks/session-events.mjs",
+            },
+          ],
+        },
+      ],
+      ...Object.fromEntries(
+        HTTP_EVENTS.map((e) => [
+          e,
+          [{ hooks: [{ type: "http", url: "http://localhost:3002/api/events" }] }],
+        ])
+      ),
+    },
+  },
+  null,
+  2
+);
 
 export default function Cmd() {
   return (
@@ -116,14 +134,16 @@ export default function Cmd() {
       <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-3">
         <div className="flex items-baseline justify-between gap-2">
           <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-400">
-            Session-event hooks · opt-in
+            Hook event stream · opt-in
           </span>
           <span className="font-mono text-[10px] text-zinc-600">
             ~/.claude/settings.json
           </span>
         </div>
         <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
-          Records SessionStart/SessionEnd to HQ&apos;s durable event log via{" "}
+          Pushes Claude Code&apos;s real-time state transitions — turns, subagent
+          fan-out, task + teammate lifecycle, compaction, stop-on-rate-limit — into
+          HQ&apos;s durable event log via{" "}
           <code className="font-mono text-zinc-300">/api/events</code>. Add it
           yourself, remove it anytime — HQ never edits your settings.
         </p>
