@@ -36,12 +36,12 @@ const ORDER: SearchScope[] = [
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") ?? "").trim();
-  const limit = Math.min(24, Math.max(1, Number(searchParams.get("limit")) || 16));
+  const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit")) || 120));
   if (!q) return NextResponse.json({ hits: [], building: false });
 
   warmDocs(); // keep the docs mirror fresh in the palette path too
 
-  const PER = 2; // top hits pulled per corpus before the interleave + cap
+  const PER = 25; // hits pulled per corpus — deep enough to lazy-load through, balanced by the interleave
   let building = false;
   const buckets = ORDER.map((scope) => {
     const { hits, building: b } = search(q, scope, "new", PER);
