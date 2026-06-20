@@ -368,12 +368,12 @@ function RecentSessions({
         terminal
       </p>
       {sessions.map((s) => (
-        <div key={s.id} className="flex items-center gap-2">
+        <div key={s.id} className="flex flex-wrap items-center gap-2">
           <Link
             href={`/?session=${s.id}`}
             scroll={false}
             title="open this session in the terminal"
-            className="group/resume flex min-w-0 flex-1 items-baseline gap-2 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
+            className="group/resume flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
           >
             <span className="shrink-0 text-zinc-300 group-hover/resume:text-zinc-100">
               {s.project}

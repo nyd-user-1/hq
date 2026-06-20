@@ -14,6 +14,25 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // A predecessor must have been written to within this window before the
 // /clear — filters out long-dead same-project sessions.
 const ADJACENCY_MS = 60 * 60 * 1000;
+const TMPDIR = os.tmpdir();
+
+// A session that is NOT a real project lineage. HQ spawns headless `claude -p`
+// probes (entrypoint "sdk-cli", cwd a /tmp hq-usage-* dir), and the bare home dir
+// is shared by many unrelated sessions — tying a /clear to "the most recent other
+// home-cwd session" is pure collision, not continuation. Excluding both kills the
+// false "<id> was cleared — its work continues here" attribution on the kickoff
+// screen (the home stubs 20daae08/ebc15767 and the sdk-cli usage probes).
+function isStubMeta(m: { cwd: string | null; entrypoint: string | null }): boolean {
+  if (m.entrypoint === "sdk-cli") return true;
+  const cwd = m.cwd;
+  if (!cwd) return true;
+  if (cwd === os.homedir()) return true;
+  // macOS reports /private/var/... where os.tmpdir() is /var/... — strip the
+  // /private prefix on both sides before comparing so temp cwds always match.
+  const bare = (p: string) => p.replace(/^\/private/, "");
+  if (bare(cwd).startsWith(bare(TMPDIR)) || cwd.includes("/hq-usage-")) return true;
+  return false;
+}
 
 export type LineageNode = {
   id: string;
@@ -23,13 +42,18 @@ export type LineageNode = {
   lastActive: number; // file mtime
 };
 
-type Meta = LineageNode & { cwd: string | null; clearBorn: boolean };
+type Meta = LineageNode & {
+  cwd: string | null;
+  clearBorn: boolean;
+  entrypoint: string | null;
+};
 
 type Head = {
   cwd: string | null;
   firstTs: number;
   clearBorn: boolean;
   title: string;
+  entrypoint: string | null;
 };
 
 // A transcript's head never changes once written — cache per path for the
@@ -50,13 +74,14 @@ function readHead(file: string): Head {
     fs.closeSync(fd);
     text = buf.toString("utf8", 0, n);
   } catch {
-    return { cwd: null, firstTs: 0, clearBorn: false, title: "" };
+    return { cwd: null, firstTs: 0, clearBorn: false, title: "", entrypoint: null };
   }
   let cwd: string | null = null;
   let firstTs = 0;
   let decided = false;
   let clearBorn = false;
   let title = "";
+  let entrypoint: string | null = null;
   for (const line of text.split("\n")) {
     if (!line) continue;
     let e;
@@ -66,6 +91,7 @@ function readHead(file: string): Head {
       continue;
     }
     if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
+    if (!entrypoint && typeof e.entrypoint === "string") entrypoint = e.entrypoint;
     if (!firstTs && typeof e.timestamp === "string") {
       const t = Date.parse(e.timestamp);
       if (!Number.isNaN(t)) firstTs = t;
@@ -103,7 +129,7 @@ function readHead(file: string): Head {
     }
     if (cwd && firstTs && decided && title) break;
   }
-  const head = { cwd, firstTs, clearBorn, title };
+  const head = { cwd, firstTs, clearBorn, title, entrypoint };
   if (decided) headCache.set(file, head); // a brand-new file may still be mid-write
   return head;
 }
@@ -136,7 +162,7 @@ function scan(): Meta[] {
         continue;
       }
       if (now - mtime > WEEK_MS) continue;
-      const { cwd, firstTs, clearBorn, title } = readHead(full);
+      const { cwd, firstTs, clearBorn, title, entrypoint } = readHead(full);
       out.push({
         id: f.slice(0, -6),
         project:
@@ -146,6 +172,7 @@ function scan(): Meta[] {
         lastActive: mtime,
         cwd,
         clearBorn,
+        entrypoint,
       });
     }
   }
@@ -174,6 +201,9 @@ export function lineageFor(id: string): Lineage {
   // still being written near the /clear moment; latest-born such session wins.
   const parentOf = (m: Meta): Meta | null => {
     if (!m.clearBorn || !m.cwd || !m.bornAt) return null;
+    // A /clear in the bare home dir or an HQ sdk-cli probe has no real
+    // predecessor — only same-cwd collisions. Don't invent a lineage for it.
+    if (isStubMeta(m)) return null;
     let best: Meta | null = null;
     for (const c of all) {
       if (c.id === m.id || c.cwd !== m.cwd) continue;

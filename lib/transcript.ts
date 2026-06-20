@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { liveSessionStatus, isLiveFresh } from "./session-status";
 
 // Live view of the current Claude Code session: the newest transcript in
 // ~/.claude/projects/<cwd-slug>/ is the active conversation. Read its tail,
@@ -455,6 +456,15 @@ export type WorkingStatus = {
 export function workingStatus(id: string | null): WorkingStatus | null {
   const sid = id ?? latestSessionId();
   if (!sid) return null;
+  // AUTHORITATIVE cross-check: Claude Code's own ~/.claude/sessions/<pid>.json.
+  // When the live record is fresh and says "idle", the session is NOT working —
+  // trust it over any inference (kills the false "still churning" after a quiet
+  // finish). When it says "busy", we use statusUpdatedAt as the true turn-start
+  // below and skip the transcript-mtime staleness backstop.
+  const now = Date.now();
+  const live = liveSessionStatus(sid);
+  const liveFresh = isLiveFresh(live, now);
+  if (liveFresh && live!.status !== "busy") return null;
   let text: string;
   let partial = false;
   let mtime = 0;
@@ -549,7 +559,15 @@ export function workingStatus(id: string | null): WorkingStatus | null {
       break;
     }
   }
-  const startedAt = entries[startIdx >= 0 ? startIdx : entries.length - 1].ts;
+  // Turn-start clock. Prefer the authoritative statusUpdatedAt when Claude Code
+  // reports this session busy: it marks when the CLI ENTERED busy (= the current
+  // turn start), far more reliable than inferring from the tail, which can latch
+  // onto a stale prompt and show a 60-min elapsed for a turn that began seconds
+  // ago (the "Churning 61m" freeze). Fall back to the inferred prompt timestamp.
+  const startedAt =
+    liveFresh && live!.status === "busy" && live!.statusUpdatedAt
+      ? live!.statusUpdatedAt
+      : entries[startIdx >= 0 ? startIdx : entries.length - 1].ts;
 
   // Token total: one turn spans MANY API calls (each tool result starts a new
   // one, whose output_tokens counter resets). The counter accumulates across
@@ -596,8 +614,12 @@ export function workingStatus(id: string | null): WorkingStatus | null {
         : "writing";
   }
 
-  // Staleness backstop: a turn untouched for 5 min is almost certainly abandoned.
-  if (working && Date.now() - mtime > 300_000) working = false;
+  // Staleness backstop: a turn untouched for 5 min is almost certainly abandoned
+  // — UNLESS the authoritative live record says this session is still busy (a long
+  // thinking block leaves status busy while the transcript goes untouched for
+  // minutes; killing it there is exactly the false-idle we want to avoid).
+  if (working && now - mtime > 300_000 && !(liveFresh && live!.status === "busy"))
+    working = false;
   if (!working) return null;
 
   return { startedAt, outputTokens, phase, phases: seq };
