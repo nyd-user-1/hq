@@ -4,19 +4,30 @@ import { warmDocs } from "@/lib/docs";
 
 export const dynamic = "force-dynamic";
 
-// The ⌘K palette's search — corpus-BALANCED. `/api/search` returns the N newest
-// hits across all corpora merged, which lets recent transcripts/commits crowd the
-// quieter corpora (the Claude docs mirror especially) out of the top of the list
-// (repro: q="session" / q="search" return zero docs). The palette is now HQ's
-// primary search, so it must reliably reach EVERY corpus. We query each corpus for
-// its top few and interleave them — best-of-each-corpus first, Docs near the front
-// — so the first screenful spans corpora rather than burying them. Same
-// {hits, building} shape as /api/search, so the palette renders unchanged.
-// warmDocs() keeps the offline docs mirror fresh in this path (the /search page
-// warmed it before; the palette must too).
+// The ⌘K palette's search — corpus-balanced AND relevance-ranked. `/api/search`
+// returns the N NEWEST hits across all corpora merged, which (a) lets recent
+// transcripts/commits crowd the quieter corpora — the Claude docs mirror
+// especially — out of the top, and (b) ranks a typed query by recency, not by
+// match quality. The palette is HQ's primary search, so it must reach EVERY
+// corpus AND put the best match first.
+//
+// Approach — the local-search consensus (relevance per corpus, fused with
+// Reciprocal Rank Fusion), the recipe qmd / GitNexus / mem0 all converge on,
+// done in-process with zero new deps:
+//   1. Query each corpus for its top matches RANKED BY RELEVANCE (sort="rel"),
+//      not recency.
+//   2. Fuse across corpora with RRF — score = 1/(K + rank) — times a gentle
+//      corpus-priority weight (Docs near the front), so a corpus with a real
+//      match is never blanked by a busier one.
+//   3. Tier the merge: exact-title > title-prefix > contains/phrase > scattered,
+//      so an exact match is always #1 (qmd's exact-match preservation), with RRF
+//      breaking ties inside each tier.
+// Same {hits, building} shape as /api/search, so the palette renders unchanged.
+// warmDocs() keeps the offline docs mirror fresh in this path too.
 
-// Interleave priority — most-likely-wanted corpora first; Docs sits at #2 so the
-// offline best-practice oracle is always near the top of the results.
+// Corpus priority — most-likely-wanted first; Docs at #2 so the offline
+// best-practice oracle stays near the top. The index also drives the RRF corpus
+// weight (earlier = a slightly higher multiplier).
 const ORDER: SearchScope[] = [
   "transcripts",
   "docs",
@@ -33,6 +44,20 @@ const ORDER: SearchScope[] = [
   "sdk",
 ];
 
+const RRF_K = 60; // Reciprocal Rank Fusion constant (qmd uses k=60)
+const PER = 25; // hits pulled per corpus — deep enough to lazy-load through
+
+// Relevance tier from how the query matches the title (lower = better). Exact
+// title and prefix are what a user almost always means; a contiguous-phrase hit
+// (already narrowed per-corpus by lib/search) outranks scattered tokens.
+function tier(h: SearchHit, ql: string): number {
+  const title = h.title.toLowerCase();
+  if (title === ql) return 0;
+  if (title.startsWith(ql)) return 1;
+  if (title.includes(ql) || h.phrase) return 2;
+  return 3;
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") ?? "").trim();
@@ -40,23 +65,36 @@ export async function GET(req: Request) {
   if (!q) return NextResponse.json({ hits: [], building: false });
 
   warmDocs(); // keep the docs mirror fresh in the palette path too
+  const ql = q.toLowerCase();
 
-  const PER = 25; // hits pulled per corpus — deep enough to lazy-load through, balanced by the interleave
   let building = false;
-  const buckets = ORDER.map((scope) => {
-    const { hits, building: b } = search(q, scope, "new", PER);
+  type Ranked = { hit: SearchHit; tier: number; score: number };
+  const ranked: Ranked[] = [];
+
+  ORDER.forEach((scope, ci) => {
+    const { hits, building: b } = search(q, scope, "rel", PER);
     if (b) building = true;
-    return hits;
+    // Gentle corpus-priority weight: top corpus ~1.46 → last ~1.0. It nudges,
+    // never dominates — an exact-title match in a low-priority corpus still wins
+    // via its tier.
+    const weight = 1 + ((ORDER.length - ci - 1) / ORDER.length) * 0.5;
+    hits.forEach((hit, rank) => {
+      ranked.push({ hit, tier: tier(hit, ql), score: (1 / (RRF_K + rank)) * weight });
+    });
   });
 
-  // Round-robin: one (best) hit from each matching corpus first, then seconds.
-  // Guarantees a corpus with a real match is never blanked by a busier one.
+  // Tier first (exact > prefix > contains/phrase > scattered), RRF score within
+  // the tier. Dedupe by kind+ref, keeping the highest-ranked instance.
+  ranked.sort((a, b) => a.tier - b.tier || b.score - a.score);
+  const seen = new Set<string>();
   const hits: SearchHit[] = [];
-  for (let pass = 0; pass < PER; pass++) {
-    for (const bucket of buckets) {
-      if (bucket[pass]) hits.push(bucket[pass]);
-    }
+  for (const r of ranked) {
+    const key = `${r.hit.kind}:${r.hit.ref}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hits.push(r.hit);
+    if (hits.length >= limit) break;
   }
 
-  return NextResponse.json({ hits: hits.slice(0, limit), building });
+  return NextResponse.json({ hits, building });
 }

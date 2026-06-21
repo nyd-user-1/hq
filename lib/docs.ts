@@ -117,7 +117,19 @@ export function warmDocs(): void {
 
 // Per-page cleaned text for the Search corpus (content is already MDX-stripped
 // by the fetcher, so this is a straight read).
+//
+// This walks DOCS_DIR and readFileSync's EVERY page (~149 files) on EVERY call,
+// and the search path calls it once per query — so a burst of ⌘K keystrokes was
+// re-reading the whole mirror each time (the one uncached hot path left; commits
+// are already memoized in lib/search). Memoize briefly, same pattern as
+// shipped.ts: the mirror only changes when the out-of-process fetcher refreshes
+// it (~daily), so a short TTL collapses a typing burst into a single scan while
+// a refresh still lands within one TTL window.
+let docsCache: { at: number; pages: { id: string; title: string; text: string }[] } | null = null;
+const DOCS_TTL_MS = 5000;
+
 export function docsText(): { id: string; title: string; text: string }[] {
+  if (docsCache && Date.now() - docsCache.at < DOCS_TTL_MS) return docsCache.pages;
   const files: string[] = [];
   walk(DOCS_DIR, files);
   const out: { id: string; title: string; text: string }[] = [];
@@ -130,5 +142,6 @@ export function docsText(): { id: string; title: string; text: string }[] {
       // skip
     }
   }
+  docsCache = { at: Date.now(), pages: out };
   return out;
 }
