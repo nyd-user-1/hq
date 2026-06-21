@@ -96,9 +96,12 @@ export function getProjects(): Project[] {
 /** Read a note by vault-relative path, frontmatter stripped. Null if missing. */
 export function getNote(relPath: string): string | null {
   try {
-    return stripFrontmatter(
-      fs.readFileSync(path.join(VAULT_ROOT, relPath), "utf8")
-    );
+    // Guard the join so a crafted relPath (`../../etc/passwd`) can't escape the
+    // vault. Currently has no callers, but it's the worst-shaped sink in the repo
+    // — guard it now so it can't be wired up unsafely later (CODE-REVIEW SEC-8).
+    const full = path.resolve(VAULT_ROOT, relPath);
+    if (full !== VAULT_ROOT && !full.startsWith(VAULT_ROOT + path.sep)) return null;
+    return stripFrontmatter(fs.readFileSync(full, "utf8"));
   } catch {
     return null;
   }

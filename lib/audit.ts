@@ -52,8 +52,13 @@ function fileTokens(file: string, label: string): AuditFile | null {
 export function readAuditDoc(p: string): string | null {
   try {
     const resolved = path.resolve(p);
-    if (resolved !== HOME && !resolved.startsWith(HOME + path.sep)) return null;
     if (!resolved.endsWith(".md")) return null;
+    // Only the docs the audit actually surfaces: instruction/memory files under
+    // ~/.claude, and project CLAUDE.md/AGENTS.md under the code root — NOT all of
+    // $HOME (which would expose any private .md off disk) (CODE-REVIEW SEC-6).
+    const inRoot = (root: string) =>
+      resolved === root || resolved.startsWith(root + path.sep);
+    if (!inRoot(path.join(HOME, ".claude")) && !inRoot(CODE_DIR)) return null;
     return fs.readFileSync(resolved, "utf8");
   } catch {
     return null;

@@ -120,18 +120,31 @@ const time = (ts: unknown) =>
 
 export type Firehose = { id: string | null; project: string; items: FireItem[]; full: boolean };
 
+const fireCache = new Map<string, Firehose>();
+
 export function firehoseFor(id: string | null): Firehose {
   const sid = id && id !== "new" ? id : latestSessionId();
   if (!sid) return { id: null, project: "", items: [], full: false };
 
-  let text: string;
-  let partial = false;
-  let mtime = 0;
   let file = "";
+  let mtime = 0;
   try {
     file = sessionFilePath(sid);
+    mtime = fs.statSync(file).mtimeMs;
+  } catch {
+    return { id: sid, project: "", items: [], full: false };
+  }
+  // Append-only file → (path, mtime) identifies the content. Skip the re-read +
+  // re-parse of the 2MB tail when nothing changed since the last firehose tick
+  // (CODE-REVIEW PERF-7).
+  const cacheKey = `${file}:${mtime}`;
+  const cached = fireCache.get(cacheKey);
+  if (cached) return cached;
+
+  let text: string;
+  let partial = false;
+  try {
     const st = fs.statSync(file);
-    mtime = st.mtimeMs;
     const start = Math.max(0, st.size - TAIL_BYTES);
     partial = start > 0;
     const fd = fs.openSync(file, "r");
@@ -253,5 +266,13 @@ export function firehoseFor(id: string | null): Firehose {
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const full = items.length > ITEM_CAP;
-  return { id: sid, project, items: full ? items.slice(-ITEM_CAP) : items, full: partial || full };
+  const result: Firehose = {
+    id: sid,
+    project,
+    items: full ? items.slice(-ITEM_CAP) : items,
+    full: partial || full,
+  };
+  fireCache.set(cacheKey, result);
+  if (fireCache.size > 48) fireCache.delete(fireCache.keys().next().value as string); // bound
+  return result;
 }

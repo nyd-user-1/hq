@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import { getFiles } from "./files";
+import { writeFileAtomicSync } from "./atomic";
 
 // The HQ component registry — hand-curated (approval is a human judgment, not
 // something you can derive from disk). APPROVED = reviewed, named per the
@@ -112,8 +113,7 @@ function readOrder(): string[] {
 }
 
 export function saveComponentsOrder(order: string[]): void {
-  fs.mkdirSync(path.dirname(ORDER_FILE), { recursive: true });
-  fs.writeFileSync(ORDER_FILE, JSON.stringify({ order }, null, 2));
+  writeFileAtomicSync(ORDER_FILE, JSON.stringify({ order }, null, 2)); // atomic — CODE-REVIEW BUG-1
 }
 
 // Auto-discovery — every app/ui/*.tsx that ISN'T in the hand-curated registry

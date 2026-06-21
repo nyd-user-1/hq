@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { randomBytes } from "node:crypto";
+import { writeFileAtomicSync } from "./atomic";
 
 // HQ-native To Do store — the disk IS the database, same philosophy as the rest
 // of HQ. Lives under ~/.claude (which exists for every Claude Code user), so To
@@ -57,8 +58,9 @@ function read(): Store {
 }
 
 function write(store: Store): void {
-  fs.mkdirSync(STORE_DIR, { recursive: true });
-  fs.writeFileSync(STORE, JSON.stringify(store, null, 2));
+  // Atomic (temp→rename) so an interrupted write can never truncate the store
+  // and wipe every to-do — see lib/atomic.ts (CODE-REVIEW BUG-1).
+  writeFileAtomicSync(STORE, JSON.stringify(store, null, 2));
 }
 
 function newId(): string {

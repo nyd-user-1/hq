@@ -25,6 +25,7 @@ export type Totals = {
   cacheRead: number;
   output: number;
   messages: number;
+  model?: string; // dominant model for the file — priced at its REAL rate (BUG-2)
 };
 
 const zero = (): Totals => ({
@@ -165,7 +166,14 @@ function transcriptFiles(maxAgeMs: number): string[] {
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
+let lastRefreshAt = 0;
 function refreshCache(): void {
+  // Idempotent-per-tick: getUsageStates() calls this then getForecast() and
+  // getSpend(), each of which refreshes again — three full dir-walks per /api/usage
+  // hit. Skip a re-walk within 250ms so the nested calls collapse to one (PERF-5).
+  const nowMs = Date.now();
+  if (nowMs - lastRefreshAt < 250) return;
+  lastRefreshAt = nowMs;
   for (const file of transcriptFiles(WEEK_MS)) {
     let cache = fileCache.get(file);
     if (!cache) {
@@ -347,13 +355,27 @@ export function perFileTotals(): Map<string, Totals> {
   const m = new Map<string, Totals>();
   for (const [file, { recs }] of fileCache) {
     const sum = zero();
+    // Tally weighted work per model so per-session cost is priced at the file's
+    // DOMINANT model's real rate, not defaulted to Opus for every session — which
+    // overstated Sonnet ~5× / Haiku ~15× and disagreed with getSpend (BUG-2).
+    const byModel = new Map<string, number>();
     for (const r of recs.values()) {
       sum.input += r.input;
       sum.cacheCreate += r.cw;
       sum.cacheRead += r.cr;
       sum.output += r.out;
       sum.messages += 1;
+      if (r.model)
+        byModel.set(r.model, (byModel.get(r.model) ?? 0) + shape(r.input, r.cw, r.cr, r.out));
     }
+    let top: string | undefined;
+    let topW = -1;
+    for (const [model, w] of byModel)
+      if (w > topW) {
+        topW = w;
+        top = model;
+      }
+    sum.model = top;
     m.set(file, sum);
   }
   return m;

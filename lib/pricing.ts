@@ -101,6 +101,9 @@ export function contextCarryCost(
 export function fmtUSD(n: number): string {
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
   if (n >= 0.01) return `$${n.toFixed(2)}`;
-  if (n > 0) return `$${n.toFixed(3)}`;
+  if (n >= 0.001) return `$${n.toFixed(3)}`;
+  // A real micro-cost below a tenth of a cent: show "<$0.001", not "$0.000",
+  // which reads as free on a money meter (CODE-REVIEW BUG-6).
+  if (n > 0) return "<$0.001";
   return "$0";
 }

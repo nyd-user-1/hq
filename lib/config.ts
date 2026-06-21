@@ -60,3 +60,21 @@ export function ensureDir(p: string): string {
   fs.mkdirSync(p, { recursive: true });
   return p;
 }
+
+// Guard a driven-session launch dir. A driven `claude` inherits the cwd's trust
+// — its .git/hooks, CLAUDE.md, .claude/settings.json all execute/load — so an
+// attacker-chosen cwd (/etc, /, another user's tree, a planted repo) is a
+// code-exec vector (CODE-REVIEW SEC-4). Resolves symlinks/.. via realpath and
+// requires the result to be a real directory strictly INSIDE the user's home
+// (never the bare home). Returns the resolved path, or null if disallowed.
+export function safeWorkspace(cwd: string): string | null {
+  try {
+    const real = fs.realpathSync(cwd);
+    const home = os.homedir();
+    if (!fs.statSync(real).isDirectory()) return null;
+    if (real === home || !real.startsWith(home + path.sep)) return null;
+    return real;
+  } catch {
+    return null;
+  }
+}

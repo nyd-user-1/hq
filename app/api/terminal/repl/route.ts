@@ -7,6 +7,7 @@ import {
   sanitizeProjectName,
   expandHome,
   ensureDir,
+  safeWorkspace,
 } from "@/lib/config";
 import {
   ensureRepl,
@@ -69,6 +70,11 @@ export async function POST(req: Request) {
     } catch (e) {
       return new NextResponse(e instanceof Error ? e.message : String(e), { status: 500 });
     }
+    // Final gate: whatever branch produced `cwd`, it must resolve inside the
+    // user's home tree — block /etc, other users, planted repos (CODE-REVIEW SEC-4).
+    const safeCwd = safeWorkspace(cwd);
+    if (!safeCwd) return new NextResponse(`folder not allowed: ${cwd}`, { status: 403 });
+    cwd = safeCwd;
     try {
       const sessionId = startNewSession(cwd, { model: body.model });
       return NextResponse.json({ ok: true, sessionId, cwd });

@@ -7,7 +7,13 @@ function fmt(n: number): string {
   return `${Math.round(n)}`;
 }
 
-const SEGMENTS: { key: keyof Totals; label: string; color: string }[] = [
+// The composition bars are the four token buckets only — NOT `messages`/`model`
+// (keyof Totals also covers those now that Totals carries a dominant model).
+const SEGMENTS: {
+  key: "input" | "cacheCreate" | "cacheRead" | "output";
+  label: string;
+  color: string;
+}[] = [
   { key: "cacheRead", label: "cache read", color: "bg-zinc-700" },
   { key: "cacheCreate", label: "cache write", color: "bg-zinc-500" },
   { key: "input", label: "fresh input", color: "bg-zinc-300" },

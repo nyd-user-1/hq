@@ -58,7 +58,7 @@ HQ has a real component library. Naming taxonomy: **`[Category][Descriptor][Elem
 
 ## Features
 
-- **Search** (`/search`) — one surface over THREE corpora: **transcripts** (persisted ~16MB index at `~/.claude/hq-archive-index.json`, built by `scripts/build-search-index.mjs`), **memory** notes, and **note blocks**. Scope chips (`flex-wrap`) above the input; click opens an in-panel reader; sort toggle.
+- **Search** (`/search`) — one surface over THREE corpora: **transcripts** (a prebuilt **SQLite FTS5** index — `lib/sqlite.ts`, built by `scripts/build-search-index.mjs`; sessions newer than the snapshot are live-scanned and merged on top, see `lib/archive.ts`), **memory** notes, and **note blocks**. Scope chips (`flex-wrap`) above the input; click opens an in-panel reader; sort toggle. (Was a ~16MB JSON index at `~/.claude/hq-archive-index.json` through v2 — now dead; that orphan file has been removed.)
 - **Ledger** (Calls panel) — usage in **dollars**.
 - **Efficiency Mode** — terminal toggle (default OFF). Measurement only; CANNOT act on a live session.
 - **Shipped** (`/shipped`, now in the **Activity** panel) — cross-project commit feed; every `~/code` repo. Click a card → the commit diff in-panel (the card + back link carry the pins). Diff: lines WRAP (`whitespace-pre-wrap` + hanging indent), Claude-dark `+`/`-` line tints, a `border-zinc-800 pt-3` header rule. Chat-reply shas auto-link via `CommitLink`.
