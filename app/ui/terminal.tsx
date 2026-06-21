@@ -479,7 +479,8 @@ export default function Terminal({
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   const [interrupted, setInterrupted] = useState(false); // last turn ended on a hard interrupt
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
-  const [projects, setProjects] = useState<string[]>([]); // ~/code dirs for the "+" launcher
+  const [projects, setProjects] = useState<{ name: string; path: string }[]>([]); // launcher chips: history-derived {name, path}
+  const [newProjectName, setNewProjectName] = useState(""); // "+ new project" input in the staging view
   const [lineage, setLineage] = useState<Lineage>(null); // this session's /clear chain
   const [predecessorCtx, setPredecessorCtx] = useState(0); // continued session's ctx size (fresh pane)
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
@@ -1165,8 +1166,8 @@ export default function Terminal({
   async function doSend() {
     if (staged) {
       // New-session view: Enter / the send arrow STARTS a session. With no project
-      // picked we default to the home dir (the bare-`claude` equivalent); a project
-      // chip starts it in that project instead. The typed draft becomes turn one.
+      // picked we default to the ~/hq workspace (never the bare home dir); a project
+      // chip or "+ new project" starts it there instead. The typed draft is turn one.
       const first = draft.trim();
       if (!first && attachments.length === 0) return;
       await birthAndDrive(undefined, first);
@@ -1262,15 +1263,24 @@ export default function Terminal({
   // New-session-from-HQ: birth a fresh `claude` in the project dir via the REPL
   // backend, then pin + drive it — no TUI, no copy-paste. The route returns the
   // real session id once the process inits; we navigate the pane to it (drive on).
-  async function birthAndDrive(project?: string, firstPrompt?: string) {
+  async function birthAndDrive(
+    target?: { cwd?: string; newProject?: string; label?: string },
+    firstPrompt?: string
+  ) {
     if (starting) return;
-    setStarting(project ?? "here");
+    const label = target?.label ?? target?.newProject ?? "here";
+    setStarting(label);
     setError(null);
     try {
       const res = await fetch("/api/terminal/repl", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "new", project, model: chosenModel ?? undefined }),
+        body: JSON.stringify({
+          action: "new",
+          cwd: target?.cwd,
+          newProject: target?.newProject,
+          model: chosenModel ?? undefined,
+        }),
       });
       if (!res.ok) throw new Error((await res.text()) || `error ${res.status}`);
       const data = await res.json();
@@ -1297,7 +1307,7 @@ export default function Terminal({
         throw new Error("no session id returned");
       }
     } catch (e) {
-      setError(`couldn't start a session${project ? ` in ${project}` : ""}: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`couldn't start a session${label !== "here" ? ` in ${label}` : ""}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setStarting(null);
     }
@@ -1801,31 +1811,65 @@ export default function Terminal({
               <p className="text-zinc-400">new session — nothing exists yet</p>
               <p className="text-zinc-600">
                 pick a project and HQ <span className="text-emerald-400">drives a fresh session right here</span> —
-                no terminal, no copy-paste. It spawns{" "}
-                <span className="text-zinc-400">{"claude"}</span> in{" "}
-                <span className="text-zinc-400">{"~/code/<name>"}</span> and goes live.
+                no terminal, no copy-paste. With nothing selected it starts in{" "}
+                <span className="text-zinc-400">{"~/hq"}</span>.
               </p>
             </div>
             {projects.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {projects.map((p) => (
                   <button
-                    key={p}
+                    key={p.path}
                     type="button"
                     disabled={!!starting}
-                    onClick={() => birthAndDrive(p, draft)}
-                    title={`start a session in ~/code/${p} and drive it from HQ`}
+                    onClick={() => birthAndDrive({ cwd: p.path, label: p.name }, draft)}
+                    title={`start a session in ${p.path} and drive it from HQ`}
                     className={`rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors disabled:opacity-50 ${
-                      starting === p
+                      starting === p.name
                         ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
                         : "border-zinc-700 text-zinc-300 hover:border-emerald-500/60 hover:text-emerald-300"
                     }`}
                   >
-                    {starting === p ? `starting ${p}…` : p}
+                    {starting === p.name ? `starting ${p.name}…` : p.name}
                   </button>
                 ))}
               </div>
             )}
+            {/* + New project — create a folder (in your projects root, default
+                ~/hq) and birth the session there. No ~/code assumption: works for
+                everyone, first run. */}
+            <div className="flex items-center gap-1.5">
+              <input
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  const name = newProjectName.trim();
+                  if (e.key === "Enter" && name && !starting) {
+                    e.preventDefault();
+                    setNewProjectName("");
+                    birthAndDrive({ newProject: name, label: name }, draft);
+                  }
+                }}
+                disabled={!!starting}
+                placeholder="+ new project"
+                title="create a folder in your projects root and start a session in it"
+                className="w-44 rounded-md border border-dashed border-zinc-700 bg-transparent px-2 py-0.5 font-mono text-[11px] text-zinc-300 placeholder:text-zinc-600 focus:border-emerald-500/60 focus:outline-none disabled:opacity-50"
+              />
+              {newProjectName.trim() && (
+                <button
+                  type="button"
+                  disabled={!!starting}
+                  onClick={() => {
+                    const name = newProjectName.trim();
+                    setNewProjectName("");
+                    birthAndDrive({ newProject: name, label: name }, draft);
+                  }}
+                  className="rounded-md border border-emerald-500/60 px-2 py-0.5 font-mono text-[11px] text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  create &amp; start
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <CopyChip label="copy · cd && claude" text="claude" />
               <span className="text-[11px] text-zinc-600">

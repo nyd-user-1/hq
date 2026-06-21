@@ -4,7 +4,7 @@ import {
   workingStatus,
   lastTurnInterrupted,
 } from "@/lib/transcript";
-import { getSessions, getRecentSessions, listCodeProjects } from "@/lib/sessions";
+import { getSessions, getRecentSessions, listLaunchProjects } from "@/lib/sessions";
 import { latestHandoff } from "@/lib/vault";
 import { lineageFor, sessionBornAt } from "@/lib/lineage";
 import { getSessionsMeta } from "@/lib/sessions-meta";
@@ -84,7 +84,7 @@ export async function GET(req: Request) {
     lineage,
     predecessorCtx,
     // The "+" staging view offers these as `cd ~/code/<p> && claude` chips.
-    projects: staged ? listCodeProjects() : undefined,
+    projects: staged ? listLaunchProjects() : undefined,
     bornAt: resolved ? sessionBornAt(resolved) : 0,
     // HQ rename (sessions-meta sidecar) → the terminal header shows it instead
     // of the abbreviated id, matching the Recents sidebar's display.

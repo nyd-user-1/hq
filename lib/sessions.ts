@@ -4,6 +4,7 @@ import os from "node:os";
 import { getUsage, perFileTotals, weighted } from "./usage";
 import { baseCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
+import { projectsRoot } from "./config";
 
 // Fleet view: every Claude Code session on this machine, from the same
 // transcripts the token meter parses. Burn comes from the meter's file
@@ -91,6 +92,7 @@ function tailInfo(file: string): {
 export type RecentSession = {
   id: string;
   project: string;
+  cwd: string | null; // the launch dir (absolute) — null when not recorded
   title: string;
   lastActive: number;
   active: boolean;
@@ -148,6 +150,7 @@ export function sessionMeta(
   return {
     id,
     project,
+    cwd,
     title: title || `${project} session`,
     lastActive: mtime,
     active: Date.now() - mtime < ACTIVE_MS,
@@ -319,6 +322,55 @@ export function listCodeProjects(): string[] {
   } catch {
     return [];
   }
+}
+
+// The launcher's project chips — folders you can start a NEW session in. Derived
+// from where you ACTUALLY work (existing session cwds, existence-checked so moved/
+// deleted folders drop out), unioned with whatever sits in your projectsRoot. This
+// is the offline-first answer to "where are this user's projects?": read it from
+// their own history instead of guessing a hardcoded path. Returns {name, path};
+// the path is what the new-session route births into.
+export function listLaunchProjects(): { name: string; path: string }[] {
+  const home = os.homedir();
+  const seen = new Map<string, { name: string; path: string; recency: number }>();
+  // realpathSync canonicalizes case (a case-insensitive FS makes ~/Code and ~/code
+  // the SAME folder) AND throws on a moved/deleted path — so it's both the dedup
+  // key and the existence check in one (the ~/code-move lesson).
+  const canon = (p: string): string | null => {
+    try {
+      // .native uses the OS realpath, which returns the TRUE on-disk casing on a
+      // case-insensitive FS (the JS realpathSync preserves input case, so ~/code
+      // and ~/Code would NOT dedupe). Falls back if .native is unavailable.
+      return (fs.realpathSync.native ?? fs.realpathSync)(p);
+    } catch {
+      return null;
+    }
+  };
+  // 1) folders from session history — the real, used set
+  for (const s of getRecentSessions(1000)) {
+    if (!s.cwd) continue;
+    const c = canon(s.cwd);
+    if (!c || c === home) continue;
+    const hit = seen.get(c);
+    if (hit) {
+      hit.recency = Math.max(hit.recency, s.lastActive);
+      continue;
+    }
+    seen.set(c, { name: path.basename(c), path: c, recency: s.lastActive });
+  }
+  // 2) folders sitting in the projects root — usable even before any session
+  try {
+    for (const d of fs.readdirSync(projectsRoot(), { withFileTypes: true })) {
+      if (!d.isDirectory() || d.name.startsWith(".")) continue;
+      const p = canon(path.join(projectsRoot(), d.name));
+      if (p && !seen.has(p)) seen.set(p, { name: path.basename(p), path: p, recency: 0 });
+    }
+  } catch {
+    /* root may not exist yet (created on first new-project) */
+  }
+  return [...seen.values()]
+    .sort((a, b) => b.recency - a.recency || a.name.localeCompare(b.name))
+    .map(({ name, path }) => ({ name, path }));
 }
 
 export function getSessions(limit = 12): SessionInfo[] {

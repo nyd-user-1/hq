@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { existsSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import {
+  projectsRoot,
+  defaultWorkspace,
+  sanitizeProjectName,
+  expandHome,
+  ensureDir,
+} from "@/lib/config";
 import {
   ensureRepl,
   startNewSession,
@@ -37,15 +43,35 @@ export async function POST(req: Request) {
   // "new" — birth a fresh session in a project dir and DRIVE it (no TUI). Returns
   // the real session id once the process inits; the UI pins + drives by it.
   if (action === "new") {
-    const project: string | undefined = body.project;
-    // No project + no cwd → start in the home dir (the bare-`claude` new session).
-    const cwd: string = body.cwd ?? (project ? join(homedir(), "code", project) : homedir());
-    if (!existsSync(cwd) || !statSync(cwd).isDirectory()) {
-      return new NextResponse(`no such project dir: ${cwd}`, { status: 400 });
+    // Resolve the launch dir. INVARIANT: never the bare home dir — Claude Code
+    // fixes cwd at launch and can't re-anchor, so this is the one decision point.
+    //   body.cwd        → an existing folder (a launcher chip), existence-checked
+    //   body.newProject → create <projectsRoot>/<name> and start there
+    //   body.project    → legacy bare name under projectsRoot (existence-checked)
+    //   (nothing)       → the default workspace (~/hq), created if missing
+    let cwd: string;
+    try {
+      if (typeof body.cwd === "string" && body.cwd.trim()) {
+        cwd = expandHome(body.cwd.trim());
+        if (!existsSync(cwd) || !statSync(cwd).isDirectory())
+          return new NextResponse(`no such folder: ${cwd}`, { status: 400 });
+      } else if (typeof body.newProject === "string" && body.newProject.trim()) {
+        const name = sanitizeProjectName(body.newProject);
+        if (!name) return new NextResponse("invalid project name", { status: 400 });
+        cwd = ensureDir(join(projectsRoot(), name));
+      } else if (typeof body.project === "string" && body.project.trim()) {
+        cwd = join(projectsRoot(), body.project.trim());
+        if (!existsSync(cwd) || !statSync(cwd).isDirectory())
+          return new NextResponse(`no such project: ${cwd}`, { status: 400 });
+      } else {
+        cwd = ensureDir(defaultWorkspace()); // ~/hq — never the bare home dir
+      }
+    } catch (e) {
+      return new NextResponse(e instanceof Error ? e.message : String(e), { status: 500 });
     }
     try {
       const sessionId = startNewSession(cwd, { model: body.model });
-      return NextResponse.json({ ok: true, sessionId });
+      return NextResponse.json({ ok: true, sessionId, cwd });
     } catch (e) {
       return new NextResponse(e instanceof Error ? e.message : String(e), { status: 500 });
     }
