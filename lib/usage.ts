@@ -213,6 +213,11 @@ const BLOCK_MS = 5 * 60 * 60 * 1000;
 
 // Session limits run in 5h blocks anchored so one resets at 5am local
 // (machine TZ = America/New_York, same clock /usage displays).
+// NOTE (CODE-REVIEW BUG-5): blocks step in fixed real-ms from a wall-clock 5am
+// anchor, so on the two DST-transition days a boundary can drift up to an hour
+// from wall-clock. This is a DELIBERATE approximation — Claude's real 5h windows
+// are real-elapsed-time anyway, and a DST-aware rebuild risks mislabeling the
+// common case worse than the ±1h twice-a-year drift it would fix. Left as-is.
 export function sessionBlock(): { start: number; reset: number } {
   const anchor = new Date();
   anchor.setHours(5, 0, 0, 0);

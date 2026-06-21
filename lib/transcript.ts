@@ -288,6 +288,11 @@ type Timeline = {
   more: boolean; // older items exist beyond what's returned (the tail was capped)
 };
 const fullTimelineCache = new Map<string, { mtime: number; result: Timeline }>();
+// PERF-2: the polled (non-full) tail path was NOT cached — it re-read + re-parsed
+// the 8MB tail on every 1s poll. Keyed by `${file}:${count}` → the tail content
+// (append-only ⇒ size identifies it). workingStatus (the live "now") is computed
+// separately by the route, so this content-only result is safe to cache.
+const tailTimelineCache = new Map<string, { size: number; result: Timeline }>();
 
 export function timelineFor(
   id: string | null,
@@ -302,13 +307,19 @@ export function timelineFor(
   let text: string;
   let partial = false;
   let lastWrite = 0;
+  const file = sessionFilePath(sid);
+  let size = 0;
+  const tkey = `${file}:${count}`;
   try {
-    const file = sessionFilePath(sid);
     const st = fs.statSync(file);
     lastWrite = st.mtimeMs;
+    size = st.size;
     if (full) {
       const cached = fullTimelineCache.get(file);
       if (cached && cached.mtime === st.mtimeMs) return cached.result;
+    } else {
+      const cached = tailTimelineCache.get(tkey); // PERF-2: skip re-parse when unchanged
+      if (cached && cached.size === st.size) return cached.result;
     }
     const startAt = full ? 0 : Math.max(0, st.size - TAIL_BYTES);
     partial = startAt > 0;
@@ -458,7 +469,8 @@ export function timelineFor(
     more: !full && (partial || items.length > count),
   };
   if (full && lastWrite)
-    fullTimelineCache.set(sessionFilePath(sid), { mtime: lastWrite, result });
+    fullTimelineCache.set(file, { mtime: lastWrite, result });
+  else if (!full) tailTimelineCache.set(tkey, { size, result }); // PERF-2
   return result;
 }
 
