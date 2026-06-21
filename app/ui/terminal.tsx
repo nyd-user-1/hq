@@ -74,7 +74,11 @@ const TERMINAL_RUNTIME_CSS = `
 ::highlight(hq-search-session),
 ::highlight(hq-search-pair) { background-color: rgba(250, 204, 21, 0.28); color: #fde68a; }
 ::highlight(hq-search-active-session),
-::highlight(hq-search-active-pair) { background-color: #facc15; color: #18181b; }`;
+::highlight(hq-search-active-pair) { background-color: #facc15; color: #18181b; }
+/* Search: any tool-step accordion CONTAINING a match takes the send box's yellow
+   search border (border-yellow-300/70) — color only, 1px stays — so the user sees
+   which collapsed section holds the keyword. */
+details[data-hq-match] { border-color: rgba(253, 224, 71, 0.7) !important; }`;
 function ensureTerminalRuntimeStyle() {
   if (typeof document === "undefined") return;
   const ID = "hq-terminal-runtime-style";
@@ -1121,6 +1125,10 @@ export default function Terminal({
   useEffect(() => {
     const api = highlightApi();
     const container = scrollRef.current;
+    // Clear any prior accordion match-borders before re-marking (or on close).
+    container
+      ?.querySelectorAll("details[data-hq-match]")
+      .forEach((d) => d.removeAttribute("data-hq-match"));
     if (!api || !container || !searchActive) {
       api?.reg.delete(hlName);
       api?.reg.delete(hlActiveName);
@@ -1151,6 +1159,19 @@ export default function Terminal({
       }
     }
     searchMatchesRef.current = matches;
+    // Border every tool-step accordion that contains a match — even collapsed
+    // ones — so the user sees which section holds the keyword.
+    const markedSeen = new Set<Element>();
+    for (const m of matches) {
+      let el: Element | null = m.node.parentElement;
+      while (el && el !== container) {
+        if (el.tagName === "DETAILS" && !markedSeen.has(el)) {
+          markedSeen.add(el);
+          el.setAttribute("data-hq-match", "");
+        }
+        el = el.parentElement;
+      }
+    }
     registerVisibleHighlights();
     setSearchMatchCount(matches.length);
     setSearchActiveIndex((i) =>
@@ -2607,7 +2628,7 @@ export default function Terminal({
         {/* Search-mode indicator — peeks above the send box like the launch
             banner (same -mb-3 overlap), signaling the box is in search mode. */}
         {searchMode && (
-          <div className="-mb-3 flex items-center gap-2 rounded-t-lg border border-b-0 border-zinc-800 bg-zinc-900/60 px-3 pb-4 pt-1.5 font-mono text-[11px] text-zinc-400">
+          <div className="-mb-3 flex items-center gap-2 rounded-t-lg border border-b-0 border-zinc-800 bg-zinc-900/60 px-3 pb-5 pt-1.5 font-mono text-[11px] text-zinc-400">
             <svg
               width="12"
               height="12"
