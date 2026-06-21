@@ -2239,7 +2239,7 @@ export default function Terminal({
                   ? "write your first message — ↵ starts it (or pick a project above)"
                   : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
-            className="scrollbar-slim max-h-[176px] min-h-[100px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+            className="scrollbar-slim max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
           <input
             ref={fileInputRef}

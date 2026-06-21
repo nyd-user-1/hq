@@ -65,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                           backing: .buffered, defer: false)
         window.title = "HQ"
         window.isReleasedWhenClosed = false   // closing hides; HQ stays in the menu bar
-        window.contentMinSize = NSSize(width: 940, height: 620)
+        window.contentMinSize = NSSize(width: 700, height: 560)
         window.setFrameAutosaveName("HQWindow")   // new key so the tuned default applies fresh
         window.center()
         window.delegate = self
