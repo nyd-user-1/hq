@@ -2604,6 +2604,27 @@ export default function Terminal({
             </button>
           </div>
         )}
+        {/* Search-mode indicator — peeks above the send box like the launch
+            banner (same -mb-3 overlap), signaling the box is in search mode. */}
+        {searchMode && (
+          <div className="-mb-3 flex items-center gap-2 rounded-t-lg border border-b-0 border-yellow-300/40 bg-yellow-300/5 px-3 pb-4 pt-1.5 font-mono text-[11px] text-yellow-200/90">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="shrink-0"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            searching this session
+          </div>
+        )}
         {/* textarea + controls; ↵ sends / ⇧↵ newline. Drops are caught at the
             pane root (the whole basin); paste + 📎 still funnel through addFiles. */}
         {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
@@ -2749,7 +2770,7 @@ export default function Terminal({
                 onClick={() => setSearchMode(true)}
                 aria-label="Search this session"
                 title="search this session"
-                className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
               >
                 <svg
                   width="14"

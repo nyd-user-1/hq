@@ -86,11 +86,12 @@ export default function SendBoxSearch({
           onClick={onClose}
           aria-label="Exit search"
           title="exit search (Esc)"
-          className="flex shrink-0 items-center rounded-md p-1.5 text-yellow-300 transition-colors hover:bg-zinc-800"
+          className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
         >
+          {/* in search mode the magnifier becomes the traditional ✕ — the exit */}
           <svg {...SVG}>
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
           </svg>
         </button>
         {hasQuery && (
