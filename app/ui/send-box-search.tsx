@@ -26,6 +26,14 @@ import SearchField from "@/app/ui/search-field";
 //   ) : ( <textarea …/> <toolbar/> )}
 // The search reuses the header search's wiring verbatim — same searchQuery,
 // same gotoMatch, same highlight — just surfaced in the send box instead.
+//
+// MODE SIGNAL: the send-box CONTAINER border switches color in search mode so
+// the box reads as a distinct mode — amber to match the in-transcript search
+// highlight (#facc15 / hq-search-session), tying the box to its own results.
+// On the container div (currently `border-zinc-700 … focus-within:border-zinc-500`):
+//   className={`… ${searchMode
+//     ? "border-amber-500/70 focus-within:border-amber-400"
+//     : "border-zinc-700 focus-within:border-zinc-500"}`}
 
 type Props = {
   value: string;
