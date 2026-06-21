@@ -16,7 +16,8 @@
     "build:offline": "next build && rm -rf .next/standalone/.next/static .next/standalone/public && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public",
     "start": "next start",
     "lint": "eslint",
-    "app:rebuild": "bash scripts/rebuild-app.sh"
+    "app:rebuild": "bash scripts/rebuild-app.sh",
+    "test:permission": "node --experimental-strip-types --test lib/permission-policy.test.mts"
   },
   "dependencies": {
     "next": "16.2.9",

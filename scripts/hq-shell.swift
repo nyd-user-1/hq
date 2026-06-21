@@ -42,8 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         p.currentDirectoryURL = URL(fileURLWithPath: standaloneDir())
         var env = ProcessInfo.processInfo.environment
         env["PORT"] = String(PORT)
+        env["HQ_PORT"] = String(PORT)   // the Live REPL + permission shim read HQ_PORT, not PORT
         env["HOSTNAME"] = "127.0.0.1"
-        env["PATH"] = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+        // GUI apps get a minimal PATH; prepend the user npm-global bin so the server
+        // can spawn `claude` (installed there), not just node.
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        env["PATH"] = "\(home)/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
         p.environment = env
         do { try p.run(); server = p } catch { NSLog("HQ: server start failed: \(error)") }
     }

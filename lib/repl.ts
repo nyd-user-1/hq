@@ -78,6 +78,29 @@ function shimPath(): string {
   return path.join(process.cwd(), "lib", "repl-approve-mcp.mjs");
 }
 
+// GUI-launched apps (HQ.app via launchd/Dock) get a minimal PATH that omits where
+// `claude` is installed (e.g. ~/.npm-global/bin), so a bare spawn("claude") fails
+// ENOENT. Resolve to an absolute path the way the native launcher resolves node.
+// HQ_CLAUDE_BIN overrides; otherwise probe the common install dirs; finally fall
+// back to "claude" so a normal shell PATH (dev / interactive TUI) keeps working.
+function resolveClaudeBin(): string {
+  const override = process.env.HQ_CLAUDE_BIN;
+  if (override) return override;
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, ".npm-global", "bin", "claude"),
+    "/opt/homebrew/bin/claude",
+    "/usr/local/bin/claude",
+    path.join(home, ".local", "bin", "claude"),
+    path.join(home, ".bun", "bin", "claude"),
+    "/usr/bin/claude",
+  ];
+  for (const c of candidates) {
+    try { if (fs.existsSync(c)) return c; } catch { /* keep probing */ }
+  }
+  return "claude"; // rely on PATH (dev / interactive shell)
+}
+
 function emit(repl: Repl, e: ReplEvent) {
   repl.lastActivity = Date.now();
   repl.events.push(e);
@@ -106,7 +129,7 @@ function spawnRepl(
   key: string,
   opts: { cwd: string; resumeId?: string; sessionId?: string; model?: string },
 ): Repl {
-  const port = process.env.HQ_PORT ?? "3002";
+  const port = process.env.HQ_PORT ?? process.env.PORT ?? "3002";
   const mcpConfig = JSON.stringify({
     mcpServers: { "hq-approve": { command: "node", args: [shimPath()] } },
   });
@@ -130,7 +153,7 @@ function spawnRepl(
         : []),
   ];
 
-  const child = spawn("claude", args, {
+  const child = spawn(resolveClaudeBin(), args, {
     cwd: opts.cwd,
     env: { ...process.env, HQ_PORT: port, HQ_REPL_SESSION: key },
     stdio: ["pipe", "pipe", "pipe"],
