@@ -439,6 +439,56 @@ function readSnapshot(): Snapshot | null {
   return null;
 }
 
+// The statusline shim (the tee added to ~/.claude/statusline-command.sh) writes
+// Claude Code's full status JSON here every assistant message. It carries the
+// REAL rate-limit windows (five_hour / seven_day) + session cost that never
+// otherwise reach disk — fresher AND free vs the paid SessionStart probe above.
+// We read the raw CC schema and map it to the same window shape; freshness is
+// the file's mtime (the raw JSON has no timestamp of its own).
+const STATUSLINE_SNAP = path.join(os.homedir(), ".claude", "hq", "statusline-snapshot.json");
+
+function readStatuslineSnapshot(): Snapshot | null {
+  let raw: unknown;
+  let mtime: number;
+  try {
+    raw = JSON.parse(fs.readFileSync(STATUSLINE_SNAP, "utf8"));
+    mtime = fs.statSync(STATUSLINE_SNAP).mtimeMs;
+  } catch {
+    return null; // shim not wired / not written yet
+  }
+  const rl = (raw as { rate_limits?: Record<string, { used_percentage?: number; resets_at?: number }> })
+    ?.rate_limits;
+  if (!rl) return null; // rate_limits absent (pre-first-response / not a subscriber)
+  const windows: Record<string, SnapWindow> = {};
+  const pairs: Array<[string, { used_percentage?: number; resets_at?: number } | undefined]> = [
+    ["five_hour", rl.five_hour],
+    ["seven_day", rl.seven_day],
+  ];
+  for (const [key, w] of pairs) {
+    if (w && typeof w.used_percentage === "number")
+      windows[key] = {
+        utilization: w.used_percentage / 100,
+        resetsAt: typeof w.resets_at === "number" ? w.resets_at * 1000 : undefined,
+      };
+  }
+  return Object.keys(windows).length ? { capturedAt: mtime, windows } : null;
+}
+
+// Merge the live sources, newest-wins PER WINDOW: statusline first (fresher,
+// free) for five_hour/seven_day, the probe fills what only it has (seven_day_opus).
+// Only windows within the TTL contribute, so a stale source never overwrites a
+// fresh one.
+function mergeLiveSnapshots(now: number): Snapshot | null {
+  const windows: Record<string, SnapWindow> = {};
+  let capturedAt = 0;
+  for (const s of [readStatuslineSnapshot(), readSnapshot()]) {
+    if (!s || now - s.capturedAt >= LIVE_TTL_MS) continue;
+    for (const [k, w] of Object.entries(s.windows)) if (!(k in windows)) windows[k] = w;
+    if (s.capturedAt > capturedAt) capturedAt = s.capturedAt;
+  }
+  return Object.keys(windows).length ? { capturedAt, windows } : null;
+}
+
 // /usage `status` enum → the meter state machine.
 const STATUS_STATE: Record<string, MeterState> = {
   allowed: "ok",
@@ -558,9 +608,10 @@ export function getUsageStates(): UsageStates {
     },
   ];
 
-  // Overlay the real values from a fresh hook snapshot, per window.
-  const snap = readSnapshot();
-  const liveFresh = snap && now - snap.capturedAt < LIVE_TTL_MS ? snap : null;
+  // Overlay the real values, newest-source-wins per window: the statusline shim
+  // (free, every assistant message) for five_hour/seven_day, the SessionStart
+  // probe for what only it captures (seven_day_opus).
+  const liveFresh = mergeLiveSnapshots(now);
   if (liveFresh) {
     for (const m of meters) {
       const w = liveFresh.windows[LIVE_KEY[m.key]];

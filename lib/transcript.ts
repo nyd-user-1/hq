@@ -264,7 +264,7 @@ type Timeline = {
   id: string | null;
   items: TimelineItem[];
   project: string;
-  contextTokens: number; // current context size = the last assistant entry's full usage
+  contextTokens: number; // context size = last assistant entry's input-only usage (matches the CLI)
   model: string; // raw model id of the latest assistant entry ("" if unknown)
   lastWrite: number; // transcript mtime ms — drives the cache-warm countdown
   more: boolean; // older items exist beyond what's returned (the tail was capped)
@@ -348,11 +348,14 @@ export function timelineFor(
       if (typeof e.message?.model === "string") model = e.message.model;
       const u = e.message?.usage;
       if (u)
+        // Input-only (input + cache read + cache write) — matches the CLI's
+        // context readout and the statusline `used_percentage`. This turn's
+        // output tokens aren't part of the live window (they roll into NEXT
+        // turn's input), so including them over-read the % vs the CLI.
         contextTokens =
           (u.input_tokens ?? 0) +
           (u.cache_read_input_tokens ?? 0) +
-          (u.cache_creation_input_tokens ?? 0) +
-          (u.output_tokens ?? 0);
+          (u.cache_creation_input_tokens ?? 0);
       const mid = e.message?.id;
       if (mid)
         blockTokens.set(
