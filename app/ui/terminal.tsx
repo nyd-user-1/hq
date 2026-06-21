@@ -2630,7 +2630,13 @@ export default function Terminal({
         {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
             scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
             pushes the top up into the message area. */}
-        <div className="relative z-10 flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2 transition-colors focus-within:border-zinc-500">
+        <div
+          className={`relative z-10 flex flex-col gap-2 rounded-md border bg-zinc-950 p-2 transition-colors ${
+            searchMode
+              ? "border-yellow-300 focus-within:border-yellow-300"
+              : "border-zinc-700 focus-within:border-zinc-500"
+          }`}
+        >
           {/* The send box's own boundary chip — top-right of its SOLID 1px border
               (everything else uses the dashed Boundary). Anticipatory name
               (send-box.tsx, pending the To Do extraction) but copies the path the
