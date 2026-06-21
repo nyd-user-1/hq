@@ -51,16 +51,16 @@ export async function GET(req: Request) {
     // entrypoint filter, so on its own it leaks HQ's own headless sdk-cli probe
     // stubs (the ~/.../T/hq-usage-* spawns) into the kickoff list. Intersect with
     // the cli-only set (the same source ?session self-pinning already uses) to
-    // drop them. Over-fetch so ≥3 survive the filter.
-    const cliIds = new Set(getRecentSessions(16).map((s) => s.id));
-    const recent = getSessions(16).filter((s) => cliIds.has(s.id));
+    // drop them. Over-fetch so the staging list can scroll through many.
+    const cliIds = new Set(getRecentSessions(60).map((s) => s.id));
+    const recent = getSessions(60).filter((s) => cliIds.has(s.id));
     predecessorCtx =
       recent.find((s) => s.id === lineage?.predecessor?.id)?.contextTokens ?? 0;
     resume = {
       handoff: staged ? null : latestHandoff(),
       sessions: recent
         .filter((s) => staged || s.id !== resolved)
-        .slice(0, 3)
+        .slice(0, staged ? 40 : 3)
         .map(({ id, project, lastActive, snippet, contextTokens }) => ({
           id,
           project,

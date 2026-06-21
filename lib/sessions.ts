@@ -116,7 +116,7 @@ const PROJECT_REF = /(?:^|[\s/~"'(])code\/([a-z0-9][a-z0-9_-]*)/i;
 // First path segment after .../code/ — the project slug when a session WAS
 // launched inside its project dir (the authoritative signal when present).
 function codeSlug(p: string): string | null {
-  const m = p.match(/\/code\/([^/]+)/);
+  const m = p.match(/\/code\/([^/]+)/i); // case-insensitive: ~/Code and ~/code both count
   return m ? m[1] : null;
 }
 
@@ -126,7 +126,7 @@ function codeSlug(p: string): string | null {
 // visible backlog of sessions that should be re-homed (set a project override).
 function dirProject(file: string): string {
   const d = path.basename(path.dirname(file));
-  const i = d.indexOf("-code-");
+  const i = d.toLowerCase().indexOf("-code-"); // case-insensitive (-Code- counts)
   return i >= 0 ? d.slice(i + 6) : "Unassigned";
 }
 

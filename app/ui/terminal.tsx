@@ -363,37 +363,47 @@ function RecentSessions({
   if (sessions.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-[11px] text-zinc-600">
-        recent sessions — click to open here · reopen = full context in your
-        terminal
-      </p>
+      <p className="text-[10px] uppercase tracking-[0.15em] text-zinc-600">Recent</p>
+      <div className="scrollbar-none flex max-h-72 flex-col gap-0.5 overflow-y-auto">
       {sessions.map((s) => (
-        <div key={s.id} className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/?session=${s.id}`}
-            scroll={false}
-            title="open this session in the terminal"
-            className="group/resume flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md border border-zinc-800 px-2.5 py-1.5 transition-colors hover:border-zinc-600"
+        <Link
+          key={s.id}
+          href={`/?session=${s.id}`}
+          scroll={false}
+          title="open this session in the terminal"
+          className="group/resume flex items-baseline gap-x-3 rounded-md px-2.5 py-1.5 transition-colors hover:bg-zinc-800/50"
+        >
+          {/* fixed-width project column → the id/time/ctx line up down the list */}
+          <span
+            className={`w-28 shrink-0 truncate ${
+              s.project === "Unassigned"
+                ? "text-zinc-600"
+                : "text-zinc-300 group-hover/resume:text-zinc-100"
+            }`}
           >
-            <span className="shrink-0 text-zinc-300 group-hover/resume:text-zinc-100">
-              {s.project}
-            </span>
-            <span className="shrink-0 text-[11px] text-zinc-600">
-              {s.id.slice(0, 8)} · {fmtAgo(now - s.lastActive)}
-              {s.contextTokens > 0 && ` · ctx ${fmtTokens(s.contextTokens)}`}
-            </span>
-            {s.snippet && (
-              <span className="min-w-0 truncate text-[11px] text-zinc-500">
-                {s.snippet}
-              </span>
+            {s.project}
+          </span>
+          <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
+            {s.id.slice(0, 8)}
+            <span className="text-zinc-700"> · </span>
+            {fmtAgo(now - s.lastActive)}
+            {s.contextTokens > 0 && (
+              <>
+                <span className="text-zinc-700"> · </span>ctx {fmtTokens(s.contextTokens)}
+              </>
             )}
-          </Link>
-          <CopyChip
-            label="reopen full session"
-            text={`claude --resume ${s.id}`}
-          />
-        </div>
+          </span>
+          {s.snippet && (
+            <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-600">
+              {s.snippet}
+            </span>
+          )}
+          <span className="ml-auto shrink-0 pl-2 text-sm leading-none text-zinc-400 opacity-0 transition-opacity group-hover/resume:opacity-100">
+            ↗
+          </span>
+        </Link>
       ))}
+      </div>
     </div>
   );
 }
@@ -481,6 +491,13 @@ export default function Terminal({
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
   const [projects, setProjects] = useState<{ name: string; path: string }[]>([]); // launcher chips: history-derived {name, path}
   const [newProjectName, setNewProjectName] = useState(""); // "+ new project" input in the staging view
+  const [newOpen, setNewOpen] = useState(false); // staging: the "+ new" chip expanded into its input
+  // staging: the chosen launch target (an existing chip or a to-be-created project).
+  // null = the ~/hq default. Clicking a chip SELECTS; the actual launch happens only
+  // on send — so a stray click can never start a session (the footgun fix).
+  const [selectedTarget, setSelectedTarget] = useState<
+    { name: string; cwd?: string; newProject?: string } | null
+  >(null);
   const [lineage, setLineage] = useState<Lineage>(null); // this session's /clear chain
   const [predecessorCtx, setPredecessorCtx] = useState(0); // continued session's ctx size (fresh pane)
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
@@ -1165,12 +1182,19 @@ export default function Terminal({
 
   async function doSend() {
     if (staged) {
-      // New-session view: Enter / the send arrow STARTS a session. With no project
-      // picked we default to the ~/hq workspace (never the bare home dir); a project
-      // chip or "+ new project" starts it there instead. The typed draft is turn one.
+      // New-session view: Enter / the send arrow STARTS the session — in the selected
+      // target (a chip or a to-be-created project), or ~/hq when nothing is selected
+      // (never the bare home dir). The typed draft is turn one. Nothing launches on a
+      // chip click; this send is the only launch path.
       const first = draft.trim();
-      if (!first && attachments.length === 0) return;
-      await birthAndDrive(undefined, first);
+      if (!first && attachments.length === 0) return; // launch ALWAYS requires a message — a selected project alone never starts
+      const target = selectedTarget?.cwd
+        ? { cwd: selectedTarget.cwd, label: selectedTarget.name }
+        : selectedTarget?.newProject
+          ? { newProject: selectedTarget.newProject, label: selectedTarget.name }
+          : undefined; // ~/hq default
+      setSelectedTarget(null);
+      await birthAndDrive(target, first);
       return;
     }
     // Drive mode: route to the warm live REPL (streams back over SSE) instead of
@@ -1735,7 +1759,7 @@ export default function Terminal({
             Part of the header cluster, so it rides the centered column WITH the
             metadata when focused. minimize-2 while wide (shrink into focus),
             maximize-2 while focused. Pinned session only. */}
-        {resolvedId && !notConnected && (
+        {(resolvedId || staged) && !notConnected && (
           <button
             type="button"
             onClick={() => setFocusMode((f) => !f)}
@@ -1745,7 +1769,7 @@ export default function Terminal({
                 ? "in focus mode — click to expand to wide screen"
                 : "in wide screen — click for focus mode"
             }
-            className={`${paramKey === "session" ? "" : "ml-auto "}flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200`}
+            className={`${paramKey === "session" && !staged ? "" : "ml-auto "}flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200`}
           >
               {focusMode ? (
                 // lucide maximize-2 — expand back out to wide screen
@@ -1806,77 +1830,80 @@ export default function Terminal({
             born, offer the recent list, and auto-flip when one appears. No
             handoff kickoff here: that belongs to /clear-born continuations. */}
         {staged && (
-          <div className="flex flex-col gap-3 font-mono text-xs">
-            <div className="flex flex-col gap-1">
-              <p className="text-zinc-400">new session — nothing exists yet</p>
-              <p className="text-zinc-600">
-                pick a project and HQ <span className="text-emerald-400">drives a fresh session right here</span> —
-                no terminal, no copy-paste. With nothing selected it starts in{" "}
-                <span className="text-zinc-400">{"~/hq"}</span>.
-              </p>
-            </div>
-            {projects.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {projects.map((p) => (
+          <div className="flex flex-col gap-5 font-mono">
+            {/* PROJECTS — click to SELECT a launch target (the session starts only on
+                send). No hero title (the header already says "new session") and no
+                filter (the chips wrap fine). */}
+            <div>
+              <p className="mb-2 text-[10px] uppercase tracking-[0.15em] text-zinc-600">Projects</p>
+              <div className="flex flex-wrap gap-2">
+                {projects.map((p) => {
+                  const sel = selectedTarget?.cwd === p.path;
+                  return (
+                    <button
+                      key={p.path}
+                      type="button"
+                      disabled={!!starting}
+                      onClick={() => setSelectedTarget(sel ? null : { name: p.name, cwd: p.path })}
+                      title={`launch a session in ${p.path}`}
+                      className={`rounded-md border px-3 py-1.5 text-[11px] transition-colors disabled:opacity-50 ${
+                        sel
+                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"
+                          : "border-zinc-800 text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-300"
+                      }`}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+                {/* "+ new" — names a to-be-created project (the folder is created on send) */}
+                {newOpen ? (
+                  <input
+                    autoFocus
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => {
+                      const name = newProjectName.trim();
+                      if (e.key === "Enter" && name) {
+                        e.preventDefault();
+                        setSelectedTarget({ name, newProject: name });
+                        setNewProjectName("");
+                        setNewOpen(false);
+                      } else if (e.key === "Escape") {
+                        setNewOpen(false);
+                        setNewProjectName("");
+                      }
+                    }}
+                    onBlur={() => {
+                      const name = newProjectName.trim();
+                      if (name) setSelectedTarget({ name, newProject: name });
+                      setNewOpen(false);
+                      setNewProjectName("");
+                    }}
+                    disabled={!!starting}
+                    placeholder="project name… ↵"
+                    className="w-40 rounded-md border border-dashed border-emerald-500/50 bg-transparent px-3 py-1.5 text-[11px] text-emerald-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
+                  />
+                ) : (
                   <button
-                    key={p.path}
                     type="button"
                     disabled={!!starting}
-                    onClick={() => birthAndDrive({ cwd: p.path, label: p.name }, draft)}
-                    title={`start a session in ${p.path} and drive it from HQ`}
-                    className={`rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors disabled:opacity-50 ${
-                      starting === p.name
-                        ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300"
-                        : "border-zinc-700 text-zinc-300 hover:border-emerald-500/60 hover:text-emerald-300"
-                    }`}
+                    onClick={() => setNewOpen(true)}
+                    title="name a new project (the folder is created when you send)"
+                    className="rounded-md border border-dashed border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-500 transition-colors hover:border-emerald-500/50 hover:text-emerald-300 disabled:opacity-50"
                   >
-                    {starting === p.name ? `starting ${p.name}…` : p.name}
+                    + new
                   </button>
-                ))}
+                )}
               </div>
-            )}
-            {/* + New project — create a folder (in your projects root, default
-                ~/hq) and birth the session there. No ~/code assumption: works for
-                everyone, first run. */}
-            <div className="flex items-center gap-1.5">
-              <input
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  const name = newProjectName.trim();
-                  if (e.key === "Enter" && name && !starting) {
-                    e.preventDefault();
-                    setNewProjectName("");
-                    birthAndDrive({ newProject: name, label: name }, draft);
-                  }
-                }}
-                disabled={!!starting}
-                placeholder="+ new project"
-                title="create a folder in your projects root and start a session in it"
-                className="w-44 rounded-md border border-dashed border-zinc-700 bg-transparent px-2 py-0.5 font-mono text-[11px] text-zinc-300 placeholder:text-zinc-600 focus:border-emerald-500/60 focus:outline-none disabled:opacity-50"
-              />
-              {newProjectName.trim() && (
-                <button
-                  type="button"
-                  disabled={!!starting}
-                  onClick={() => {
-                    const name = newProjectName.trim();
-                    setNewProjectName("");
-                    birthAndDrive({ newProject: name, label: name }, draft);
-                  }}
-                  className="rounded-md border border-emerald-500/60 px-2 py-0.5 font-mono text-[11px] text-emerald-300 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
-                >
-                  create &amp; start
-                </button>
-              )}
             </div>
-            <div className="flex items-center gap-2">
-              <CopyChip label="copy · cd && claude" text="claude" />
-              <span className="text-[11px] text-zinc-600">
-                or copy the command to start one yourself in a terminal — this
-                pane flips to it the moment it appears
-              </span>
+
+            {/* escape hatch — demoted to one muted line */}
+            <div className="flex items-center gap-2 text-[11px] text-zinc-600">
+              <span>or start it in your own terminal</span>
+              <CopyChip label="cd && claude ↗" text="claude" />
             </div>
+
             {resume && <RecentSessions sessions={resume.sessions} now={now} />}
           </div>
         )}
@@ -2207,13 +2234,36 @@ export default function Terminal({
         </p>
       )}
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col">
+        {/* Launch-target banner — the Claude pattern: a strip BEHIND the input that
+            peeks out the top. The input card sits in front (z-10, opaque bg) and
+            overlaps the banner's lower edge via -mb-3, so only the top shows. Only
+            when a project chip is selected; ✕ clears back to ~/hq. */}
+        {staged && selectedTarget && (
+          <div className="-mb-3 flex items-center justify-between gap-2 rounded-t-lg border border-b-0 border-zinc-800 bg-zinc-900/60 px-3 pb-4 pt-1.5 font-mono text-[11px]">
+            <span className="min-w-0 truncate text-zinc-400">
+              launches in{" "}
+              <span className="text-zinc-200" title={selectedTarget.cwd ?? selectedTarget.newProject}>
+                {selectedTarget.name}
+                {selectedTarget.newProject && <span className="text-zinc-500"> · new</span>}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedTarget(null)}
+              title="clear — back to ~/hq"
+              className="shrink-0 text-zinc-600 transition-colors hover:text-zinc-300"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {/* textarea + controls; ↵ sends / ⇧↵ newline. Drops are caught at the
             pane root (the whole basin); paste + 📎 still funnel through addFiles. */}
         {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
             scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
             pushes the top up into the message area. */}
-        <div className="relative flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950/60 p-2 transition-colors focus-within:border-zinc-500">
+        <div className="relative z-10 flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2 transition-colors focus-within:border-zinc-500">
           {/* The send box's own boundary chip — top-right of its SOLID 1px border
               (everything else uses the dashed Boundary). Anticipatory name
               (send-box.tsx, pending the To Do extraction) but copies the path the
@@ -2280,7 +2330,9 @@ export default function Terminal({
               notConnected
                 ? "run HQ locally and open a session to chat here"
                 : staged
-                  ? "write your first message — ↵ starts it (or pick a project above)"
+                  ? selectedTarget
+                    ? `message ${selectedTarget.name} — ↵ launches it`
+                    : "write your first message — ↵ launches in ~/hq (or pick a project)"
                   : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
             className="scrollbar-slim max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
@@ -2426,7 +2478,11 @@ export default function Terminal({
                   disabled={!canSend}
                   aria-label="Send"
                   title="send (↵)"
-                  className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                  className={`flex shrink-0 items-center rounded-md p-1.5 transition-colors ${
+                    canSend
+                      ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                      : "cursor-not-allowed text-zinc-600"
+                  }`}
                 >
                   <svg
                     width="14"

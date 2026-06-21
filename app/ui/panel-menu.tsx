@@ -34,7 +34,13 @@ export default function PanelMenu() {
     return () => document.removeEventListener("click", onDocClick);
   }, []);
   return (
-    <details ref={ref} className="relative shrink-0">
+    <details
+      ref={ref}
+      className="relative shrink-0"
+      // Navbar-style: open on hover, close when the pointer leaves — it's a nav menu.
+      onMouseEnter={() => { if (ref.current) ref.current.open = true; }}
+      onMouseLeave={() => { if (ref.current) ref.current.open = false; }}
+    >
       <summary
         title="open a panel"
         // The layout-grid icon, styled like the header's bare search button.
@@ -57,7 +63,10 @@ export default function PanelMenu() {
           <rect x="14" y="14" width="7" height="7" rx="1" />
         </svg>
       </summary>
-      <div className="absolute left-0 top-full z-20 mt-1.5 flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
+      {/* pt-1.5 is a TRANSPARENT hover-bridge (a descendant of <details>, so the
+          pointer can cross the gap from icon to menu without firing mouseleave). */}
+      <div className="absolute left-0 top-full z-20 pt-1.5">
+      <div className="relative flex w-40 flex-col gap-0.5 rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1.5 shadow-xl">
         {/* info-circle chip on the top-right corner — same pattern as the app
             panel's ✕, straddling the dashed top border */}
         <div className="absolute -top-2.5 right-2 z-10">
@@ -141,6 +150,7 @@ export default function PanelMenu() {
         >
           Text
         </button>
+      </div>
       </div>
     </details>
   );
