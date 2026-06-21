@@ -16,9 +16,13 @@ export const CHIP_CLASS =
 export default function BoundaryChip({
   label,
   copyText,
+  className = "",
 }: {
   label: string;
   copyText?: string;
+  // Optional extra classes — lets a caller tint the chip (e.g. yellow while the
+  // send box is in search mode). Appended last so `!` overrides win.
+  className?: string;
 }) {
   const [copied, setCopied] = useState(false);
   // Display the file name WITHOUT its extension (terminal.tsx → terminal); the
@@ -33,7 +37,7 @@ export default function BoundaryChip({
         setTimeout(() => setCopied(false), 1200);
       }}
       title={copyText ? `click to copy ${copyText}` : "click to copy path"}
-      className={`${CHIP_CLASS} min-w-0 truncate`}
+      className={`${CHIP_CLASS} min-w-0 truncate ${className}`}
     >
       {copied ? "copied ✓" : shown}
     </button>

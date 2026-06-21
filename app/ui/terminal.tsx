@@ -2607,7 +2607,7 @@ export default function Terminal({
         {/* Search-mode indicator — peeks above the send box like the launch
             banner (same -mb-3 overlap), signaling the box is in search mode. */}
         {searchMode && (
-          <div className="-mb-3 flex items-center gap-2 rounded-t-lg border border-b-0 border-yellow-300/40 bg-yellow-300/5 px-3 pb-4 pt-1.5 font-mono text-[11px] text-yellow-200/90">
+          <div className="-mb-3 flex items-center gap-2 rounded-t-lg border border-b-0 border-zinc-800 bg-zinc-900/60 px-3 pb-4 pt-1.5 font-mono text-[11px] text-zinc-400">
             <svg
               width="12"
               height="12"
@@ -2630,19 +2630,21 @@ export default function Terminal({
         {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
             scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
             pushes the top up into the message area. */}
-        <div
-          className={`relative z-10 flex flex-col gap-2 rounded-md border bg-zinc-950 p-2 transition-colors ${
-            searchMode
-              ? "border-yellow-300 focus-within:border-yellow-300"
-              : "border-zinc-700 focus-within:border-zinc-500"
-          }`}
-        >
+        <div className="relative z-10 flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2 transition-colors focus-within:border-zinc-500">
           {/* The send box's own boundary chip — top-right of its SOLID 1px border
               (everything else uses the dashed Boundary). Anticipatory name
               (send-box.tsx, pending the To Do extraction) but copies the path the
               code lives at TODAY — app/ui/terminal.tsx. */}
           <span className="absolute -top-2.5 right-3 z-10">
-            <BoundaryChip label="send-box.tsx" copyText="app/ui/terminal.tsx" />
+            {/* the chip is the search-mode signal — it goes yellow while the box
+                is in "search this session" (border/banner stay traditional). */}
+            <BoundaryChip
+              label="send-box.tsx"
+              copyText="app/ui/terminal.tsx"
+              className={
+                searchMode ? "!bg-yellow-300 !text-zinc-900 hover:!text-zinc-900" : ""
+              }
+            />
           </span>
           {/* Search-this-session mode — the box BECOMES the search bar (reuses the
               header's in-transcript highlighter + match nav). The compose UI below
