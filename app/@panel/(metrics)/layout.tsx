@@ -1,13 +1,12 @@
 import Boundary from "@/app/ui/boundary";
 import FlashOnNav from "@/app/ui/flash-on-nav";
-import MetricsBackBar from "@/app/ui/metrics-back-bar";
+import TabNav from "@/app/ui/tab-nav";
 
 export const dynamic = "force-dynamic";
 
-// Metrics panel: a drill-down hub (/metrics) into Usage · Calls · Guardrails.
-// The hub IS the nav; once you're in a section the back bar replaces it with a
-// "‹ back". Savings + Memory Audit still live here as routes (reachable via ⌘K),
-// just not surfaced in the hub.
+// Metrics panel: Usage · Calls · Guardrails — each a tab, mirroring the
+// Activity/Console panels. Savings + Memory Audit still exist as routes
+// (reachable via ⌘K), just not surfaced as tabs here.
 export default function MetricsLayout({
   children,
 }: {
@@ -15,7 +14,13 @@ export default function MetricsLayout({
 }) {
   return (
     <Boundary label="@panel/(metrics)/layout.tsx">
-      <MetricsBackBar />
+      <TabNav
+        tabs={[
+          { title: "Usage", href: "/metrics", segment: "metrics" },
+          { title: "Calls", href: "/calls", segment: "calls" },
+          { title: "Guardrails", href: "/guardrails", segment: "guardrails" },
+        ]}
+      />
       <FlashOnNav>{children}</FlashOnNav>
     </Boundary>
   );

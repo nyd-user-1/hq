@@ -12,7 +12,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 // `routes` = every tab under it, for active-state + the open-panel test.
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
   { title: "Activity", href: "/projects", routes: ["/projects", "/todo", "/components", "/shipped"] },
-  { title: "Metrics", href: "/metrics", routes: ["/metrics", "/usage", "/calls", "/guardrails", "/savings", "/audit"] },
+  { title: "Metrics", href: "/metrics", routes: ["/metrics", "/calls", "/guardrails", "/savings", "/audit"] },
   { title: "Console", href: "/tree", routes: ["/tree", "/skills", "/cmd", "/routines", "/firehose"] },
   { title: "Compose", href: "/compose", routes: ["/compose"] },
 ];
@@ -39,7 +39,7 @@ export const NAV_TARGETS: NavTarget[] = [
   { title: "Components", href: "/components", group: "Activity", keywords: "design system library ui registry" },
   { title: "Shipped", href: "/shipped", group: "Activity", keywords: "commits git diff feed changelog" },
   // Metrics
-  { title: "Usage", href: "/usage", group: "Metrics", keywords: "tokens usage burn meter context cost rate limit" },
+  { title: "Usage", href: "/metrics", group: "Metrics", keywords: "tokens usage burn meter context cost rate limit" },
   { title: "Calls", href: "/calls", group: "Metrics", keywords: "ledger dollars cost spend api" },
   { title: "Guardrails", href: "/guardrails", group: "Metrics", keywords: "cost cap budget burn rate limit spend alarm projection otel" },
   { title: "Savings", href: "/savings", group: "Metrics", keywords: "efficiency saved" },
