@@ -2612,7 +2612,7 @@ export default function Terminal({
         <div
           className={`relative z-10 flex flex-col gap-2 rounded-md border bg-zinc-950 p-2 transition-colors ${
             searchMode
-              ? "border-yellow-400/80 focus-within:border-yellow-400"
+              ? "border-yellow-300 focus-within:border-yellow-300"
               : "border-zinc-700 focus-within:border-zinc-500"
           }`}
         >

@@ -86,7 +86,7 @@ export default function SendBoxSearch({
           onClick={onClose}
           aria-label="Exit search"
           title="exit search (Esc)"
-          className="flex shrink-0 items-center rounded-md p-1.5 text-yellow-400 transition-colors hover:bg-zinc-800"
+          className="flex shrink-0 items-center rounded-md p-1.5 text-yellow-300 transition-colors hover:bg-zinc-800"
         >
           <svg {...SVG}>
             <circle cx="11" cy="11" r="8" />
