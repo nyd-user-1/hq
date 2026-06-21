@@ -314,10 +314,12 @@ export default function CommandPalette() {
       return;
     }
     let alive = true;
+    const ctrl = new AbortController();
     const t = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/command-search?q=${encodeURIComponent(query)}&limit=200`
+          `/api/command-search?q=${encodeURIComponent(query)}&limit=200`,
+          { signal: ctrl.signal }
         );
         const data = await res.json();
         if (alive) {
@@ -325,11 +327,15 @@ export default function CommandPalette() {
           setShown(PAGE);
         }
       } catch {
-        if (alive) setHits([]);
+        if (alive) setHits([]); // ignore aborts (alive is already false then)
       }
-    }, 160);
+      // 90ms (was 160): the server is fast now — docsText is memoized, commits
+      // cached, the rest is FTS5 — so a shorter debounce stays responsive
+      // without hammering, and search feels closer to per-keystroke.
+    }, 90);
     return () => {
       alive = false;
+      ctrl.abort(); // cancel the in-flight request so fast typing can't pile up
       clearTimeout(t);
     };
   }, [q]);

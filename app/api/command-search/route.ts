@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
-import { search, type SearchScope, type SearchHit } from "@/lib/search";
+import {
+  search,
+  queryTokens,
+  metadataCorpus,
+  type SearchScope,
+  type SearchHit,
+  type CorpusItem,
+} from "@/lib/search";
 import { warmDocs } from "@/lib/docs";
+import { fuzzyMatch } from "@/lib/fuzzy";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +102,38 @@ export async function GET(req: Request) {
     seen.add(key);
     hits.push(r.hit);
     if (hits.length >= limit) break;
+  }
+
+  // Typo tolerance: the exact pass (substring/token) can't find a misspelling —
+  // "comand" never reaches command-palette. Run a bounded fuzzy pass over the
+  // small named-thing corpora (sessions/components/todos/projects/skills/memory/
+  // notes) and append the near-matches the exact pass didn't already surface,
+  // ranked BELOW the exact hits (typo recoveries, not primary results). d > 0
+  // keeps it to genuine misspellings — clean substring matches are the server's
+  // job above. Cheap; transcripts/docs fuzzy is the Phase-2 trigram index.
+  const toks = queryTokens(q);
+  if (toks.length && hits.length < limit) {
+    const fz: { item: CorpusItem; d: number }[] = [];
+    for (const item of metadataCorpus()) {
+      const key = `${item.kind}:${item.ref}`;
+      if (seen.has(key)) continue;
+      const d = fuzzyMatch(toks, item.title);
+      if (d !== null && d > 0) fz.push({ item, d });
+    }
+    fz.sort((a, b) => a.d - b.d || b.item.at - a.item.at);
+    for (const { item } of fz) {
+      if (hits.length >= limit) break;
+      hits.push({
+        kind: item.kind,
+        ref: item.ref,
+        title: item.title,
+        snippet: "",
+        at: item.at,
+        score: 0,
+        phrase: false,
+        meta: item.meta,
+      });
+    }
   }
 
   return NextResponse.json({ hits, building });

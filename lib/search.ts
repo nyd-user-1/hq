@@ -735,6 +735,63 @@ export function recent(
   return out.sort((a, b) => dir * (a.at - b.at)).slice(0, limit);
 }
 
+// A compact "named thing" — the metadata corpora (sessions/components/todos/…),
+// title only, no body. The ⌘K palette's fuzzy/typo pass scans these, so they're
+// stripped to the fields it needs (and renders as a SearchHit).
+export type CorpusItem = {
+  kind: SearchKind;
+  ref: string;
+  title: string;
+  at: number;
+  meta?: string;
+};
+
+// The small metadata corpora as a flat, queryless snapshot — the input to the
+// palette's typo-tolerance pass (lib/fuzzy). Several readers (sessions, projects,
+// skills) aren't free, and this runs once per keystroke, so memoize it 5s like
+// docsText/commits. Transcripts/docs/files are deliberately excluded — they're
+// big (server full-text), and named-thing typos are where fuzzy actually helps.
+let corpusCache: { at: number; items: CorpusItem[] } | null = null;
+const CORPUS_TTL_MS = 5000;
+
+export function metadataCorpus(): CorpusItem[] {
+  if (corpusCache && Date.now() - corpusCache.at < CORPUS_TTL_MS) return corpusCache.items;
+  const out: CorpusItem[] = [];
+  for (const s of getRecentSessions(500))
+    out.push({ kind: "session", ref: s.id, title: s.customTitle || s.title || s.project, at: s.lastActive, meta: s.project });
+  for (const s of getSdkSessions(200))
+    out.push({ kind: "sdk", ref: s.id, title: s.customTitle || s.title || s.project, at: s.lastActive, meta: s.project });
+  for (const c of COMPONENTS)
+    out.push({ kind: "component", ref: c.name, title: c.name, at: REGISTRY_CREATED_AT, meta: c.status });
+  for (const t of getTodos()) {
+    if (t.parentId) continue;
+    out.push({ kind: "todo", ref: t.id, title: t.text, at: t.createdAt, meta: t.done ? "done" : t.category ?? "open" });
+  }
+  for (const p of getProjects())
+    out.push({ kind: "project", ref: p.name, title: p.name, at: p.lastActive, meta: `${p.sessions}` });
+  for (const k of getSkills())
+    out.push({ kind: "skill", ref: k.path, title: k.title, at: k.mtime, meta: `/${k.name}` });
+  try {
+    for (const name of fs.readdirSync(MEMORY_DIR)) {
+      if (!name.endsWith(".md") || name === "MEMORY.md") continue;
+      let at = 0;
+      try { at = fs.statSync(path.join(MEMORY_DIR, name)).mtimeMs; } catch { /* gone */ }
+      out.push({ kind: "memory", ref: name, title: name.slice(0, -3), at });
+    }
+  } catch { /* no memory dir */ }
+  try {
+    for (const name of fs.readdirSync(NOTES_DIR)) {
+      if (!name.endsWith(".md")) continue;
+      try {
+        const full = path.join(NOTES_DIR, name);
+        out.push({ kind: "note", ref: name, title: noteTitle(fs.readFileSync(full, "utf8")), at: fs.statSync(full).mtimeMs });
+      } catch { /* vanished mid-read */ }
+    }
+  } catch { /* no notes dir */ }
+  corpusCache = { at: Date.now(), items: out };
+  return out;
+}
+
 // Absolute path of a memory file — for the reader's click-to-copy path header.
 export function memoryFilePath(name: string): string {
   return path.join(MEMORY_DIR, path.basename(name));
