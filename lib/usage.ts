@@ -256,6 +256,8 @@ export type Window = {
   totals: Totals;
   weightedTotal: number;
   limit?: number;
+  livePct?: number; // CC's REAL rate-limit % (statusline/probe) when this window has one
+  liveResetsAt?: number; // ms — the real reset time from CC, when live
 };
 
 export function getUsage(): { windows: Window[]; generatedAt: number } {
@@ -300,6 +302,27 @@ export function getUsage(): { windows: Window[]; generatedAt: number } {
         w.totals.output += r.out;
         w.totals.messages += 1;
         w.weightedTotal += ew;
+      }
+    }
+  }
+
+  // Overlay CC's REAL rate-limit % onto the windows that have a live equivalent
+  // (Session ↔ five_hour, Week ↔ seven_day), so the meter shows the live number
+  // instead of HQ's modeled weighted/limit estimate. Last 24h has no rate-limit
+  // window, so it stays a pure token-volume bar.
+  const live = mergeLiveSnapshots(now);
+  if (live) {
+    for (const w of windows) {
+      const key =
+        w.limit === SESSION_LIMIT_WEIGHTED
+          ? "five_hour"
+          : w.limit === WEEK_LIMIT_WEIGHTED
+            ? "seven_day"
+            : null;
+      const lw = key ? live.windows[key] : undefined;
+      if (lw && typeof lw.utilization === "number") {
+        w.livePct = lw.utilization * 100;
+        if (typeof lw.resetsAt === "number") w.liveResetsAt = lw.resetsAt;
       }
     }
   }

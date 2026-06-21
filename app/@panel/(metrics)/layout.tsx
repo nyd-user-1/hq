@@ -17,7 +17,7 @@ export default function MetricsLayout({
     <Boundary label="@panel/(metrics)/layout.tsx">
       <TabNav
         tabs={[
-          { title: "Usage & Burn", href: "/metrics", segment: "metrics" },
+          { title: "Usage", href: "/metrics", segment: "metrics" },
           { title: "Calls", href: "/calls", segment: "calls" },
           { title: "Guardrails", href: "/guardrails", segment: "guardrails" },
           { title: "Savings", href: "/savings", segment: "savings" },

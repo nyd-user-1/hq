@@ -39,7 +39,7 @@ export const NAV_TARGETS: NavTarget[] = [
   { title: "Components", href: "/components", group: "Activity", keywords: "design system library ui registry" },
   { title: "Shipped", href: "/shipped", group: "Activity", keywords: "commits git diff feed changelog" },
   // Metrics
-  { title: "Usage & Burn", href: "/metrics", group: "Metrics", keywords: "tokens usage burn meter context cost" },
+  { title: "Usage", href: "/metrics", group: "Metrics", keywords: "tokens usage burn meter context cost rate limit" },
   { title: "Calls", href: "/calls", group: "Metrics", keywords: "ledger dollars cost spend api" },
   { title: "Guardrails", href: "/guardrails", group: "Metrics", keywords: "cost cap budget burn rate limit spend alarm projection otel" },
   { title: "Savings", href: "/savings", group: "Metrics", keywords: "efficiency saved" },

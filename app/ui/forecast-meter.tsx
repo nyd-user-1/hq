@@ -25,36 +25,21 @@ export default function ForecastMeter() {
   const projectedAtReset = f.blockWeighted + f.burnPerMin * minsToReset;
   const projectedPct = Math.min((projectedAtReset / f.limit) * 100, 100);
 
-  const status = f.underCap
-    ? { text: "UNDER CAP", color: "text-green-500" }
-    : { text: `CAP AT ${clock(f.projectedCapAt!)}`, color: "text-orange-500" };
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-          <span className="text-sm text-zinc-300">Burn forecast · 5h block</span>
-          <span className="font-mono text-xs text-zinc-500">
-            burn{" "}
-            <span className="text-zinc-300">{fmt(f.burnPerMin)}/min</span>
-            {" · "}
-            <span className={status.color}>{status.text}</span>
-          </span>
-        </div>
+        <span className="text-sm text-zinc-300">Burn forecast · 5h block</span>
 
-        {/* timeline track: used (solid) + projected-by-reset (hatched) + NOW marker */}
+        {/* timeline track: used (solid) + projected-by-reset (faint) + NOW marker */}
         <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
-          {/* projected segment trailing the current fill */}
           <div
             className="absolute inset-y-0 left-0 rounded-full bg-orange-500/25"
             style={{ width: `${projectedPct}%` }}
           />
-          {/* current usage */}
           <div
             className="absolute inset-y-0 left-0 rounded-full bg-orange-500"
             style={{ width: `${usedPct}%` }}
           />
-          {/* NOW marker at the head of the current fill */}
           <div
             className="absolute inset-y-0 w-px bg-zinc-100"
             style={{ left: `${usedPct}%` }}
@@ -78,15 +63,9 @@ export default function ForecastMeter() {
           <span className="size-2 rounded-full bg-orange-500" /> used now
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-orange-500/25" /> projected by
-          reset
+          <span className="size-2 rounded-full bg-orange-500/25" /> projected by reset
         </span>
       </div>
-
-      <p className="text-xs text-zinc-600">
-        burn = weighted tokens/min over the last 15 min · projection assumes the
-        current pace holds to the {clock(f.blockReset)} reset · flow, not stock
-      </p>
     </div>
   );
 }

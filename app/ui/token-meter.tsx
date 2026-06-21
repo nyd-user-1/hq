@@ -14,8 +14,11 @@ const SEGMENTS: { key: keyof Totals; label: string; color: string }[] = [
   { key: "output", label: "output", color: "bg-blue-500" },
 ];
 
+const pctText = (p: number) =>
+  p < 50 ? "text-green-500" : p < 75 ? "text-yellow-500" : p < 90 ? "text-orange-500" : "text-red-500";
+
 // part="head" renders only the first window (always-visible accordion row);
-// part="rest" renders the remaining windows + legend + footnote.
+// part="rest" renders the remaining windows + legend.
 export default function TokenMeter({
   part,
 }: {
@@ -30,86 +33,87 @@ export default function TokenMeter({
     <div className="flex flex-col gap-4">
       {shown.map((w) => {
         const raw =
-          w.totals.input +
-          w.totals.cacheCreate +
-          w.totals.cacheRead +
-          w.totals.output;
+          w.totals.input + w.totals.cacheCreate + w.totals.cacheRead + w.totals.output;
         const wt = w.weightedTotal;
-        const pct = w.limit ? Math.min((wt / w.limit) * 100, 100) : null;
-        const pctColor =
-          pct === null
-            ? ""
-            : pct < 50
-              ? "text-green-500"
-              : pct < 75
-                ? "text-yellow-500"
-                : pct < 90
-                  ? "text-orange-500"
-                  : "text-red-500";
+        const hasLimit = w.limit != null;
+        // The % is CC's live rate-limit reading when a fresh snapshot covers this
+        // window, else HQ's modeled weighted/limit estimate. Last 24h has no limit
+        // → no %, just token volume.
+        const live = w.livePct != null;
+        const pct = hasLimit
+          ? live
+            ? w.livePct!
+            : Math.min((wt / (w.limit ?? 1)) * 100, 100)
+          : null;
         return (
           <div key={w.label} className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            {/* header: window + live/est badge */}
+            <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-300">{w.label}</span>
-              <span className="font-mono text-xs text-zinc-500">
-                {fmt(wt)} weighted · {fmt(raw)} raw · {w.totals.messages} msgs
-                {pct !== null && (
-                  <>
-                    {" · "}
-                    <span className={pctColor}>{Math.round(pct)}%</span>
-                  </>
-                )}
-              </span>
+              {hasLimit && (
+                <span
+                  title={
+                    live
+                      ? "live — Claude Code's real rate-limit window"
+                      : "estimate — calibrated from local transcripts (no live snapshot yet)"
+                  }
+                  className={`flex items-center gap-1 font-mono text-[8px] uppercase tracking-wider ${
+                    live ? "text-green-400" : "text-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${live ? "bg-green-400" : "bg-zinc-600"}`}
+                  />
+                  {live ? "live" : "est"}
+                </span>
+              )}
             </div>
-            {pct !== null ? (
-              // limit window: /usage-style track + fill
+
+            {/* bar — fills to the % (limit windows) or the raw composition (no limit) */}
+            {pct != null ? (
               <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
                 <div
-                  className="h-full rounded-full bg-blue-600"
+                  className="h-full rounded-full bg-blue-600 transition-[width] duration-500"
                   style={{ width: `${pct}%` }}
                 />
               </div>
             ) : (
-              // no limit: bar length = weighted share vs the week; fill = raw composition
               <div
                 className="flex h-2.5 overflow-hidden rounded-full bg-zinc-900"
-                style={{
-                  width: `${Math.max((wt / maxWeighted) * 100, 2)}%`,
-                }}
+                style={{ width: `${Math.max((wt / maxWeighted) * 100, 2)}%` }}
               >
                 {SEGMENTS.map((s) => (
                   <div
                     key={s.key}
                     className={s.color}
-                    style={{
-                      width: `${raw ? (w.totals[s.key] / raw) * 100 : 0}%`,
-                    }}
+                    style={{ width: `${raw ? (w.totals[s.key] / raw) * 100 : 0}%` }}
                   />
                 ))}
               </div>
             )}
+
+            {/* stat row — now UNDER the bar */}
+            <span className="font-mono text-xs text-zinc-500">
+              {pct != null && (
+                <>
+                  <span className={pctText(pct)}>{Math.round(pct)}%</span>
+                  {" · "}
+                </>
+              )}
+              {fmt(wt)} weighted · {fmt(raw)} raw · {w.totals.messages} msgs
+            </span>
           </div>
         );
       })}
       {part === "head" ? null : (
-        <>
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
-        {SEGMENTS.map((s) => (
-          <span
-            key={s.key}
-            className="flex items-center gap-1.5 text-xs text-zinc-500"
-          >
-            <span className={`size-2 rounded-full ${s.color}`} />
-            {s.label}
-          </span>
-        ))}
-      </div>
-      <p className="text-xs text-zinc-600">
-        local transcripts · deduped by request · weighted = input-equivalents
-        (cache read ×0.1, output ×5) × per-model tier (opus ×5) · limits
-        recalibrated against /usage 2026-06-11 6:32pm (session 23%, week 43%) ·
-        estimates
-      </p>
-        </>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {SEGMENTS.map((s) => (
+            <span key={s.key} className="flex items-center gap-1.5 text-xs text-zinc-500">
+              <span className={`size-2 rounded-full ${s.color}`} />
+              {s.label}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
