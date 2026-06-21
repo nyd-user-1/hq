@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEv
 import Markdown from "@/app/ui/md";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
+import SendBoxSearch from "@/app/ui/send-box-search";
 import PanelMenu from "@/app/ui/panel-menu";
 import { useRepl } from "@/app/ui/use-repl";
 import { OnboardingConversation } from "@/app/ui/landing-install";
@@ -752,6 +753,8 @@ export default function Terminal({
   const [searchOpen, setSearchOpen] = useState(false); // header search expanded?
   const [searchQuery, setSearchQuery] = useState(""); // raw input — updates instantly so typing never lags
   const [appliedQuery, setAppliedQuery] = useState(""); // debounced — what the (heavy) DOM walk actually runs
+  const [searchMode, setSearchMode] = useState(false); // send-box "search this session" mode — the box becomes the search bar
+  const sendSearchInputRef = useRef<HTMLInputElement>(null); // send-box search field (the header field keeps searchInputRef)
   const [searchMatchCount, setSearchMatchCount] = useState(0); // hits in the transcript
   const [searchActiveIndex, setSearchActiveIndex] = useState(0); // which hit is current
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -843,10 +846,21 @@ export default function Terminal({
   // the two terminals from clobbering each other's registry entries.
   const q = appliedQuery.trim().toLowerCase();
   const searching = searchOpen && q.length > 0;
+  // The highlight engine lights up for EITHER search surface — the header field
+  // (searchOpen) or the send-box mode (searchMode). `searching` stays header-only
+  // so the header's own nav cluster never orphans when only the send box is open.
+  const searchActive = (searchOpen || searchMode) && q.length > 0;
   const hlName = `hq-search-${paramKey}`;
   const hlActiveName = `hq-search-active-${paramKey}`;
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
+    setSearchQuery("");
+    setAppliedQuery("");
+  }, []);
+  // Exit the send-box search mode → back to compose (clears the query so the
+  // highlights drop too).
+  const closeSendSearch = useCallback(() => {
+    setSearchMode(false);
     setSearchQuery("");
     setAppliedQuery("");
   }, []);
@@ -909,6 +923,11 @@ export default function Terminal({
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
+
+  // Focus the send-box search field the moment the box flips into search mode.
+  useEffect(() => {
+    if (searchMode) sendSearchInputRef.current?.focus();
+  }, [searchMode]);
 
   // Turn-state border (Terminal 1 only for now): drive THIS pane's own boundary
   // box off the turn lifecycle. ORANGE while the user awaits a COMPLETE response
@@ -1091,8 +1110,8 @@ export default function Terminal({
   // Search opened → pull the FULL transcript so find-in-page covers everything,
   // not just the loaded tail. loadOlder no-ops if already expanded / nothing more.
   useEffect(() => {
-    if (searchOpen) loadOlder();
-  }, [searchOpen, loadOlder]);
+    if (searchOpen || searchMode) loadOlder();
+  }, [searchOpen, searchMode, loadOlder]);
 
   // Build the match list for the active query across the WHOLE transcript — text
   // inside collapsed tool steps included. Cheap on purpose: one TreeWalker pass of
@@ -1102,7 +1121,7 @@ export default function Terminal({
   useEffect(() => {
     const api = highlightApi();
     const container = scrollRef.current;
-    if (!api || !container || !searching) {
+    if (!api || !container || !searchActive) {
       api?.reg.delete(hlName);
       api?.reg.delete(hlActiveName);
       searchMatchesRef.current = [];
@@ -1137,7 +1156,7 @@ export default function Terminal({
     setSearchActiveIndex((i) =>
       matches.length ? Math.min(i, matches.length - 1) : 0,
     );
-  }, [searching, q, items, hlName, hlActiveName, registerVisibleHighlights]);
+  }, [searchActive, q, items, hlName, hlActiveName, registerVisibleHighlights]);
 
   // Navigate to the active hit: reveal it if it's tucked inside a collapsed tool
   // step (then re-light the now-visible siblings), paint it the brighter active
@@ -1147,7 +1166,7 @@ export default function Terminal({
     const container = scrollRef.current;
     if (!api || !container) return;
     const matches = searchMatchesRef.current;
-    if (!searching || matches.length === 0) {
+    if (!searchActive || matches.length === 0) {
       api.reg.delete(hlActiveName);
       return;
     }
@@ -1187,7 +1206,7 @@ export default function Terminal({
   }, [
     searchActiveIndex,
     searchMatchCount,
-    searching,
+    searchActive,
     hlActiveName,
     q,
     registerVisibleHighlights,
@@ -2590,7 +2609,13 @@ export default function Terminal({
         {/* Claude-chat shape: the textarea on top (auto-grows ~1→8 lines, then
             scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
             pushes the top up into the message area. */}
-        <div className="relative z-10 flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2 transition-colors focus-within:border-zinc-500">
+        <div
+          className={`relative z-10 flex flex-col gap-2 rounded-md border bg-zinc-950 p-2 transition-colors ${
+            searchMode
+              ? "border-amber-500/70 focus-within:border-amber-400"
+              : "border-zinc-700 focus-within:border-zinc-500"
+          }`}
+        >
           {/* The send box's own boundary chip — top-right of its SOLID 1px border
               (everything else uses the dashed Boundary). Anticipatory name
               (send-box.tsx, pending the To Do extraction) but copies the path the
@@ -2598,6 +2623,23 @@ export default function Terminal({
           <span className="absolute -top-2.5 right-3 z-10">
             <BoundaryChip label="send-box.tsx" copyText="app/ui/terminal.tsx" />
           </span>
+          {/* Search-this-session mode — the box BECOMES the search bar (reuses the
+              header's in-transcript highlighter + match nav). The compose UI below
+              hides while it's active; the ✕ / Esc returns to compose. */}
+          {searchMode && (
+            <SendBoxSearch
+              value={searchQuery}
+              onChange={setSearchQuery}
+              inputRef={sendSearchInputRef}
+              matchCount={searchMatchCount}
+              activeIndex={searchActiveIndex}
+              onPrev={() => gotoMatch(-1)}
+              onNext={() => gotoMatch(1)}
+              onClose={closeSendSearch}
+            />
+          )}
+          {!searchMode && (
+            <>
           {/* Attached images ride INSIDE the box (Claude-chat shape), above the
               textarea — same size/styling as before, just relocated in. */}
           {attachments.length > 0 && (
@@ -2699,6 +2741,31 @@ export default function Terminal({
                 <path d="M5 12h14" />
               </svg>
             </button>
+            {/* search this session — the magnifier next to "+" flips the box into
+                search mode (reuses the header's in-transcript highlighter). */}
+            {!notConnected && !!resolvedId && (
+              <button
+                type="button"
+                onClick={() => setSearchMode(true)}
+                aria-label="Search this session"
+                title="search this session"
+                className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+              </button>
+            )}
             {/* right cluster, bottom-right: cache + model + todo + send. */}
             <div className="ml-auto flex items-center gap-2">
               {/* ctx % then cache meter — in wide screen they live here, just
@@ -2828,6 +2895,8 @@ export default function Terminal({
               )}
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
       {/* Footer row under the composer (centered shell only): the tagline,
