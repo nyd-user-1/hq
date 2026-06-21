@@ -36,6 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // Spawn the bundled standalone server. GUI apps get a minimal PATH, so we
     // resolve node by absolute path and pass the env explicitly.
     func startServer() {
+        killPort(PORT)   // reclaim :PORT from any orphaned/stale server — without this a
+                         // prior server (a window-close left it alive) keeps serving the
+                         // OLD bundle and quit+reopen never picks up a rebuild.
         let p = Process()
         p.executableURL = URL(fileURLWithPath: resolveNode())
         p.arguments = ["server.js"]
@@ -89,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // Poll the server until it answers, then load it (avoids a flash of error
     // while node is still booting).
-    func waitForServerThenLoad() {
+    func waitForServerThenLoad(reload: Bool = false) {
         guard let url = URL(string: URLSTR) else { return }
         DispatchQueue.global().async {
             for _ in 0..<60 {
@@ -105,7 +108,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             DispatchQueue.main.async {
                 self.serverUp = true
-                if let p = self.pendingPath {              // a deep-link tap is waiting
+                if reload {
+                    self.webView.reloadFromOrigin()        // restart path: bypass cache, keep place
+                } else if let p = self.pendingPath {        // a deep-link tap is waiting
                     self.pendingPath = nil
                     self.loadPath(p)
                 } else {
@@ -153,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let m = NSMenu()
             m.addItem(withTitle: "Show HQ", action: #selector(showWindow), keyEquivalent: "")
             m.addItem(withTitle: "Reload", action: #selector(reload), keyEquivalent: "")
+            m.addItem(withTitle: "Restart Server (load latest build)", action: #selector(restartServer), keyEquivalent: "")
             m.addItem(.separator())
             m.addItem(withTitle: "Quit HQ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             statusItem.menu = m
@@ -195,7 +201,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         server?.terminate()   // no leaked background server
     }
 
-    @objc func reload() { webView?.reload() }
+    @objc func reload() { webView?.reloadFromOrigin() }   // ⌘R: cache-busting page reload (server untouched)
+
+    // Kill whatever holds `port` — reclaims it from an orphaned/stale server so a
+    // fresh start always serves the CURRENT bundle. lsof lives in /usr/sbin, which
+    // the minimal GUI PATH omits, so set PATH explicitly.
+    func killPort(_ port: Int) {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "lsof -ti tcp:\(port) | xargs kill -9 2>/dev/null || true"]
+        p.environment = ["PATH": "/usr/sbin:/usr/bin:/bin"]
+        try? p.run()
+        p.waitUntilExit()
+    }
+
+    // ⇧⌘R: restart the bundled server (picks up a `npm run app:rebuild` without a
+    // full quit), then cache-bust reload. NOTE: this ends any HQ-DRIVEN session,
+    // since the warm `claude` REPLs are children of the server it kills.
+    @objc func restartServer() {
+        server?.terminate()
+        serverUp = false
+        startServer()                 // startServer() killPort()s first, so the old one is gone
+        waitForServerThenLoad(reload: true)
+    }
 
     // --- page zoom (⌘+ / ⌘- / ⌘0), persisted across launches ----------------
     @objc func zoomIn()    { setZoom(webView.pageZoom + 0.1) }
@@ -316,6 +344,10 @@ let appMenu = NSMenu()
 let reloadItem = NSMenuItem(title: "Reload", action: #selector(AppDelegate.reload), keyEquivalent: "r")
 reloadItem.target = delegate
 appMenu.addItem(reloadItem)
+let restartItem = NSMenuItem(title: "Restart Server (load latest build)", action: #selector(AppDelegate.restartServer), keyEquivalent: "r")
+restartItem.keyEquivalentModifierMask = [.command, .shift]
+restartItem.target = delegate
+appMenu.addItem(restartItem)
 appMenu.addItem(NSMenuItem.separator())
 appMenu.addItem(withTitle: "Hide HQ", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
 appMenu.addItem(withTitle: "Quit HQ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
