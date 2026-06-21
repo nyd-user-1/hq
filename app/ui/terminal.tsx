@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import Markdown from "@/app/ui/md";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
@@ -177,7 +177,12 @@ function fmtAgo(ms: number): string {
   const m = Math.floor(ms / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ${m % 60}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) {
+    const rem = m % 60;
+    return rem ? `${h}h ${rem}m ago` : `${h}h ago`; // drop the "0m" on the hour
+  }
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 // The Anthropic prompt cache holds ~5 minutes; reply inside the window and the
@@ -351,8 +356,13 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// Recent-session rows shared by the fresh pane and the "+" staging view:
-// click = show in the terminal, chip = copy the full-context reopen command.
+// Recent-session DATA TABLE, shared by the fresh pane and the "+" staging view.
+// A SearchField + a "Filter" (by project) dropdown — the shipped-feed/components
+// control pair — sit on a header rule; below, each session is a distinct
+// clickable row in one bordered box: session id (the session's NAME —
+// first-class) · project · description · ctx · timestamp · a ⋯ actions menu (the
+// sidebar Recents kebab, brought here: Open / Terminal 2 / Star / Hide / Copy id;
+// Star + Hide persist to the same ~/.claude/hq sidecar).
 function RecentSessions({
   sessions,
   now,
@@ -360,50 +370,320 @@ function RecentSessions({
   sessions: NonNullable<ResumeOptions>["sessions"];
   now: number;
 }) {
+  const router = useRouter();
+  const pathname = usePathname() ?? "/";
+  const params = useSearchParams();
+  const pairParam = params.get("pair");
+  const sessionParam = params.get("session");
+
+  const [filter, setFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null); // row whose ⋯ menu is open
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [hidden, setHidden] = useState<Set<string>>(new Set()); // optimistic hide
+  const [starred, setStarred] = useState<Set<string>>(new Set()); // optimistic star
+  const [copied, setCopied] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  // Close the ⋯ menu on any outside click, Escape, or scroll (the menu stops its
+  // own propagation; items close it explicitly). Mirrors sidebar-recents.
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => {
+      setMenuFor(null);
+      setMenuPos(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [menuFor]);
+
+  // Close the "Filter" dropdown on an outside click (shipped-feed pattern).
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node))
+        setFilterOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [filterOpen]);
+
+  // Fire-and-forget write to the shared sidecar (~/.claude/hq/sessions-meta.json),
+  // the SAME store the sidebar Recents menu writes — favorite/hide stay in sync.
+  const postMeta = (id: string, body: Record<string, unknown>) => {
+    fetch("/api/sessions-meta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...body }),
+    }).catch(() => {});
+  };
+
+  const openMenu = (e: ReactMouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCopied(false);
+    if (menuFor === id) {
+      setMenuFor(null);
+      setMenuPos(null);
+      return;
+    }
+    // Anchor to the ⋯ BUTTON (left-aligned, just below it). The Action column is
+    // the first column now, so a row-right anchor would float the menu far away.
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const w = 220;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    setMenuPos({ top: r.bottom + 4, left, width: w });
+    setMenuFor(id);
+  };
+  const closeMenu = () => {
+    setMenuFor(null);
+    setMenuPos(null);
+  };
+
   if (sessions.length === 0) return null;
+
+  const openHref = (id: string) =>
+    pairParam ? `${pathname}?session=${id}&pair=${pairParam}` : `${pathname}?session=${id}`;
+
+  const q = filter.trim().toLowerCase();
+  const projectNames = [...new Set(sessions.map((s) => s.project))].sort();
+  const rows = sessions
+    .filter((s) => !hidden.has(s.id))
+    .filter((s) => !projectFilter || s.project === projectFilter)
+    .filter((s) => !q || `${s.id} ${s.project} ${s.snippet ?? ""}`.toLowerCase().includes(q))
+    .slice()
+    .sort((a, b) => b.lastActive - a.lastActive);
+  const menuSession = menuFor ? sessions.find((s) => s.id === menuFor) : null;
+  const menuItem =
+    "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-[10px] uppercase tracking-[0.15em] text-zinc-600">Recent</p>
-      <div className="scrollbar-none flex max-h-72 flex-col gap-0.5 overflow-y-auto">
-      {sessions.map((s) => (
-        <Link
-          key={s.id}
-          href={`/?session=${s.id}`}
-          scroll={false}
-          title="open this session in the terminal"
-          className="group/resume flex items-baseline gap-x-3 rounded-md px-2.5 py-1.5 transition-colors hover:bg-zinc-800/50"
-        >
-          {/* fixed-width project column → the id/time/ctx line up down the list */}
-          <span
-            className={`w-28 shrink-0 truncate ${
-              s.project === "Unassigned"
-                ? "text-zinc-600"
-                : "text-zinc-300 group-hover/resume:text-zinc-100"
-            }`}
+    <div className="flex flex-col gap-3">
+      {/* header — SearchField (left, narrowed) IN LINE with the "Filter" (by
+          project) dropdown on the right; the Shipped feed / Components control pair. */}
+      <div className="flex items-end gap-2 border-b border-zinc-800/60 pb-2">
+        <div className="w-72 max-w-[60%] shrink-0">
+          <SearchField
+            value={filter}
+            onChange={setFilter}
+            placeholder="Search sessions…"
+            className="h-[35px] py-0"
+          />
+        </div>
+        <div ref={filterRef} className="relative ml-auto">
+          <button
+            onClick={() => setFilterOpen((o) => !o)}
+            title="filter by project"
+            aria-label="Filter by project"
+            aria-haspopup="menu"
+            aria-expanded={filterOpen}
+            className="flex max-w-full items-center rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           >
-            {s.project}
-          </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
-            {s.id.slice(0, 8)}
-            <span className="text-zinc-700"> · </span>
-            {fmtAgo(now - s.lastActive)}
-            {s.contextTokens > 0 && (
-              <>
-                <span className="text-zinc-700"> · </span>ctx {fmtTokens(s.contextTokens)}
-              </>
-            )}
-          </span>
-          {s.snippet && (
-            <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-600">
-              {s.snippet}
-            </span>
+            <span className="truncate">{projectFilter ?? "Filter"}</span>
+          </button>
+          {filterOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-30 mt-1 flex max-h-72 w-48 flex-col overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+            >
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setProjectFilter(null);
+                  setFilterOpen(false);
+                }}
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
+              >
+                <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
+                  All
+                </span>
+                {projectFilter === null && <span className="ml-auto text-xs text-blue-400">✓</span>}
+              </button>
+              {projectNames.map((p) => (
+                <button
+                  key={p}
+                  role="menuitem"
+                  onClick={() => {
+                    setProjectFilter((prev) => (prev === p ? null : p));
+                    setFilterOpen(false);
+                  }}
+                  className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
+                >
+                  <span className="min-w-0 truncate font-mono text-[11px] text-zinc-300">{p}</span>
+                  {projectFilter === p && <span className="ml-auto text-xs text-blue-400">✓</span>}
+                </button>
+              ))}
+            </div>
           )}
-          <span className="ml-auto shrink-0 pl-2 text-sm leading-none text-zinc-400 opacity-0 transition-opacity group-hover/resume:opacity-100">
-            ↗
-          </span>
-        </Link>
-      ))}
+        </div>
       </div>
+
+      {/* the table */}
+      <div className="scrollbar-none max-h-80 overflow-y-auto rounded-lg border border-zinc-800">
+        {/* fixed (sticky) column header — same column widths as the rows below */}
+        <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
+          <span className="w-16 shrink-0 text-center">Action</span>
+          <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pr-3">
+            <span className="w-20 shrink-0">Session</span>
+            <span className="w-24 shrink-0">Project</span>
+            <span className="min-w-0 flex-1">Description</span>
+            <span className="w-24 shrink-0 text-right">Context</span>
+            <span className="w-24 shrink-0 text-right">Last activity</span>
+          </div>
+        </div>
+        <div className="divide-y divide-zinc-800/70">
+          {rows.length === 0 ? (
+            <p className="px-3 py-3 text-[11px] text-zinc-600">no sessions match this filter</p>
+          ) : (
+            rows.map((s) => (
+              <div
+                key={s.id}
+                data-session-row
+                className={`group/row flex items-center transition-colors ${
+                  menuFor === s.id ? "bg-zinc-800/40" : "hover:bg-zinc-800/40"
+                }`}
+              >
+                {/* action — the ⋯ kebab → dropdown (sidebar Recents menu), always shown */}
+                <div className="flex w-16 shrink-0 items-center justify-center">
+                  <button
+                    onClick={(e) => openMenu(e, s.id)}
+                    title="more actions"
+                    aria-label="more actions"
+                    className="rounded p-1 text-zinc-500 transition-colors hover:text-zinc-200"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" />
+                    </svg>
+                  </button>
+                </div>
+                <Link
+                  href={openHref(s.id)}
+                  scroll={false}
+                  title="open this session in the terminal"
+                  className="flex min-w-0 flex-1 items-baseline gap-3 py-2 pr-3"
+                >
+                  {/* session id — the session's name, the first-class identifier */}
+                  <span className="flex w-20 shrink-0 items-baseline gap-1 truncate text-xs font-medium tabular-nums text-zinc-100">
+                    {starred.has(s.id) && <span className="text-amber-400">★</span>}
+                    {s.id.slice(0, 8)}
+                  </span>
+                  {/* project */}
+                  <span
+                    className={`w-24 shrink-0 truncate text-[11px] ${
+                      s.project === "Unassigned" ? "text-zinc-600" : "text-zinc-400"
+                    }`}
+                  >
+                    {s.project}
+                  </span>
+                  {/* description */}
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+                    {s.snippet || "—"}
+                  </span>
+                  {/* ctx — amber when the 1M window is ~70%+ full */}
+                  <span
+                    className={`w-24 shrink-0 text-right text-[11px] tabular-nums ${
+                      s.contextTokens >= CONTEXT_LIMIT * 0.7 ? "text-amber-500/90" : "text-zinc-500"
+                    }`}
+                  >
+                    {s.contextTokens > 0 ? fmtTokens(s.contextTokens) : ""}
+                  </span>
+                  {/* last activity */}
+                  <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">
+                    {fmtAgo(now - s.lastActive)}
+                  </span>
+                </Link>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* the ⋯ dropdown — fixed so the scroll box can't clip it. One at a time. */}
+      {menuSession && menuPos && (
+        <div
+          role="menu"
+          onClick={(e) => e.stopPropagation()}
+          style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="fixed z-50 flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+        >
+          <button
+            role="menuitem"
+            onClick={() => {
+              router.push(openHref(menuSession.id), { scroll: false });
+              closeMenu();
+            }}
+            className={menuItem}
+          >
+            Open
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              const h = sessionParam
+                ? `${pathname}?session=${sessionParam}&pair=${menuSession.id}`
+                : `${pathname}?pair=${menuSession.id}`;
+              router.push(h, { scroll: false });
+              closeMenu();
+            }}
+            className={menuItem}
+          >
+            Open in Terminal 2
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              const next = !starred.has(menuSession.id);
+              setStarred((p) => {
+                const n = new Set(p);
+                if (next) n.add(menuSession.id);
+                else n.delete(menuSession.id);
+                return n;
+              });
+              postMeta(menuSession.id, { favorite: next });
+              closeMenu();
+            }}
+            className={menuItem}
+          >
+            {starred.has(menuSession.id) ? "Unstar" : "Star"}
+          </button>
+          <div className="my-1 h-px bg-zinc-800" />
+          <button
+            role="menuitem"
+            onClick={() => {
+              setHidden((p) => new Set(p).add(menuSession.id));
+              postMeta(menuSession.id, { hidden: true });
+              closeMenu();
+            }}
+            className={menuItem}
+          >
+            Hide
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              navigator.clipboard.writeText(menuSession.id);
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1200);
+            }}
+            title={`click to copy ${menuSession.id}`}
+            className={`${menuItem} font-mono text-[10px] text-zinc-500 hover:text-zinc-300`}
+          >
+            {copied ? "copied ✓" : `copy id · ${menuSession.id.slice(0, 8)}…`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -492,6 +772,10 @@ export default function Terminal({
   const [projects, setProjects] = useState<{ name: string; path: string }[]>([]); // launcher chips: history-derived {name, path}
   const [newProjectName, setNewProjectName] = useState(""); // "+ new project" input in the staging view
   const [newOpen, setNewOpen] = useState(false); // staging: the "+ new" chip expanded into its input
+  // staging PROJECTS grid: clamped to 2 rows, a chevron reveals the rest.
+  const [projExpanded, setProjExpanded] = useState(false);
+  const [projOverflow, setProjOverflow] = useState(false); // chips hidden beyond the 2-row clamp?
+  const projGridRef = useRef<HTMLDivElement>(null);
   // staging: the chosen launch target (an existing chip or a to-be-created project).
   // null = the ~/hq default. Clicking a chip SELECTS; the actual launch happens only
   // on send — so a stray click can never start a session (the footgun fix).
@@ -501,6 +785,17 @@ export default function Terminal({
   const [lineage, setLineage] = useState<Lineage>(null); // this session's /clear chain
   const [predecessorCtx, setPredecessorCtx] = useState(0); // continued session's ctx size (fresh pane)
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
+  // Does the clamped PROJECTS grid hide any chips (a row 3+)? Drives whether the
+  // "more" chevron shows — never offer to expand when there's nothing hidden.
+  useEffect(() => {
+    const el = projGridRef.current;
+    if (!staged || !el || projExpanded) return;
+    const check = () => setProjOverflow(el.scrollHeight - el.clientHeight > 4);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [staged, projects.length, projExpanded]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Scrollback + bottom-follow. atBottomRef: is the view parked at the bottom (so
   // live turns only auto-scroll then, never yanking you while you read up top).
@@ -1830,13 +2125,19 @@ export default function Terminal({
             born, offer the recent list, and auto-flip when one appears. No
             handoff kickoff here: that belongs to /clear-born continuations. */}
         {staged && (
-          <div className="flex flex-col gap-5 font-mono">
+          // Top-aligned, full-width (matches the header rule above). Two ruled
+          // sections — PROJECTS (pick a launch target) then SESSIONS (reopen one).
+          <div className="flex w-full flex-col gap-6 pb-8 pt-2 font-mono">
             {/* PROJECTS — click to SELECT a launch target (the session starts only on
-                send). No hero title (the header already says "new session") and no
-                filter (the chips wrap fine). */}
-            <div>
-              <p className="mb-2 text-[10px] uppercase tracking-[0.15em] text-zinc-600">Projects</p>
-              <div className="flex flex-wrap gap-2">
+                send, never on a stray click). An even grid, clamped to 2 rows; the
+                chevron reveals the rest. */}
+            <div className="flex flex-col gap-3">
+              <div
+                ref={projGridRef}
+                className={`grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 ${
+                  projExpanded ? "" : "max-h-[80px] overflow-hidden"
+                }`}
+              >
                 {projects.map((p) => {
                   const sel = selectedTarget?.cwd === p.path;
                   return (
@@ -1846,17 +2147,42 @@ export default function Terminal({
                       disabled={!!starting}
                       onClick={() => setSelectedTarget(sel ? null : { name: p.name, cwd: p.path })}
                       title={`launch a session in ${p.path}`}
-                      className={`rounded-md border px-3 py-1.5 text-[11px] transition-colors disabled:opacity-50 ${
+                      className={`flex h-9 items-center rounded-md border px-2 transition-colors disabled:opacity-50 ${
                         sel
                           ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"
                           : "border-zinc-800 text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-300"
                       }`}
                     >
-                      {p.name}
+                      <span className="w-full truncate text-center text-[11px]">{p.name}</span>
                     </button>
                   );
                 })}
-                {/* "+ new" — names a to-be-created project (the folder is created on send) */}
+              </div>
+              {/* control row — the expand/collapse chevron (left) + "+ new" (right) */}
+              <div className="flex items-center gap-2">
+                {(projOverflow || projExpanded) && (
+                  <button
+                    type="button"
+                    onClick={() => setProjExpanded((v) => !v)}
+                    title={projExpanded ? "show fewer projects" : "show all projects"}
+                    className="flex h-9 items-center gap-1 rounded-md px-2 text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
+                  >
+                    {projExpanded ? "less" : "more"}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`transition-transform ${projExpanded ? "rotate-180" : ""}`}
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                )}
                 {newOpen ? (
                   <input
                     autoFocus
@@ -1882,7 +2208,7 @@ export default function Terminal({
                     }}
                     disabled={!!starting}
                     placeholder="project name… ↵"
-                    className="w-40 rounded-md border border-dashed border-emerald-500/50 bg-transparent px-3 py-1.5 text-[11px] text-emerald-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
+                    className="ml-auto h-9 w-44 rounded-md border border-dashed border-emerald-500/50 bg-transparent px-3 text-[11px] text-emerald-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
                   />
                 ) : (
                   <button
@@ -1890,7 +2216,7 @@ export default function Terminal({
                     disabled={!!starting}
                     onClick={() => setNewOpen(true)}
                     title="name a new project (the folder is created when you send)"
-                    className="rounded-md border border-dashed border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-500 transition-colors hover:border-emerald-500/50 hover:text-emerald-300 disabled:opacity-50"
+                    className="ml-auto flex h-9 items-center rounded-md border border-dashed border-zinc-700 px-3 text-[11px] text-zinc-500 transition-colors hover:border-emerald-500/50 hover:text-emerald-300 disabled:opacity-50"
                   >
                     + new
                   </button>
@@ -1898,13 +2224,14 @@ export default function Terminal({
               </div>
             </div>
 
-            {/* escape hatch — demoted to one muted line */}
+            {/* SESSIONS — its own ruled section (header + border live in the component) */}
+            {resume && <RecentSessions sessions={resume.sessions} now={now} />}
+
+            {/* escape hatch — a quiet footer below both sections */}
             <div className="flex items-center gap-2 text-[11px] text-zinc-600">
               <span>or start it in your own terminal</span>
               <CopyChip label="cd && claude ↗" text="claude" />
             </div>
-
-            {resume && <RecentSessions sessions={resume.sessions} now={now} />}
           </div>
         )}
         {!staged && !previewInstall && loading && items.length === 0 && (
