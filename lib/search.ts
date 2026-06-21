@@ -39,6 +39,60 @@ const SCRIPTS_DIR = path.join(process.cwd(), "scripts");
 const SCRIPT_EXTS = [".mjs", ".js", ".cjs", ".ts", ".sh", ".py"];
 const isScript = (name: string) => SCRIPT_EXTS.some((e) => name.endsWith(e));
 
+// ── Search-local read cache ────────────────────────────────────────────────
+// The ⌘K palette hits these readers on EVERY keystroke, yet the underlying
+// files (sessions, repo files, skills, memory/notes/scripts) don't change
+// mid-search. Memoize each 5s — same as docsText/commits — so a typing burst
+// does one read per corpus, not one-per-keystroke; this fixed read-cost was the
+// bulk of the per-query floor (a zero-match query still paid it). Deliberately
+// SEARCH-LOCAL (not pushed into the readers themselves): the rest of the app —
+// the live Recents sidebar, the new-session UI — keeps reading fresh, so nothing
+// else inherits a 5s lag.
+const SEARCH_TTL = 5000;
+const readCache = new Map<string, { at: number; val: unknown }>();
+function memoRead<T>(key: string, fn: () => T): T {
+  const hit = readCache.get(key);
+  const now = Date.now();
+  if (hit && now - hit.at < SEARCH_TTL) return hit.val as T;
+  const val = fn();
+  readCache.set(key, { at: now, val });
+  return val;
+}
+const cachedFiles = () => memoRead("files", () => getFiles());
+const cachedSkillsList = () => memoRead("skills", () => getSkills());
+const cachedRecent = () => memoRead("recent1000", () => getRecentSessions(1000));
+const cachedSdk = () => memoRead("sdk200", () => getSdkSessions(200));
+const cachedProjectsList = () => memoRead("projects", () => getProjects());
+const cachedArchiveSessions = () => memoRead("archiveSessions", () => getArchiveSessions());
+
+// Cached file-content lists for the corpora read LIVE (memory/notes/scripts read
+// every file's full text per query — the same trap docsText had). Same 5s memo,
+// so scoreNorm runs over cached bytes instead of fresh reads.
+type FileDoc = { name: string; content: string; mtime: number };
+function readDir(dir: string, accept: (n: string) => boolean): FileDoc[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const out: FileDoc[] = [];
+  for (const name of names) {
+    if (!accept(name)) continue;
+    try {
+      const full = path.join(dir, name);
+      out.push({ name, content: fs.readFileSync(full, "utf8"), mtime: fs.statSync(full).mtimeMs });
+    } catch {
+      // vanished mid-scan
+    }
+  }
+  return out;
+}
+const memoryDocs = () =>
+  memoRead("memoryDocs", () => readDir(MEMORY_DIR, (n) => n.endsWith(".md") && n !== "MEMORY.md"));
+const noteDocs = () => memoRead("noteDocs", () => readDir(NOTES_DIR, (n) => n.endsWith(".md")));
+const scriptDocs = () => memoRead("scriptDocs", () => readDir(SCRIPTS_DIR, isScript));
+
 export type SearchScope =
   | "all"
   | "transcripts"
@@ -124,7 +178,7 @@ function searchTranscripts(toks: string[]): { hits: SearchHit[]; building: boole
   const { hits: idxHits, building } = searchTranscriptIndex(toks);
   if (idxHits.length === 0) return { hits: [], building };
 
-  const meta = new Map(getArchiveSessions().map((s) => [s.id, s]));
+  const meta = new Map(cachedArchiveSessions().map((s) => [s.id, s]));
   const hits: SearchHit[] = [];
   for (const h of idxHits) {
     const m = meta.get(h.id);
@@ -145,33 +199,16 @@ function searchTranscripts(toks: string[]): { hits: SearchHit[]; building: boole
 }
 
 function searchMemory(toks: string[]): SearchHit[] {
-  let names: string[];
-  try {
-    names = fs.readdirSync(MEMORY_DIR);
-  } catch {
-    return [];
-  }
   const hits: SearchHit[] = [];
-  for (const name of names) {
-    // skip the index — every memory would double as its MEMORY.md pointer
-    if (!name.endsWith(".md") || name === "MEMORY.md") continue;
-    const full = path.join(MEMORY_DIR, name);
-    let content: string;
-    let mtime: number;
-    try {
-      content = fs.readFileSync(full, "utf8");
-      mtime = fs.statSync(full).mtimeMs;
-    } catch {
-      continue;
-    }
-    const mt = scoreNorm(normalize(content), toks);
+  for (const f of memoryDocs()) {
+    const mt = scoreNorm(normalize(f.content), toks);
     if (mt.score === 0) continue;
     hits.push({
       kind: "memory",
-      ref: name,
-      title: name.slice(0, -3),
-      snippet: snippetAround(content, toks[0]),
-      at: mtime,
+      ref: f.name,
+      title: f.name.slice(0, -3),
+      snippet: snippetAround(f.content, toks[0]),
+      at: f.mtime,
       score: mt.score,
       phrase: mt.phrase,
     });
@@ -182,32 +219,16 @@ function searchMemory(toks: string[]): SearchHit[] {
 // Saved note blocks (~/.claude/hq/notes/*.md) — same substring/token read as
 // memory. Title is the note's first body line (the filename is a timestamp).
 function searchNotes(toks: string[]): SearchHit[] {
-  let names: string[];
-  try {
-    names = fs.readdirSync(NOTES_DIR);
-  } catch {
-    return [];
-  }
   const hits: SearchHit[] = [];
-  for (const name of names) {
-    if (!name.endsWith(".md")) continue;
-    const full = path.join(NOTES_DIR, name);
-    let content: string;
-    let mtime: number;
-    try {
-      content = fs.readFileSync(full, "utf8");
-      mtime = fs.statSync(full).mtimeMs;
-    } catch {
-      continue;
-    }
-    const mt = scoreNorm(normalize(content), toks);
+  for (const f of noteDocs()) {
+    const mt = scoreNorm(normalize(f.content), toks);
     if (mt.score === 0) continue;
     hits.push({
       kind: "note",
-      ref: name,
-      title: noteTitle(content),
-      snippet: snippetAround(content, toks[0]),
-      at: mtime,
+      ref: f.name,
+      title: noteTitle(f.content),
+      snippet: snippetAround(f.content, toks[0]),
+      at: f.mtime,
       score: mt.score,
       phrase: mt.phrase,
     });
@@ -219,32 +240,16 @@ function searchNotes(toks: string[]): SearchHit[] {
 // as memory/notes; a handful of small files, so no persisted index needed. Title
 // is the bare filename; clicking opens the source, dragging drops the path.
 function searchScripts(toks: string[]): SearchHit[] {
-  let names: string[];
-  try {
-    names = fs.readdirSync(SCRIPTS_DIR);
-  } catch {
-    return [];
-  }
   const hits: SearchHit[] = [];
-  for (const name of names) {
-    if (!isScript(name)) continue;
-    const full = path.join(SCRIPTS_DIR, name);
-    let content: string;
-    let mtime: number;
-    try {
-      content = fs.readFileSync(full, "utf8");
-      mtime = fs.statSync(full).mtimeMs;
-    } catch {
-      continue;
-    }
-    const mt = scoreNorm(normalize(content), toks);
+  for (const f of scriptDocs()) {
+    const mt = scoreNorm(normalize(f.content), toks);
     if (mt.score === 0) continue;
     hits.push({
       kind: "script",
-      ref: name,
-      title: name,
-      snippet: snippetAround(content, toks[0]),
-      at: mtime,
+      ref: f.name,
+      title: f.name,
+      snippet: snippetAround(f.content, toks[0]),
+      at: f.mtime,
       score: mt.score,
       phrase: mt.phrase,
     });
@@ -318,7 +323,7 @@ function searchSessionRows(
 // "planner panel" all hit.
 function searchFilesCorpus(toks: string[]): SearchHit[] {
   const hits: SearchHit[] = [];
-  for (const f of getFiles()) {
+  for (const f of cachedFiles()) {
     const mt = sc(f.rel, toks);
     if (mt.score === 0) continue;
     hits.push({
@@ -413,7 +418,7 @@ function searchTodos(toks: string[]): SearchHit[] {
 // Projects — match the derived project name. Click lists the project's sessions.
 function searchProjects(toks: string[]): SearchHit[] {
   const hits: SearchHit[] = [];
-  for (const p of getProjects()) {
+  for (const p of cachedProjectsList()) {
     const mt = sc(p.name, toks);
     if (mt.score === 0) continue;
     hits.push({
@@ -433,7 +438,7 @@ function searchProjects(toks: string[]): SearchHit[] {
 // Skills — match name + title + description + arg hint. Click opens SKILL.md.
 function searchSkills(toks: string[]): SearchHit[] {
   const hits: SearchHit[] = [];
-  for (const k of getSkills()) {
+  for (const k of cachedSkillsList()) {
     const mt = sc(`${k.name} ${k.title} ${k.description} ${k.argHint}`, toks);
     if (mt.score === 0) continue;
     hits.push({
@@ -487,11 +492,11 @@ export function search(
   const s = scope === "all" || scope === "scripts" ? searchScripts(toks) : [];
   const sess =
     scope === "all" || scope === "sessions"
-      ? searchSessionRows(getRecentSessions(1000), "session", toks)
+      ? searchSessionRows(cachedRecent(), "session", toks)
       : [];
   const sdk =
     scope === "all" || scope === "sdk"
-      ? searchSessionRows(getSdkSessions(200), "sdk", toks)
+      ? searchSessionRows(cachedSdk(), "sdk", toks)
       : [];
   const fil = scope === "all" || scope === "files" ? searchFilesCorpus(toks) : [];
   const comp = scope === "all" || scope === "components" ? searchComponentsCorpus(toks) : [];
@@ -757,9 +762,9 @@ const CORPUS_TTL_MS = 5000;
 export function metadataCorpus(): CorpusItem[] {
   if (corpusCache && Date.now() - corpusCache.at < CORPUS_TTL_MS) return corpusCache.items;
   const out: CorpusItem[] = [];
-  for (const s of getRecentSessions(500))
+  for (const s of cachedRecent())
     out.push({ kind: "session", ref: s.id, title: s.customTitle || s.title || s.project, at: s.lastActive, meta: s.project });
-  for (const s of getSdkSessions(200))
+  for (const s of cachedSdk())
     out.push({ kind: "sdk", ref: s.id, title: s.customTitle || s.title || s.project, at: s.lastActive, meta: s.project });
   for (const c of COMPONENTS)
     out.push({ kind: "component", ref: c.name, title: c.name, at: REGISTRY_CREATED_AT, meta: c.status });
@@ -767,27 +772,14 @@ export function metadataCorpus(): CorpusItem[] {
     if (t.parentId) continue;
     out.push({ kind: "todo", ref: t.id, title: t.text, at: t.createdAt, meta: t.done ? "done" : t.category ?? "open" });
   }
-  for (const p of getProjects())
+  for (const p of cachedProjectsList())
     out.push({ kind: "project", ref: p.name, title: p.name, at: p.lastActive, meta: `${p.sessions}` });
-  for (const k of getSkills())
+  for (const k of cachedSkillsList())
     out.push({ kind: "skill", ref: k.path, title: k.title, at: k.mtime, meta: `/${k.name}` });
-  try {
-    for (const name of fs.readdirSync(MEMORY_DIR)) {
-      if (!name.endsWith(".md") || name === "MEMORY.md") continue;
-      let at = 0;
-      try { at = fs.statSync(path.join(MEMORY_DIR, name)).mtimeMs; } catch { /* gone */ }
-      out.push({ kind: "memory", ref: name, title: name.slice(0, -3), at });
-    }
-  } catch { /* no memory dir */ }
-  try {
-    for (const name of fs.readdirSync(NOTES_DIR)) {
-      if (!name.endsWith(".md")) continue;
-      try {
-        const full = path.join(NOTES_DIR, name);
-        out.push({ kind: "note", ref: name, title: noteTitle(fs.readFileSync(full, "utf8")), at: fs.statSync(full).mtimeMs });
-      } catch { /* vanished mid-read */ }
-    }
-  } catch { /* no notes dir */ }
+  for (const f of memoryDocs())
+    out.push({ kind: "memory", ref: f.name, title: f.name.slice(0, -3), at: f.mtime });
+  for (const f of noteDocs())
+    out.push({ kind: "note", ref: f.name, title: noteTitle(f.content), at: f.mtime });
   corpusCache = { at: Date.now(), items: out };
   return out;
 }
