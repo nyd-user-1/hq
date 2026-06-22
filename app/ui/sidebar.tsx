@@ -5,6 +5,7 @@ import Link from "next/link";
 import NewSessionItem from "@/app/ui/new-session-item";
 import ProjectsItem from "@/app/ui/projects-item";
 import SidebarRecents from "@/app/ui/sidebar-recents";
+import AccountChip from "@/app/ui/account-chip";
 
 // Left rail. Brand → "/" (closes the panel, terminal-only focus). "New Session"
 // is the primary action (Search moved to the terminal boundary's search icon).
@@ -27,6 +28,8 @@ export default function Sidebar() {
       <Suspense fallback={null}>
         <SidebarRecents />
       </Suspense>
+
+      <AccountChip />
     </div>
   );
 }
