@@ -17,6 +17,7 @@ const STORE = path.join(STORE_DIR, "sessions-meta.json");
 export type SessionMeta = {
   favorite?: boolean;
   hidden?: boolean;
+  archived?: boolean; // moved to the browsable "Archived" group (out of Recents, still searchable)
   title?: string;
   project?: string; // overrides the DERIVED project (re-homes ~ / Unassigned sessions)
   related?: string[]; // cross-link tags — "this session also relates to <project>"
@@ -59,6 +60,10 @@ export function setSessionMeta(id: string, patch: SessionMeta): SessionMeta {
   if (typeof patch.hidden === "boolean") {
     if (patch.hidden) next.hidden = true;
     else delete next.hidden;
+  }
+  if (typeof patch.archived === "boolean") {
+    if (patch.archived) next.archived = true;
+    else delete next.archived;
   }
   if (typeof patch.title === "string") {
     const t = patch.title.trim();

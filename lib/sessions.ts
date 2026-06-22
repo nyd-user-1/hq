@@ -103,6 +103,7 @@ export type RecentSession = {
   chainRoot: string; // root id of this session's /clear chain (self if none) — Tree grouping
   favorite: boolean; // pinned to the top of Recents
   hidden: boolean; // soft-deleted from Recents (toggle to reveal)
+  archived: boolean; // moved to the browsable "Archived" group (still searchable)
   related: string[]; // cross-link tags (sidecar); [] when none
 };
 
@@ -165,6 +166,7 @@ export function sessionMeta(
     customTitle: m.title ?? "",
     favorite: !!m.favorite,
     hidden: !!m.hidden,
+    archived: !!m.archived,
     related: m.related ?? [],
   };
 }

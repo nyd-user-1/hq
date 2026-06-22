@@ -28,6 +28,7 @@ type Recent = {
   customTitle: string;
   favorite: boolean;
   hidden: boolean;
+  archived: boolean;
   related: string[];
 };
 
@@ -165,6 +166,14 @@ function ArchiveIcon() {
   );
 }
 
+function FolderIcon() {
+  return (
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </svg>
+  );
+}
+
 function LinkIcon() {
   return (
     <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -221,6 +230,7 @@ export default function SidebarRecents() {
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("date"); // default: grouped by day (claude.ai-style)
   const [showHidden, setShowHidden] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<string | null>(null); // session id being edited inline
   const [editField, setEditField] = useState<"title" | "project" | "related">("title");
   const [editValue, setEditValue] = useState("");
@@ -334,6 +344,11 @@ export default function SidebarRecents() {
     patchLocal(s.id, { hidden });
     postMeta(s.id, { hidden });
   };
+  const toggleArchived = (s: Recent) => {
+    const archived = !s.archived;
+    patchLocal(s.id, { archived });
+    postMeta(s.id, { archived });
+  };
   // One inline editor, three fields: the session title (rename), the project
   // override (re-home an Unassigned session), or the related cross-link tags.
   const startEdit = (s: Recent, field: "title" | "project" | "related") => {
@@ -394,10 +409,118 @@ export default function SidebarRecents() {
     setMenuPos(null);
   };
 
-  const hiddenCount = sessions.filter((s) => s.hidden).length;
-  const visible = showHidden ? sessions : sessions.filter((s) => !s.hidden);
+  // Archived sessions leave Recents for the browsable "Archived" group (still on
+  // disk + searchable); the main list is the rest, honoring Show/Hide-hidden.
+  const archivedSessions = sessions.filter((s) => s.archived);
+  const archivedCount = archivedSessions.length;
+  const live = sessions.filter((s) => !s.archived);
+  const hiddenCount = live.filter((s) => s.hidden).length;
+  const visible = showHidden ? live : live.filter((s) => !s.hidden);
   const groups = groupSessions(visible, groupBy);
   const menuSession = menuFor ? sessions.find((s) => s.id === menuFor) : null;
+
+  // One session row — extracted so the Archived group reuses the exact same row
+  // (label, favorite star, live dot, kebab) and the inline rename/project editor.
+  const renderRow = (s: Recent) => {
+    const active = current === s.id;
+    const openHref = pairParam
+      ? `${pathname}?session=${s.id}&pair=${pairParam}`
+      : `${pathname}?session=${s.id}`;
+    // Label precedence: your rename → Claude's ai-title → the id.
+    const label = s.customTitle || s.aiTitle || s.id.slice(0, 8);
+    const titled = !!(s.customTitle || s.aiTitle);
+
+    if (editing === s.id) {
+      return (
+        <div key={s.id} className="flex items-center rounded-md bg-zinc-800">
+          <input
+            autoFocus
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitEdit(s);
+              if (e.key === "Escape") setEditing(null);
+            }}
+            onBlur={() => setEditing(null)}
+            placeholder={
+              editField === "project"
+                ? "set project — ↵ save · esc cancel"
+                : editField === "related"
+                  ? "related, comma-separated — ↵ save · esc cancel"
+                  : "name this session — ↵ save · esc cancel"
+            }
+            className="min-w-0 flex-1 bg-transparent px-2.5 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div
+        key={s.id}
+        onMouseEnter={(e) => {
+          if (menuFor) return; // no tooltip while a row menu is open
+          const r = e.currentTarget.getBoundingClientRect();
+          setTip({
+            x: r.right + 8,
+            y: r.top + r.height / 2,
+            text: `${s.id.slice(0, 8)} · ${ago(s.lastActive)}`,
+          });
+        }}
+        onMouseLeave={() => setTip(null)}
+        className={`group flex items-center rounded-md transition-colors ${
+          active || menuFor === s.id ? "bg-zinc-800" : "hover:bg-zinc-800/60"
+        } ${s.hidden ? "opacity-50" : ""}`}
+      >
+        <Link
+          href={openHref}
+          scroll={false}
+          className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-sm transition-colors ${
+            active ? "text-zinc-100" : "text-zinc-400 group-hover:text-zinc-200"
+          }`}
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-x-1.5">
+            <span
+              className={`min-w-0 flex-1 truncate font-mono text-xs ${
+                titled ? "text-zinc-200" : ""
+              }`}
+            >
+              {label}
+            </span>
+            {s.related?.length > 0 && (
+              <span
+                title={`related: ${s.related.join(", ")}`}
+                className="shrink-0 rounded bg-zinc-800/70 px-1 py-px font-mono text-[9px] uppercase tracking-wide text-zinc-500"
+              >
+                rel: {s.related.join(" · ")}
+              </span>
+            )}
+          </span>
+          {/* green = active within the cache window */}
+          <span
+            className={`size-1.5 shrink-0 rounded-full ${
+              s.active ? "bg-green-500" : "bg-transparent"
+            }`}
+          />
+        </Link>
+        {s.favorite && (
+          <span className="shrink-0 pl-1 text-amber-400" title="favorite" aria-hidden>
+            <StarIcon filled className="size-3" />
+          </span>
+        )}
+        <button
+          onClick={(e) => openMenu(e, s.id)}
+          title="more actions"
+          aria-label="more actions"
+          className={`shrink-0 px-1.5 py-1.5 text-zinc-500 transition-opacity hover:text-zinc-200 ${
+            menuFor === s.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
+        >
+          <KebabIcon />
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
@@ -448,113 +571,7 @@ export default function SidebarRecents() {
                   {g.label}
                 </span>
               )}
-              {g.sessions.map((s) => {
-                const active = current === s.id;
-                const openHref = pairParam
-                  ? `${pathname}?session=${s.id}&pair=${pairParam}`
-                  : `${pathname}?session=${s.id}`;
-                // Label precedence: your rename → Claude's ai-title → the id.
-                const label = s.customTitle || s.aiTitle || s.id.slice(0, 8);
-                const titled = !!(s.customTitle || s.aiTitle);
-
-                if (editing === s.id) {
-                  return (
-                    <div key={s.id} className="flex items-center rounded-md bg-zinc-800">
-                      <input
-                        autoFocus
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") commitEdit(s);
-                          if (e.key === "Escape") setEditing(null);
-                        }}
-                        onBlur={() => setEditing(null)}
-                        placeholder={
-                          editField === "project"
-                            ? "set project — ↵ save · esc cancel"
-                            : editField === "related"
-                              ? "related, comma-separated — ↵ save · esc cancel"
-                              : "name this session — ↵ save · esc cancel"
-                        }
-                        className="min-w-0 flex-1 bg-transparent px-2.5 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
-                      />
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={s.id}
-                    onMouseEnter={(e) => {
-                      if (menuFor) return; // no tooltip while a row menu is open
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setTip({
-                        x: r.right + 8,
-                        y: r.top + r.height / 2,
-                        text: `${s.id.slice(0, 8)} · ${ago(s.lastActive)}`,
-                      });
-                    }}
-                    onMouseLeave={() => setTip(null)}
-                    className={`group flex items-center rounded-md transition-colors ${
-                      active || menuFor === s.id ? "bg-zinc-800" : "hover:bg-zinc-800/60"
-                    } ${s.hidden ? "opacity-50" : ""}`}
-                  >
-                    <Link
-                      href={openHref}
-                      scroll={false}
-                      className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-sm transition-colors ${
-                        active
-                          ? "text-zinc-100"
-                          : "text-zinc-400 group-hover:text-zinc-200"
-                      }`}
-                    >
-                      <span className="flex min-w-0 flex-1 items-center gap-x-1.5">
-                        {/* label: rename → Claude's ai-title → id. Single line +
-                            truncate (full name + last-activity on hover, full id
-                            in the ⋮ menu) so the row height never changes. */}
-                        <span
-                          className={`min-w-0 flex-1 truncate font-mono text-xs ${
-                            titled ? "text-zinc-200" : ""
-                          }`}
-                        >
-                          {label}
-                        </span>
-                        {s.related?.length > 0 && (
-                          <span
-                            title={`related: ${s.related.join(", ")}`}
-                            className="shrink-0 rounded bg-zinc-800/70 px-1 py-px font-mono text-[9px] uppercase tracking-wide text-zinc-500"
-                          >
-                            rel: {s.related.join(" · ")}
-                          </span>
-                        )}
-                      </span>
-                      {/* green = active within the cache window */}
-                      <span
-                        className={`size-1.5 shrink-0 rounded-full ${
-                          s.active ? "bg-green-500" : "bg-transparent"
-                        }`}
-                      />
-                    </Link>
-                    {/* favorite indicator — subtle, persistent (toggle lives in the menu) */}
-                    {s.favorite && (
-                      <span className="shrink-0 pl-1 text-amber-400" title="favorite" aria-hidden>
-                        <StarIcon filled className="size-3" />
-                      </span>
-                    )}
-                    {/* the one row affordance: a kebab → dropdown menu */}
-                    <button
-                      onClick={(e) => openMenu(e, s.id)}
-                      title="more actions"
-                      aria-label="more actions"
-                      className={`shrink-0 px-1.5 py-1.5 text-zinc-500 transition-opacity hover:text-zinc-200 ${
-                        menuFor === s.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                      }`}
-                    >
-                      <KebabIcon />
-                    </button>
-                  </div>
-                );
-              })}
+              {g.sessions.map(renderRow)}
             </div>
           ))}
 
@@ -565,6 +582,25 @@ export default function SidebarRecents() {
             >
               {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
             </button>
+          )}
+
+          {/* Archived — a collapsible group of sessions moved out of Recents.
+              Still on disk + searchable; reuses the exact same rows (whose kebab
+              now offers Unarchive). */}
+          {archivedCount > 0 && (
+            <div className="mt-1 flex flex-col gap-0.5 border-t border-zinc-800/60 pt-1">
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-left font-mono text-[10px] uppercase tracking-widest text-zinc-600 transition-colors hover:text-zinc-400"
+              >
+                <span className="text-zinc-700">{showArchived ? "▾" : "▸"}</span>
+                <span className="text-zinc-500">
+                  <ArchiveIcon />
+                </span>
+                Archived · {archivedCount}
+              </button>
+              {showArchived && archivedSessions.map(renderRow)}
+            </div>
           )}
         </div>
       )}
@@ -643,7 +679,7 @@ export default function SidebarRecents() {
             title="re-home this session under a project (overrides the derived label)"
             className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
           >
-            <ArchiveIcon />
+            <FolderIcon />
             Set project
           </button>
           <button
@@ -682,6 +718,18 @@ export default function SidebarRecents() {
           >
             {menuSession.hidden ? <EyeIcon /> : <EyeOffIcon />}
             {menuSession.hidden ? "Unhide" : "Hide"}
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              toggleArchived(menuSession);
+              closeMenu();
+            }}
+            title="move to the Archived group (out of Recents; still searchable)"
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <ArchiveIcon />
+            {menuSession.archived ? "Unarchive" : "Archive"}
           </button>
           <div className="my-1 h-px bg-zinc-800" />
           <button

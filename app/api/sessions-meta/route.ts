@@ -11,7 +11,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { id, favorite, hidden, title, project, related } = await req
+  const { id, favorite, hidden, archived, title, project, related } = await req
     .json()
     .catch(() => ({}));
   if (typeof id !== "string" || !id) {
@@ -20,12 +20,14 @@ export async function POST(req: Request) {
   const patch: {
     favorite?: boolean;
     hidden?: boolean;
+    archived?: boolean;
     title?: string;
     project?: string;
     related?: string[];
   } = {};
   if (typeof favorite === "boolean") patch.favorite = favorite;
   if (typeof hidden === "boolean") patch.hidden = hidden;
+  if (typeof archived === "boolean") patch.archived = archived;
   if (typeof title === "string") patch.title = title;
   if (typeof project === "string") patch.project = project;
   if (Array.isArray(related)) patch.related = related;
