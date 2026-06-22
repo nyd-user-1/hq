@@ -478,7 +478,7 @@ export default async function Search({
   // crowd a low-volume corpus out) and stacks them in CORPORA order — Docs lead.
   // A scoped view drills into a single corpus at full depth. Per-corpus calls cost
   // ≈ one search("all") since each only searches its own corpus.
-  const PER_CORPUS = 5;
+  const PER_CORPUS = 10;
   type Group = { corpus: Corpus; hits: SearchHit[]; count: string; drill?: string };
   const groups: Group[] = [];
   const counts: Record<string, string> = {};
@@ -512,7 +512,7 @@ export default async function Search({
   } else {
     const c = CORPORA.find((x) => x.scope === scope);
     if (c) {
-      const { hits, building: b } = search(q, scope, sortDir, 60);
+      const { hits, building: b } = search(q, scope, sortDir, 200);
       building = b;
       if (hits.length) {
         counts[c.scope] = String(hits.length);

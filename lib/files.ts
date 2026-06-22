@@ -66,11 +66,45 @@ function walk(dir: string, out: FileRecord[]) {
   }
 }
 
-// The whole index (app/ + lib/ + scripts/), TTL-cached in-process.
+// The repo-root files themselves (package.json, next.config.ts, AGENTS.md,
+// CLAUDE.md, tsconfig.json, eslint config, …) — top level only, no recursion
+// into sibling dirs. These show up constantly as click-to-copy chips in the
+// message stream, but the recursive walk below only covers the source ROOTS, so
+// searching "AGENTS.md" or "next.config.ts" used to return nothing.
+function rootFiles(out: FileRecord[]) {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(REPO_ROOT, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith(".") || !e.isFile()) continue; // dirs handled by walk()
+    const full = path.join(REPO_ROOT, e.name);
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(full);
+    } catch {
+      continue;
+    }
+    out.push({
+      path: full,
+      rel: e.name,
+      name: e.name,
+      ext: path.extname(e.name).replace(/^\./, ""),
+      bytes: st.size,
+      mtime: st.mtimeMs,
+    });
+  }
+}
+
+// The whole index (repo-root files + app/ + lib/ + scripts/), TTL-cached
+// in-process.
 export function getFiles(): FileRecord[] {
   const now = Date.now();
   if (cache && now - cache.at < FRESH_MS) return cache.files;
   const out: FileRecord[] = [];
+  rootFiles(out);
   for (const r of ROOTS) walk(path.join(REPO_ROOT, r), out);
   cache = { at: now, files: out };
   return out;
@@ -125,7 +159,8 @@ export function resolveFile(guess: string): ResolvedFile {
 export function getRepoFile(rel: string): string | null {
   const clean = cleanGuess(rel);
   const inRoot = ROOTS.some((r) => clean === r || clean.startsWith(r + "/"));
-  if (!inRoot) return null;
+  const topLevel = clean.length > 0 && !clean.includes("/"); // a repo-root file like "AGENTS.md"
+  if (!inRoot && !topLevel) return null;
   const full = path.join(REPO_ROOT, clean);
   if (path.relative(REPO_ROOT, full).startsWith("..")) return null;
   try {

@@ -168,7 +168,13 @@ export type SearchHit = {
 // punctuation in the query ("wow..you did it.") never glues words together or
 // gets matched literally. The single-spaced join of these IS the search phrase.
 export function queryTokens(query: string): string[] {
-  return normalize(query).split(" ").filter(Boolean);
+  // A file chip's literal text is `path:line[:col]` (e.g. "components.ts:97") —
+  // drop a trailing line/col suffix that follows a real extension so searching
+  // the chip verbatim still matches the file. Without this the bare digits become
+  // required tokens that no path contains, and the whole query returns nothing.
+  // Anchored to a `.ext` so a genuine query like "port:8080" is left untouched.
+  const q = query.replace(/(\.[a-z0-9]+):\d+(:\d+)?(?=\s|$)/gi, "$1");
+  return normalize(q).split(" ").filter(Boolean);
 }
 
 // Transcripts: hits come from the all-time index (id + score + snippet); titles
