@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ago } from "@/lib/ago";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
@@ -230,6 +231,7 @@ export default function SidebarRecents() {
     width: number;
   } | null>(null);
   const [copiedId, setCopiedId] = useState(false); // ⋮-menu "copy id" feedback
+  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const menuRef = useRef<HTMLDetailsElement>(null);
 
   // Restore the saved grouping (client-only → useEffect, no hydration mismatch).
@@ -483,6 +485,16 @@ export default function SidebarRecents() {
                 return (
                   <div
                     key={s.id}
+                    onMouseEnter={(e) => {
+                      if (menuFor) return; // no tooltip while a row menu is open
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setTip({
+                        x: r.right + 8,
+                        y: r.top + r.height / 2,
+                        text: `${s.id.slice(0, 8)} · ${ago(s.lastActive)}`,
+                      });
+                    }}
+                    onMouseLeave={() => setTip(null)}
                     className={`group flex items-center rounded-md transition-colors ${
                       active || menuFor === s.id ? "bg-zinc-800" : "hover:bg-zinc-800/60"
                     } ${s.hidden ? "opacity-50" : ""}`}
@@ -490,7 +502,6 @@ export default function SidebarRecents() {
                     <Link
                       href={openHref}
                       scroll={false}
-                      title={`${s.project} · ${s.customTitle || s.aiTitle || s.title} · ${s.id.slice(0, 8)} · ${ago(s.lastActive)}`}
                       className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-sm transition-colors ${
                         active
                           ? "text-zinc-100"
@@ -557,6 +568,24 @@ export default function SidebarRecents() {
           )}
         </div>
       )}
+
+      {/* Custom hover tooltip — project · id · last-activity. Fixed-positioned
+          (like the kebab) so the scroll container can't clip it; a flyout to the
+          right of the row, vertically centered. */}
+      {tip &&
+        typeof document !== "undefined" &&
+        createPortal(
+          // Portaled to <body> so it escapes the sidebar's stacking context —
+          // otherwise the terminal column paints over this right-side flyout.
+          <div
+            role="tooltip"
+            style={{ top: tip.y, left: tip.x }}
+            className="pointer-events-none fixed z-[100] -translate-y-1/2 whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[11px] tracking-wide text-zinc-200 shadow-xl"
+          >
+            {tip.text}
+          </div>,
+          document.body
+        )}
 
       {/* Kebab dropdown — fixed-positioned so the scroll container can't clip it.
           One menu at a time; opens from the clicked row's ⋮. */}
