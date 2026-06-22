@@ -14,6 +14,7 @@ import { getTodos } from "./todo";
 import { getProjects } from "./projects";
 import { getSkills } from "./skills";
 import { getFiles } from "./files";
+import { writeFileAtomicSync } from "./atomic";
 import { COMPONENTS, REGISTRY_CREATED_AT } from "./components";
 import { listDocs, docsText, DOCS_DIR } from "./docs";
 
@@ -866,6 +867,21 @@ export function getMemoryFile(name: string): string | null {
     return fs.readFileSync(full, "utf8");
   } catch {
     return null;
+  }
+}
+
+// Overwrite a memory note's full content (frontmatter included — the editor edits
+// the raw file, so nothing is silently rewritten) in the dir it actually lives in.
+// Edit-only: an unknown name returns false rather than creating a stray file.
+// Atomic; resolved via findMemoryFile, so a crafted name can't escape the dirs.
+export function writeMemoryFile(name: string, content: string): boolean {
+  const full = findMemoryFile(name);
+  if (!full) return false;
+  try {
+    writeFileAtomicSync(full, content);
+    return true;
+  } catch {
+    return false;
   }
 }
 

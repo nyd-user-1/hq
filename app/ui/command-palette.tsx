@@ -472,7 +472,8 @@ export default function CommandPalette() {
   const { open, setOpen } = useCommand();
   const router = useRouter();
   const { toggle: togglePlanner } = usePlanner();
-  const { toggle: toggleText } = useTextEditor();
+  const { toggle: toggleText, openEdit } = useTextEditor();
+  const [editNonce, setEditNonce] = useState(0); // bumped on hq:file-edited → re-fetch the open file
   const { toggle: toggleSidebar } = useSidebar();
 
   const [mounted, setMounted] = useState(false);
@@ -552,6 +553,18 @@ export default function CommandPalette() {
     return () => {
       alive = false;
     };
+  }, [viewing, editNonce]);
+
+  // When the Edit modal writes the open file back, re-fetch its body so the reader
+  // reflects the save without leaving ⌘K.
+  useEffect(() => {
+    const onEdited = (e: Event) => {
+      const d = (e as CustomEvent).detail as { kind: string; ref: string };
+      if (viewing && viewing.kind === d.kind && viewing.ref === d.ref)
+        setEditNonce((n) => n + 1);
+    };
+    window.addEventListener("hq:file-edited", onEdited);
+    return () => window.removeEventListener("hq:file-edited", onEdited);
   }, [viewing]);
 
   const commands: Command[] = useMemo(
@@ -683,6 +696,35 @@ export default function CommandPalette() {
     [setOpen, router, q]
   );
 
+  // Editable kinds for the reader's pencil: memory notes, HQ notes, repo .md.
+  const canEdit = (h: Hit | null) =>
+    !!h &&
+    (h.kind === "memory" ||
+      h.kind === "note" ||
+      (h.kind === "file" && h.ref.endsWith(".md")));
+
+  // Pencil → fetch the RAW file (frontmatter and all) and open it in the Text
+  // editor in edit mode. The editor floats over the palette; on save it fires
+  // hq:file-edited, which re-fetches the body here.
+  const openEditor = useCallback(async () => {
+    if (!viewing) return;
+    try {
+      const res = await fetch(
+        `/api/file-edit?kind=${encodeURIComponent(viewing.kind)}&ref=${encodeURIComponent(viewing.ref)}`
+      );
+      if (!res.ok) return;
+      const d = await res.json();
+      openEdit({
+        kind: viewing.kind,
+        ref: viewing.ref,
+        title: viewing.title || viewing.ref,
+        content: typeof d?.content === "string" ? d.content : "",
+      });
+    } catch {
+      /* leave the reader as-is on a fetch error */
+    }
+  }, [viewing, openEdit]);
+
   const execute = useCallback(
     (cmd?: Command) => {
       if (!cmd) return;
@@ -768,6 +810,32 @@ export default function CommandPalette() {
                 {/* Copy + open-in-panel float top-right of the BODY (over the
                     content), pinned as it scrolls. Both lucide icons so they pair. */}
                 <div className="absolute right-2 top-1 z-10 flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/90 px-1.5 py-1">
+                  {canEdit(viewing) && (
+                    <>
+                      <button
+                        onClick={openEditor}
+                        aria-label="Edit file"
+                        title="Edit file"
+                        className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
+                      >
+                        {/* lucide pencil */}
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+                          <path d="m15 5 4 4" />
+                        </svg>
+                      </button>
+                      <span className="h-3.5 w-px bg-zinc-800" />
+                    </>
+                  )}
                   <ViewerCopyButton text={viewerText(body)} />
                   <span className="h-3.5 w-px bg-zinc-800" />
                   <button

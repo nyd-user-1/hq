@@ -92,3 +92,18 @@ export function getNoteFile(name: string): string | null {
     return null;
   }
 }
+
+// Overwrite a note's full content (frontmatter included). Edit-only — an unknown
+// name returns false. Basename-guarded + atomic, like getNoteFile / saveNote.
+export function writeNoteFile(name: string, content: string): boolean {
+  const base = path.basename(name);
+  if (!base.endsWith(".md")) return false;
+  const full = path.join(NOTES_DIR, base);
+  if (!fs.existsSync(full)) return false;
+  try {
+    writeFileAtomicSync(full, content);
+    return true;
+  } catch {
+    return false;
+  }
+}

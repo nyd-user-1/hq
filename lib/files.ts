@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { writeFileAtomicSync } from "./atomic";
 
 // The repo file index — a single walk of the source roots HQ "owns", turned into
 // {path,rel,name,ext,bytes,mtime} records. This is the shared primitive behind
@@ -167,5 +168,25 @@ export function getRepoFile(rel: string): string | null {
     return fs.readFileSync(full, "utf8");
   } catch {
     return null;
+  }
+}
+
+// Overwrite a repo file — restricted to MARKDOWN only (editing .ts/.tsx source from
+// a note modal is out of scope), inside the walked roots / repo-root, behind the
+// same ..-escape guard as getRepoFile. Edit-only: a missing file returns false.
+export function writeRepoFile(rel: string, content: string): boolean {
+  const clean = cleanGuess(rel);
+  if (!clean.endsWith(".md")) return false;
+  const inRoot = ROOTS.some((r) => clean.startsWith(r + "/"));
+  const topLevel = !clean.includes("/");
+  if (!inRoot && !topLevel) return false;
+  const full = path.join(REPO_ROOT, clean);
+  if (path.relative(REPO_ROOT, full).startsWith("..")) return false;
+  if (!fs.existsSync(full)) return false;
+  try {
+    writeFileAtomicSync(full, content);
+    return true;
+  } catch {
+    return false;
   }
 }

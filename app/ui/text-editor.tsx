@@ -18,7 +18,7 @@ import { useTextEditor } from "@/app/ui/text-editor-state";
 // on the way out, never dropped. The blurred backdrop both signals the modal and
 // catches a stray click as a one-tap exit.
 export default function TextEditor() {
-  const { open, setOpen, text, setText, clear } = useTextEditor();
+  const { open, setOpen, text, setText, clear, editTarget, closeEdit } = useTextEditor();
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
@@ -59,10 +59,41 @@ export default function TextEditor() {
   }, [text]);
 
   async function save() {
-    const body = text.trim();
-    if (!body || saving || savedName) return;
+    if (saving || savedName || !text.trim()) return;
     setSaving(true);
     setError(null);
+
+    // Edit mode: write the raw content straight back to the file it came from.
+    if (editTarget) {
+      try {
+        const res = await fetch("/api/file-edit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            kind: editTarget.kind,
+            ref: editTarget.ref,
+            content: text,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+        setSavedName(editTarget.title || editTarget.ref);
+        // Tell the ⌘K reader to re-fetch the file it's showing.
+        window.dispatchEvent(
+          new CustomEvent("hq:file-edited", {
+            detail: { kind: editTarget.kind, ref: editTarget.ref },
+          })
+        );
+        window.setTimeout(() => {
+          closeEdit(); // restore the scratch draft
+          setOpen(false);
+        }, 850);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        setSaving(false);
+      }
+      return;
+    }
+
     try {
       // Pin provenance to the session in the URL if one's there (best-effort).
       const sessionId =
@@ -70,7 +101,7 @@ export default function TextEditor() {
       const res = await fetch("/api/notes", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: body, role: "user", sessionId }),
+        body: JSON.stringify({ text: text.trim(), role: "user", sessionId }),
       });
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
       const data = await res.json().catch(() => ({}));
@@ -84,9 +115,15 @@ export default function TextEditor() {
     }
   }
 
-  // Any exit path: save the text on the way out (never lose a paste), else just
-  // close. Used by the backdrop/chrome click, the close X, and esc.
+  // Exit. New-note mode auto-saves on the way out (never lose a paste). EDIT mode
+  // does NOT — a stray click must never silently overwrite a file — so it just
+  // discards the unsaved edits and restores the scratch draft.
   function dismiss() {
+    if (editTarget) {
+      closeEdit();
+      setOpen(false);
+      return;
+    }
     if (text.trim()) save();
     else setOpen(false);
   }
@@ -152,8 +189,19 @@ export default function TextEditor() {
             (no competing solid ring), matching every other panel in HQ. */}
         <Boundary label="text-editor.tsx">
           <p className="-mt-1 font-mono text-[11px] text-zinc-500">
-            Paste or type a body of text — the first line becomes its title.{" "}
-            <span className="text-zinc-600">It saves as a searchable HQ note.</span>
+            {editTarget ? (
+              <>
+                Editing <span className="text-zinc-300">{editTarget.title}</span>{" "}
+                <span className="text-zinc-600">
+                  — ↵ writes it straight back to the file (frontmatter and all).
+                </span>
+              </>
+            ) : (
+              <>
+                Paste or type a body of text — the first line becomes its title.{" "}
+                <span className="text-zinc-600">It saves as a searchable HQ note.</span>
+              </>
+            )}
           </p>
 
           <textarea
@@ -162,7 +210,9 @@ export default function TextEditor() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Paste your text here, then ↵ to save…"
+            placeholder={
+              editTarget ? "Edit the file, then ↵ to save…" : "Paste your text here, then ↵ to save…"
+            }
             spellCheck={false}
             className="min-h-0 w-full flex-1 resize-none rounded-lg bg-zinc-900/50 p-4 text-[15px] leading-relaxed text-zinc-100 ring-1 ring-zinc-800/60 transition-colors placeholder:text-zinc-600 focus:outline-none focus:ring-zinc-700/70"
           />
@@ -177,7 +227,7 @@ export default function TextEditor() {
               ) : (
                 <span>
                   {stats.words} words · {stats.chars} chars · {stats.lines} lines
-                  {stats.title && (
+                  {!editTarget && stats.title && (
                     <span className="ml-2 text-zinc-600">
                       title: “{stats.title}”
                     </span>
@@ -196,7 +246,7 @@ export default function TextEditor() {
                 disabled={!text.trim() || saving || !!savedName}
                 className="rounded-md bg-orange-500/90 px-3.5 py-1.5 font-mono text-[11px] font-medium text-zinc-950 transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
               >
-                {savedName ? "saved ✓" : saving ? "saving…" : "save note"}
+                {savedName ? "saved ✓" : saving ? "saving…" : editTarget ? "save file" : "save note"}
               </button>
             </div>
           </div>
