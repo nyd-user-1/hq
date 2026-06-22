@@ -31,6 +31,10 @@ const fmtDur = (ms: number): string => {
   const mm = m % 60;
   return mm ? `${h}h ${mm}m` : `${h}h`;
 };
+// Dollars — compact ($5.6k) once we cross $1k (matches the Calls panel) so the
+// week total never sprawls; smaller figures keep their cents.
+const usd = (n: number): string =>
+  n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`;
 
 // Continuous pct ramp — the same green→yellow→orange→red TokenMeter uses for its
 // % text, reused here for both the % readout and the bar fill so the meter reads
@@ -103,15 +107,13 @@ function Meter({ m }: { m: UsageMeter }) {
         />
       </div>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 font-mono text-[11px] text-zinc-500">
-        <span>
-          {fmt(m.usedWeighted)} / {fmt(m.limit)} weighted ·{" "}
-          <span className={pctText(m.rawPct)}>{Math.round(m.rawPct)}%</span>
+        <span
+          className={pctText(m.rawPct)}
+          title={`${fmt(m.usedWeighted)} / ${fmt(m.limit)} weighted tokens used`}
+        >
+          {Math.round(m.rawPct)}%
         </span>
-        <span>
-          {m.resetsAt
-            ? `resets ${clock(m.resetsAt)} · in ${fmtDur(m.resetsAt - Date.now())}`
-            : `${m.span} · ${m.messages} msgs`}
-        </span>
+        <span>{m.resetsAt ? `resets ${clock(m.resetsAt)}` : m.span}</span>
       </div>
     </div>
   );
@@ -178,7 +180,6 @@ export default function ApiPanel() {
         {/* header — live state, synced stamp, refresh */}
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-zinc-600">
-            usage ·{" "}
             {data?.snapshotAt ? (
               <span className="text-green-400" title={`live snapshot captured ${clock(data.snapshotAt)}`}>
                 live {fmtDur(Date.now() - data.snapshotAt)} old
@@ -219,9 +220,73 @@ export default function ApiPanel() {
         {!data ? (
           <p className="mt-2 font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "—"}</p>
         ) : (
+          <>
           <div className="scrollbar-none mt-3 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+            {/* ── SPEND — the headline cost (top). The hero is this session;
+                each context row pairs its share (left) with the dollar (right),
+                then a vs-avg line shows how today stacks up to the week's average
+                day. ── */}
+            <div className="flex flex-col gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">
+                session
+              </span>
+              <span
+                className="font-mono text-2xl text-emerald-300"
+                title="estimated USD — rates in lib/pricing.ts"
+              >
+                ${data.spend.session.toFixed(2)}
+              </span>
+              <div className="flex flex-col gap-1 font-mono text-[11px] text-zinc-600">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span>
+                    {data.spend.today > 0 && (
+                      <span className="text-zinc-300">
+                        {Math.round((data.spend.session / data.spend.today) * 100)}%
+                      </span>
+                    )}{" "}
+                    of today
+                  </span>
+                  <span>
+                    <span className="text-zinc-300">{usd(data.spend.today)}</span> today
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span>
+                    {data.spend.week > 0 && (
+                      <span className="text-zinc-300">
+                        {Math.round((data.spend.today / data.spend.week) * 100)}%
+                      </span>
+                    )}{" "}
+                    of the week
+                  </span>
+                  <span>
+                    <span className="text-zinc-300">{usd(data.spend.week)}</span> this week
+                  </span>
+                </div>
+              </div>
+              {data.spend.week > 0 && (
+                <p
+                  className="font-mono text-[10px] text-zinc-600"
+                  title="today's spend vs. the week's average day (week ÷ 7)"
+                >
+                  today{" "}
+                  <span
+                    className={
+                      data.spend.today >= data.spend.week / 7
+                        ? "text-amber-400/80"
+                        : "text-emerald-400/70"
+                    }
+                  >
+                    {data.spend.today >= data.spend.week / 7 ? "+" : ""}
+                    {Math.round((data.spend.today / (data.spend.week / 7) - 1) * 100)}%
+                  </span>{" "}
+                  vs. avg day
+                </p>
+              )}
+            </div>
+
             {/* ── METERS — the /usage rows ── */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 border-t border-zinc-800 pt-4">
               {data.meters.map((m) => (
                 <Meter key={m.key} m={m} />
               ))}
@@ -257,9 +322,8 @@ export default function ApiPanel() {
                   />
                 </div>
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 font-mono text-[11px] text-zinc-500">
-                  <span>
-                    now <span className="text-zinc-300">{fmt(f.blockWeighted)}</span> ·{" "}
-                    {Math.round(usedPct)}%
+                  <span title={`${fmt(f.blockWeighted)} weighted tokens used in this 5h block so far`}>
+                    now {Math.round(usedPct)}%
                   </span>
                   <span>
                     by {clock(f.blockReset)}:{" "}
@@ -268,20 +332,6 @@ export default function ApiPanel() {
                 </div>
               </div>
             )}
-
-            {/* ── SPEND — session / today / week (est. USD) ── */}
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-zinc-800 pt-4 font-mono text-xs">
-              <span className="uppercase tracking-wide text-zinc-600">spend</span>
-              <span className="text-emerald-300">
-                ${data.spend.session.toFixed(2)} <span className="text-zinc-600">session</span>
-              </span>
-              <span className="text-zinc-300">
-                ${data.spend.today.toFixed(2)} <span className="text-zinc-600">today</span>
-              </span>
-              <span className="text-zinc-300">
-                ${data.spend.week.toFixed(2)} <span className="text-zinc-600">week</span>
-              </span>
-            </div>
 
             {/* ── MODEL MIX — weighted share over the week ── */}
             {data.byModel.length > 0 && (
@@ -310,31 +360,30 @@ export default function ApiPanel() {
             )}
 
             {/* ── INSIGHTS — where the weekly burn concentrates ── */}
-            <div className="flex flex-col gap-1 border-t border-zinc-800 pt-4">
+            <div className="flex flex-col gap-3 border-t border-zinc-800 pt-4">
               <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">
-                breakdown · week
+                breakdown
               </span>
-              {data.insights.map((ins) => (
-                <div key={ins.key} className="flex items-baseline gap-2 font-mono text-[11px]">
-                  <span className="w-10 shrink-0 text-right text-zinc-300">
-                    {Math.round(ins.pct)}%
-                  </span>
-                  <span className="text-zinc-500">{ins.label}</span>
-                </div>
-              ))}
+              <div className="flex flex-col gap-1.5">
+                {data.insights.map((ins) => (
+                  <div key={ins.key} className="flex items-baseline gap-3 font-mono text-[11px]">
+                    <span className="w-10 shrink-0 text-zinc-300">
+                      {Math.round(ins.pct)}%
+                    </span>
+                    <span className="text-zinc-500">{ins.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-
-            {/* ── FOOTNOTE — the honest provenance ── */}
-            <p className="border-t border-dashed border-zinc-800 pt-3 text-xs leading-relaxed text-zinc-600">
-              meters tagged <span className="text-green-400">live</span> are the real
-              /usage values, captured by the SessionStart usage hook (the windows never
-              hit disk otherwise); <span className="text-zinc-500">modeled</span> meters
-              are HQ&apos;s calibrated estimate from local transcripts — weighted =
-              input-equivalents (cache read ×0.1, output ×5) × per-model tier (opus ×5),
-              limits calibrated to /usage 2026-06-11; Opus weekly cap uncalibrated until
-              a live snapshot lands.
-            </p>
           </div>
+          {/* ── FOOTER — provenance, pinned to the bottom of the panel ── */}
+          <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
+            <span className="text-green-400">Live</span> meters are your real /usage,
+            caught the moment a session starts. <span className="text-zinc-400">Modeled</span>{" "}
+            meters are HQ&apos;s calibrated read of your local transcripts — close enough
+            to steer by.
+          </footer>
+          </>
         )}
       </Boundary>
     </AppPanel>

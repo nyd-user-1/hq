@@ -6,6 +6,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEv
 import Markdown from "@/app/ui/md";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
+import TodoMenu from "@/app/ui/todo-menu";
+import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import SendBoxSearch from "@/app/ui/send-box-search";
 import PanelMenu from "@/app/ui/panel-menu";
 import { useRepl } from "@/app/ui/use-repl";
@@ -745,19 +747,18 @@ export default function Terminal({
   const [chosenModel, setChosenModel] = useState<string | null>(null); // picker override → --model on sends
   const [modelOpen, setModelOpen] = useState(false); // model dropdown open?
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const lineageRef = useRef<HTMLDetailsElement>(null); // /clear-chain menu — opens on hover (like PanelMenu)
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const [focusMode, setFocusMode] = useState(false); // centered "conversation shell" toggle for a live session (the not-connected state forces it on)
   const [driveMode, setDriveMode] = useState(false); // "Drive from HQ": route the send box to the live REPL (Terminal 1 only)
   const [starting, setStarting] = useState<string | null>(null); // a project being born-and-driven from the staging view
-  const [searchOpen, setSearchOpen] = useState(false); // header search expanded?
   const [searchQuery, setSearchQuery] = useState(""); // raw input — updates instantly so typing never lags
   const [appliedQuery, setAppliedQuery] = useState(""); // debounced — what the (heavy) DOM walk actually runs
   const [searchMode, setSearchMode] = useState(false); // send-box "search this session" mode — the box becomes the search bar
-  const sendSearchInputRef = useRef<HTMLInputElement>(null); // send-box search field (the header field keeps searchInputRef)
+  const sendSearchInputRef = useRef<HTMLInputElement>(null); // send-box search field
   const [searchMatchCount, setSearchMatchCount] = useState(0); // hits in the transcript
   const [searchActiveIndex, setSearchActiveIndex] = useState(0); // which hit is current
-  const searchInputRef = useRef<HTMLInputElement>(null);
   // The matched hits in document order, stored as (textNode, offset) — NOT live
   // Ranges — so the list is cheap to build over the whole transcript (incl. text
   // inside collapsed tool steps). Ranges are minted on demand for visible hits +
@@ -866,18 +867,10 @@ export default function Terminal({
   // keystroke). Per-pane highlight keys (Terminal 1 = "session", 2 = "pair") keep
   // the two terminals from clobbering each other's registry entries.
   const q = appliedQuery.trim().toLowerCase();
-  const searching = searchOpen && q.length > 0;
-  // The highlight engine lights up for EITHER search surface — the header field
-  // (searchOpen) or the send-box mode (searchMode). `searching` stays header-only
-  // so the header's own nav cluster never orphans when only the send box is open.
-  const searchActive = (searchOpen || searchMode) && q.length > 0;
+  // The highlight engine lights up when the send-box search mode has a query.
+  const searchActive = searchMode && q.length > 0;
   const hlName = `hq-search-${paramKey}`;
   const hlActiveName = `hq-search-active-${paramKey}`;
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setSearchQuery("");
-    setAppliedQuery("");
-  }, []);
   // Exit the send-box search mode → back to compose (clears the query so the
   // highlights drop too).
   const closeSendSearch = useCallback(() => {
@@ -938,12 +931,6 @@ export default function Terminal({
   useEffect(() => {
     setSearchActiveIndex(0);
   }, [q]);
-
-  // Focus the box the moment it expands (it's always mounted for the width
-  // animation, so autoFocus won't refire — focus imperatively instead).
-  useEffect(() => {
-    if (searchOpen) searchInputRef.current?.focus();
-  }, [searchOpen]);
 
   // Focus the send-box search field the moment the box flips into search mode.
   useEffect(() => {
@@ -1144,11 +1131,11 @@ export default function Terminal({
     });
   }, [hasMore, loadTurns]);
 
-  // Search opened → pull the FULL transcript so find-in-page covers everything,
+  // Search mode → pull the FULL transcript so find-in-page covers everything,
   // not just the loaded tail. loadOlder no-ops if already expanded / nothing more.
   useEffect(() => {
-    if (searchOpen || searchMode) loadOlder();
-  }, [searchOpen, searchMode, loadOlder]);
+    if (searchMode) loadOlder();
+  }, [searchMode, loadOlder]);
 
   // Build the match list for the active query across the WHOLE transcript — text
   // inside collapsed tool steps included. Cheap on purpose: one TreeWalker pass of
@@ -1963,126 +1950,78 @@ export default function Terminal({
           <span className="font-mono text-[11px] text-zinc-600">—</span>
         )}
         {/* Panels menu — the layout-grid icon opens Activity/Metrics/Console/
-            Compose/Planner/Text. Lives here in the header, just left of search
-            (its former boundary-trail chip was removed). */}
+            Compose/Planner/Text. Lives here in the header (per-session search now
+            lives only in the send box). */}
         <PanelMenu />
-        {/* Search — bare icon-button (send-box standard) just after the session
-            id. Click expands it into the SearchField primitive (animated width)
-            that filters THIS session's transcript; the icon morphs to ×. */}
-        {resolvedId && !notConnected && (
-          <span className="flex min-w-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
-              aria-label={searchOpen ? "Close search" : "Search this session"}
-              title={searchOpen ? "close search" : "search this session"}
-              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              {searchOpen ? (
-                // lucide x
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              ) : (
-                // lucide search
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-              )}
-            </button>
-            {/* Expanding field — always mounted (so the width animates), the
-                reusable SearchField primitive inside. Escape closes + clears. */}
-            <span
-              className={`overflow-hidden transition-all duration-200 ease-out ${
-                searchOpen ? "w-44 opacity-100 sm:w-56" : "w-0 opacity-0"
-              }`}
-            >
-              <SearchField
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="search this session…"
-                inputRef={searchInputRef}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") closeSearch();
-                  else if (e.key === "Enter") {
-                    e.preventDefault();
-                    gotoMatch(e.shiftKey ? -1 : 1); // ↵ next · ⇧↵ prev
-                  }
-                }}
-                className="hq-find-field !py-1 !text-xs"
-              />
-            </span>
-            {searching && (
-              <span className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-zinc-500">
-                <button
-                  type="button"
-                  onClick={() => gotoMatch(-1)}
-                  disabled={!searchMatchCount}
-                  aria-label="Previous match"
-                  title="previous match (⇧↵)"
-                  className="flex items-center rounded p-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-30 disabled:hover:bg-transparent"
-                >
-                  {/* lucide chevron-up */}
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m18 15-6-6-6 6" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => gotoMatch(1)}
-                  disabled={!searchMatchCount}
-                  aria-label="Next match"
-                  title="next match (↵)"
-                  className="flex items-center rounded p-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-30 disabled:hover:bg-transparent"
-                >
-                  {/* lucide chevron-down */}
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </button>
-                <span className="tabular-nums" title="↵ next · ⇧↵ previous">
-                  {searchMatchCount ? searchActiveIndex + 1 : 0}/{searchMatchCount}
-                </span>
-              </span>
-            )}
-          </span>
-        )}
         {/* The /clear chain: this session's tied line of continuations.
             Click a row to show that session in the terminal. */}
         {lineage?.chain && (
-          <details className="relative">
+          <details
+            ref={lineageRef}
+            className="relative shrink-0"
+            // Navbar-style: open on hover, close on leave — same as PanelMenu.
+            onMouseEnter={() => { if (lineageRef.current) lineageRef.current.open = true; }}
+            onMouseLeave={() => { if (lineageRef.current) lineageRef.current.open = false; }}
+          >
             <summary
-              title="sessions tied together by /clear continuations"
-              className="cursor-pointer list-none rounded-md border border-zinc-800 px-1.5 py-px font-mono text-[10px] text-zinc-500 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:border-zinc-600 hover:text-zinc-300"
+              title={`session tree — ${lineage.chain.length} tied by /clear continuations`}
+              // Bare folder-tree icon button (send-box standard); the dropdown
+              // lists the chain. Replaced the "sessions · N" text label.
+              className="flex shrink-0 cursor-pointer list-none items-center rounded-md p-1.5 text-zinc-400 transition-colors marker:content-none [&::-webkit-details-marker]:hidden hover:bg-zinc-800 hover:text-zinc-200"
             >
-              sessions · {lineage.chain.length} ▾
+              {/* lucide folder-tree */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M20 10a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 14 7h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1Z" />
+                <path d="M20 21a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2a1 1 0 0 0-.8-.4H12a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1Z" />
+                <path d="M3 5a2 2 0 0 0 2 2h3" />
+                <path d="M3 3v13a2 2 0 0 0 2 2h3" />
+              </svg>
             </summary>
-            <div className="absolute left-0 top-full z-20 mt-1 flex w-72 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+            {/* pt-1.5 is a TRANSPARENT hover-bridge — a descendant of <details>, so
+                the pointer can cross icon→menu without firing mouseleave. */}
+            <div className="absolute left-0 top-full z-20 pt-1.5">
+            <div className="relative flex w-72 flex-col rounded-md border border-dashed border-zinc-700 bg-zinc-950 p-1 shadow-xl">
+              {/* info-circle chip straddling the dashed top border — same pattern
+                  as PanelMenu's "about panels" chip. */}
+              <div className="absolute -top-2.5 right-2 z-10">
+                <ButtonChipIcon
+                  onClick={() => {}}
+                  label="About the session tree"
+                  title="A continuous terminal session, differentiated by the /clear function and individual session IDs."
+                  icon={
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4" />
+                      <path d="M12 8h.01" />
+                    </svg>
+                  }
+                />
+              </div>
               {lineage.chain.map((c, i) => (
                 <Link
                   key={c.id}
                   href={hrefFor(c.id)}
                   scroll={false}
+                  onClick={() => { if (lineageRef.current) lineageRef.current.open = false; }}
                   className={`flex items-baseline gap-2 rounded px-2 py-1 font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
                     c.id === resolvedId ? "text-zinc-200" : "text-zinc-500"
                   }`}
@@ -2100,6 +2039,7 @@ export default function Terminal({
                   </span>
                 </Link>
               ))}
+            </div>
             </div>
           </details>
         )}
@@ -2210,6 +2150,14 @@ export default function Terminal({
           if (el.scrollTop < 120) loadOlder();
         }}
         className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
+        // Top-edge fade — masks the top ~64px of the scroll viewport to
+        // transparent so streaming text dissolves into the bg as it slides up
+        // under the header (instead of a hard cut). Inline so it can't be purged
+        // or overridden by Tailwind's own mask layer; webkit-prefixed for Chromium.
+        style={{
+          WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 64px)",
+          maskImage: "linear-gradient(to bottom, transparent, #000 64px)",
+        }}
       >
         {/* Centered column when `centered`; `display:contents` (a no-op) when not,
             so the full-width transcript is unchanged. */}
@@ -2622,11 +2570,6 @@ export default function Terminal({
               }${status.phase ? ` · ${status.phase}` : ""})`}
             </span>
           </p>
-          {status.phases.length > 1 && (
-            <p className="font-mono text-[11px] text-zinc-600">
-              phases · {status.phases.slice(-6).join(" → ")}
-            </p>
-          )}
         </div>
       ) : sending ? (
         <p className="font-mono text-xs text-zinc-500">starting…</p>
@@ -2635,7 +2578,7 @@ export default function Terminal({
           ⊘ interrupted — send a message to redirect
         </p>
       ) : !loading && lastWrite && now > 0 ? (
-        <p className="font-mono text-xs text-zinc-600">
+        <p className="font-mono text-xs text-amber-400">
           ◦ idle — nothing running
           {now > lastWrite && ` · last activity ${fmtAgo(now - lastWrite)}`}
         </p>
@@ -2696,7 +2639,10 @@ export default function Terminal({
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
             </svg>
-            searching this session
+            searching session{" "}
+            <span className="text-yellow-300">
+              {customTitle || resolvedId?.slice(0, 8) || "this session"}
+            </span>
           </div>
         )}
         {/* textarea + controls; ↵ sends / ⇧↵ newline. Drops are caught at the
@@ -2705,11 +2651,7 @@ export default function Terminal({
             scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
             pushes the top up into the message area. */}
         <div
-          className={`relative z-10 flex flex-col gap-2 rounded-md border bg-zinc-950 p-2 transition-colors ${
-            searchMode
-              ? "border-yellow-300/70 focus-within:border-yellow-300/70"
-              : "border-zinc-700 focus-within:border-zinc-500"
-          }`}
+          className="relative z-10 flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2 transition-colors focus-within:border-zinc-500"
         >
           {/* The send box's own boundary chip — top-right of its SOLID 1px border
               (everything else uses the dashed Boundary). Anticipatory name
@@ -2852,7 +2794,7 @@ export default function Terminal({
                 onClick={() => setSearchMode(true)}
                 aria-label="Search this session"
                 title="search this session"
-                className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
+                className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
               >
                 <svg
                   width="14"
@@ -2869,7 +2811,20 @@ export default function Terminal({
                 </svg>
               </button>
             )}
-            {/* right cluster, bottom-right: cache + model + todo + send. */}
+            {/* todos — grouped with attach + search on the left. A search +
+                scrollable-rows dropdown over the HQ To Do store: pick a row to
+                drop it into the box, or add the current message as a new to-do. */}
+            <TodoMenu
+              draft={draft}
+              onAddDraft={todoDraft}
+              onPick={(text) => {
+                setDraft((d) =>
+                  d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text
+                );
+                taRef.current?.focus();
+              }}
+            />
+            {/* right cluster, bottom-right: cache + model + send. */}
             <div className="ml-auto flex items-center gap-2">
               {/* ctx % then cache meter — in wide screen they live here, just
                   before the model selector (in the centered shell they move to the
@@ -2929,31 +2884,6 @@ export default function Terminal({
                   )}
                 </div>
               )}
-              {/* todo — same icon-button standard, lucide list-todo glyph. */}
-              <button
-                type="button"
-                onClick={todoDraft}
-                aria-label="Add to-do"
-                title="add this as a to-do on your HQ list"
-                className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="5" width="6" height="6" rx="1" />
-                  <path d="m3 17 2 2 4-4" />
-                  <path d="M13 6h8" />
-                  <path d="M13 12h8" />
-                  <path d="M13 18h8" />
-                </svg>
-              </button>
               {/* send (↑) → while a run is in flight, becomes the red stop button
                   with the traditional white square. */}
               {sending ? (
@@ -3005,8 +2935,7 @@ export default function Terminal({
       {/* Footer row under the composer (centered shell only): the tagline,
           left-aligned, with the cache/ctx meter inline on the right. */}
       {centered && (
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-mono text-[11px] text-zinc-600">
-          <span>HQ: The disk is the database.</span>
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 font-mono text-[11px] text-zinc-600">
           <span className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
             {ctxMeter}
             {meter}
