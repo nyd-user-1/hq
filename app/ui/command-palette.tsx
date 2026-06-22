@@ -153,6 +153,117 @@ const IconDoc = () => (
     <path d="M8 13h8M8 17h6" />
   </svg>
 );
+// Per-kind result glyphs — so a memory note, a commit, a todo, a script, etc.
+// each read at a glance instead of every row sharing the one doc icon. Lucide
+// paths, same SVG base as the nav icons above.
+const IconBrain = () => (
+  <svg {...SVG}>
+    <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+    <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+    <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+    <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
+    <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+    <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+    <path d="M19.938 10.5a4 4 0 0 1 .585.396" />
+    <path d="M6 18a4 4 0 0 1-1.967-.516" />
+    <path d="M19.967 17.484A4 4 0 0 1 18 18" />
+  </svg>
+);
+const IconListTodo = () => (
+  <svg {...SVG}>
+    <rect x="3" y="5" width="6" height="6" rx="1" />
+    <path d="m3 17 2 2 4-4" />
+    <path d="M13 6h8" />
+    <path d="M13 12h8" />
+    <path d="M13 18h8" />
+  </svg>
+);
+const IconCommitVertical = () => (
+  <svg {...SVG}>
+    <path d="M12 3v6" />
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 15v6" />
+  </svg>
+);
+const IconNotebookPen = () => (
+  <svg {...SVG}>
+    <path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4" />
+    <path d="M2 6h4" />
+    <path d="M2 10h4" />
+    <path d="M2 14h4" />
+    <path d="M2 18h4" />
+    <path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
+  </svg>
+);
+const IconFileCode = () => (
+  <svg {...SVG}>
+    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+    <path d="m10 13-2 2 2 2" />
+    <path d="m14 13 2 2-2 2" />
+  </svg>
+);
+const IconFile = () => (
+  <svg {...SVG}>
+    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+  </svg>
+);
+const IconBox = () => (
+  <svg {...SVG}>
+    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+    <path d="m3.3 7 8.7 5 8.7-5" />
+    <path d="M12 22V12" />
+  </svg>
+);
+const IconMessage = () => (
+  <svg {...SVG}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+const IconFolder = () => (
+  <svg {...SVG}>
+    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+  </svg>
+);
+const IconSparkles = () => (
+  <svg {...SVG}>
+    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z" />
+    <path d="M20 3v4" />
+    <path d="M22 5h-4" />
+    <path d="M4 17v2" />
+    <path d="M5 18H3" />
+  </svg>
+);
+// A hit's kind → its glyph. Anything unmapped falls back to the doc icon.
+function hitIcon(kind: string): React.ReactNode {
+  switch (kind) {
+    case "memory":
+      return <IconBrain />;
+    case "todo":
+      return <IconListTodo />;
+    case "commit":
+      return <IconCommitVertical />;
+    case "note":
+      return <IconNotebookPen />;
+    case "script":
+      return <IconFileCode />;
+    case "file":
+      return <IconFile />;
+    case "component":
+      return <IconBox />;
+    case "transcript":
+    case "session":
+    case "sdk":
+      return <IconMessage />;
+    case "project":
+      return <IconFolder />;
+    case "skill":
+      return <IconSparkles />;
+    default:
+      return <IconDoc />;
+  }
+}
 
 function navIcon(t: NavTarget): React.ReactNode {
   if (t.href === "/compose") return <IconCompose />;
@@ -400,7 +511,7 @@ export default function CommandPalette() {
         meta: h.meta,
         at: h.at,
         hit: h,
-        icon: <IconDoc />,
+        icon: hitIcon(h.kind),
         run: () =>
           setViewing((cur) =>
             cur && cur.kind === h.kind && cur.ref === h.ref ? null : h
