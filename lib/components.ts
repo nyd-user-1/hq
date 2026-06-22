@@ -64,6 +64,7 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "SearchTrigger", file: "app/ui/search-trigger.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — opens/closes the Search panel (active state)." },
   { name: "TextEditor", file: "app/ui/text-editor.tsx", kind: "container", status: "review", desc: "Full-screen capture modal (opened from the panel-menu “Text” item) — paste text, ↵ saves it as a searchable HQ note (POST /api/notes)." },
   { name: "CommandPalette", file: "app/ui/command-palette.tsx", kind: "container", status: "review", desc: "⌘K launcher — ranked + grouped Actions/Navigate commands; keyboard-driven; nav carries the terminal pins (withPins)." },
+  { name: "Tooltip", file: "app/ui/tooltip.tsx", kind: "presentational", status: "review", desc: "Custom dark hover tooltip — portaled chip replacing native title; wrap a trigger, placement top/bottom/right. Extracted from sidebar-recents; that inline copy is a candidate to fold in." },
 ];
 
 // Registry provenance — like a to-do, each entry records the session that added

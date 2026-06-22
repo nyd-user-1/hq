@@ -9,6 +9,7 @@ import SearchField from "@/app/ui/search-field";
 import TodoMenu from "@/app/ui/todo-menu";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import SendBoxSearch from "@/app/ui/send-box-search";
+import Tooltip from "@/app/ui/tooltip";
 import PanelMenu from "@/app/ui/panel-menu";
 import { useRepl } from "@/app/ui/use-repl";
 import { OnboardingConversation } from "@/app/ui/landing-install";
@@ -693,12 +694,16 @@ function RecentSessions({
 
 export default function Terminal({
   paramKey = "session",
+  initialFocus = true,
 }: {
   // Which URL param this terminal reads/writes for its session. Terminal 1 (the
   // shell's always-mounted heart) uses "session"; Terminal 2 (the pair pane)
   // uses "pair", so the two never collide. API query params stay "session"
   // (that's the endpoint's name) — only the browser URL key changes.
   paramKey?: "session" | "pair";
+  // Seeds focus mode from the `hq-focus` cookie (server-read in shell.tsx → no
+  // flash). Focus is the DEFAULT (true); toggling to wide writes "0".
+  initialFocus?: boolean;
 } = {}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -750,12 +755,13 @@ export default function Terminal({
   const lineageRef = useRef<HTMLDetailsElement>(null); // /clear-chain menu — opens on hover (like PanelMenu)
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
-  const [focusMode, setFocusMode] = useState(false); // centered "conversation shell" toggle for a live session (the not-connected state forces it on)
+  const [focusMode, setFocusMode] = useState(initialFocus); // centered "conversation shell" — focus is the DEFAULT, seeded from the hq-focus cookie; the not-connected state forces it on regardless
   const [driveMode, setDriveMode] = useState(false); // "Drive from HQ": route the send box to the live REPL (Terminal 1 only)
   const [starting, setStarting] = useState<string | null>(null); // a project being born-and-driven from the staging view
   const [searchQuery, setSearchQuery] = useState(""); // raw input — updates instantly so typing never lags
   const [appliedQuery, setAppliedQuery] = useState(""); // debounced — what the (heavy) DOM walk actually runs
   const [searchMode, setSearchMode] = useState(false); // send-box "search this session" mode — the box becomes the search bar
+  const [searchUserOnly, setSearchUserOnly] = useState(false); // "filter by user" — scope hits to YOUR turns, skipping Claude + tool output
   const sendSearchInputRef = useRef<HTMLInputElement>(null); // send-box search field
   const [searchMatchCount, setSearchMatchCount] = useState(0); // hits in the transcript
   const [searchActiveIndex, setSearchActiveIndex] = useState(0); // which hit is current
@@ -1170,6 +1176,13 @@ export default function Terminal({
     });
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const text = (node.nodeValue ?? "").toLowerCase();
+      // "Filter by user": keep a hit only if its nearest [data-role] ancestor
+      // is a user turn. Claude replies are data-role="assistant"; tool output
+      // and dividers have no [data-role] at all — both fall away here.
+      if (searchUserOnly) {
+        const owner = node.parentElement?.closest("[data-role]");
+        if (owner?.getAttribute("data-role") !== "user") continue;
+      }
       for (
         let idx = text.indexOf(q);
         idx !== -1;
@@ -1197,7 +1210,15 @@ export default function Terminal({
     setSearchActiveIndex((i) =>
       matches.length ? Math.min(i, matches.length - 1) : 0,
     );
-  }, [searchActive, q, items, hlName, hlActiveName, registerVisibleHighlights]);
+  }, [
+    searchActive,
+    q,
+    items,
+    searchUserOnly,
+    hlName,
+    hlActiveName,
+    registerVisibleHighlights,
+  ]);
 
   // Navigate to the active hit: reveal it if it's tucked inside a collapsed tool
   // step (then re-light the now-visible siblings), paint it the brighter active
@@ -2082,22 +2103,30 @@ export default function Terminal({
             {driveMode ? "driving" : "drive"}
           </button>
         )}
-        {/* Layout toggle — flips this live session between two real modes: "wide
-            screen" (default) and "focus mode" (the centered conversation shell).
+        {/* Layout toggle — flips this live session between two real modes: "focus
+            mode" (the centered conversation shell, the DEFAULT) and "wide screen".
+            The choice persists in the hq-focus cookie (read server-side in
+            shell.tsx → no flash), shared across both panes like the sidebar.
             Part of the header cluster, so it rides the centered column WITH the
             metadata when focused. minimize-2 while wide (shrink into focus),
             maximize-2 while focused. Pinned session only. */}
         {(resolvedId || staged) && !notConnected && (
+          <Tooltip
+            label={focusMode ? "Wide screen" : "Focus mode"}
+            placement="bottom"
+            className={paramKey === "session" && !staged ? undefined : "ml-auto"}
+          >
           <button
             type="button"
-            onClick={() => setFocusMode((f) => !f)}
-            aria-label={focusMode ? "Wide screen" : "Focus mode"}
-            title={
-              focusMode
-                ? "in focus mode — click to expand to wide screen"
-                : "in wide screen — click for focus mode"
+            onClick={() =>
+              setFocusMode((f) => {
+                const next = !f;
+                document.cookie = `hq-focus=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+                return next;
+              })
             }
-            className={`${paramKey === "session" && !staged ? "" : "ml-auto "}flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200`}
+            aria-label={focusMode ? "Wide screen" : "Focus mode"}
+            className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           >
               {focusMode ? (
                 // lucide maximize-2 — expand back out to wide screen
@@ -2135,6 +2164,7 @@ export default function Terminal({
                 </svg>
               )}
             </button>
+          </Tooltip>
           )}
         </div>
       </div>
@@ -2316,6 +2346,7 @@ export default function Terminal({
                 )}
               </span>
               <div
+                data-role={it.role}
                 className={`group/turn relative break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
                   savedNotes.has(it.text)
                     ? it.role === "user"
@@ -2678,6 +2709,8 @@ export default function Terminal({
               inputRef={sendSearchInputRef}
               matchCount={searchMatchCount}
               activeIndex={searchActiveIndex}
+              userOnly={searchUserOnly}
+              onToggleUserOnly={() => setSearchUserOnly((v) => !v)}
               onPrev={() => gotoMatch(-1)}
               onNext={() => gotoMatch(1)}
               onClose={closeSendSearch}
@@ -2826,11 +2859,11 @@ export default function Terminal({
             />
             {/* right cluster, bottom-right: cache + model + send. */}
             <div className="ml-auto flex items-center gap-2">
-              {/* ctx % then cache meter — in wide screen they live here, just
-                  before the model selector (in the centered shell they move to the
-                  footer instead). ctx sits immediately to the left of cache. */}
-              {!centered && ctxMeter}
-              {!centered && meter}
+              {/* ctx % then cache meter — they live here in the send-box toolbar
+                  in BOTH wide screen and the centered (focus) shell, just before
+                  the model selector. ctx sits immediately to the left of cache. */}
+              {ctxMeter}
+              {meter}
               {/* model picker — defaults to the model read from the transcript;
                   your pick rides on the send as `claude --model <id>`, which sets
                   the resumed session's model. Dropdown opens up-and-right. */}
@@ -2932,16 +2965,6 @@ export default function Terminal({
           )}
         </div>
       </div>
-      {/* Footer row under the composer (centered shell only): the tagline,
-          left-aligned, with the cache/ctx meter inline on the right. */}
-      {centered && (
-        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 font-mono text-[11px] text-zinc-600">
-          <span className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-            {ctxMeter}
-            {meter}
-          </span>
-        </div>
-      )}
       </div>
     </div>
   );

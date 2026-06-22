@@ -12,7 +12,15 @@ import Terminal from "@/app/ui/terminal";
 // second pane mounts a real, independent Terminal driven off ?pair (Terminal 1
 // stays on ?session). To remove: drop this file, unwrap in shell.tsx, and delete
 // the split affordance in sidebar-recents.tsx.
-export default function PairColumn({ children }: { children: React.ReactNode }) {
+export default function PairColumn({
+  children,
+  initialFocus = true,
+}: {
+  children: React.ReactNode;
+  // Seeds Terminal 2's focus mode from the same server-read hq-focus cookie as
+  // Terminal 1, so both panes open in the user's preferred layout (no flash).
+  initialFocus?: boolean;
+}) {
   return (
     <div className="flex min-h-0 flex-1 gap-4">
       {/* Terminal 1 — always rendered, always first → never remounts */}
@@ -20,13 +28,13 @@ export default function PairColumn({ children }: { children: React.ReactNode }) 
       {/* Terminal 2 — reads ?pair; Suspense keeps useSearchParams from breaking
           the static /_not-found prerender */}
       <Suspense fallback={null}>
-        <PairPane />
+        <PairPane initialFocus={initialFocus} />
       </Suspense>
     </div>
   );
 }
 
-function PairPane() {
+function PairPane({ initialFocus }: { initialFocus: boolean }) {
   const params = useSearchParams();
   const pair = params.get("pair");
   const session = params.get("session");
@@ -60,7 +68,7 @@ function PairPane() {
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </Link>
-        <Terminal paramKey="pair" />
+        <Terminal paramKey="pair" initialFocus={initialFocus} />
       </Boundary>
     </div>
   );

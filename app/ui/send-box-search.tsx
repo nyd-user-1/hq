@@ -2,6 +2,8 @@
 
 import type { KeyboardEvent, Ref } from "react";
 
+import Tooltip from "@/app/ui/tooltip";
+
 // "Search this session" mode for the send box — the solar map/voice-mode pattern.
 // The box KEEPS its exact shape: a plain text line on top, a toolbar row beneath,
 // just like compose. The ONLY mode signals are (1) the send-box CONTAINER border
@@ -24,6 +26,8 @@ type Props = {
   inputRef?: Ref<HTMLInputElement>;
   matchCount: number;
   activeIndex: number; // 0-based; shown as activeIndex + 1
+  userOnly: boolean; // "filter by user" — scope hits to the user's own turns
+  onToggleUserOnly: () => void;
   onPrev: () => void;
   onNext: () => void;
   onClose: () => void; // exit search → compose (the active magnifier / Esc)
@@ -49,6 +53,8 @@ export default function SendBoxSearch({
   inputRef,
   matchCount,
   activeIndex,
+  userOnly,
+  onToggleUserOnly,
   onPrev,
   onNext,
   onClose,
@@ -94,6 +100,28 @@ export default function SendBoxSearch({
             <path d="m6 6 12 12" />
           </svg>
         </button>
+        {/* "filter by user" — scope hits to YOUR turns (skips Claude + tool
+            output). Lights yellow (the search accent) when active. Shown always,
+            so it can be pre-set before typing. The custom dark Tooltip replaces
+            the native title. */}
+        <Tooltip label="Filter by user">
+          <button
+            type="button"
+            onClick={onToggleUserOnly}
+            aria-pressed={userOnly}
+            aria-label="Filter by user"
+            className={`flex shrink-0 items-center rounded-md border p-1.5 transition-colors ${
+              userOnly
+                ? "border-yellow-300/70 bg-yellow-300/10 text-yellow-300"
+                : "border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            }`}
+          >
+            <svg {...SVG}>
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </button>
+        </Tooltip>
         {hasQuery && (
           <span className="ml-auto flex shrink-0 items-center gap-1 font-mono text-[10px] text-zinc-500">
             <button

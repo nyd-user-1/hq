@@ -31,9 +31,13 @@ export default async function Shell({
   children: React.ReactNode;
   panel: React.ReactNode;
 }) {
-  // Seed the sidebar from its cookie so a refresh keeps the last open/closed
-  // state (default open on a first visit). Read on the server → no flash.
-  const sidebarOpen = (await cookies()).get("hq-sidebar")?.value !== "0";
+  // Seed the sidebar + focus mode from their cookies so a refresh keeps the last
+  // choice. Read on the server → no flash. Sidebar defaults open; focus mode is
+  // the DEFAULT layout (centered conversation shell) unless the user toggled to
+  // wide (hq-focus="0").
+  const jar = await cookies();
+  const sidebarOpen = jar.get("hq-sidebar")?.value !== "0";
+  const focusDefault = jar.get("hq-focus")?.value !== "0";
   return (
     <div className="flex h-dvh flex-col bg-zinc-950 p-6 text-zinc-100">
       {/* no row gap — the sidebar carries mr-4 while open (collapses with it)
@@ -55,7 +59,7 @@ export default async function Shell({
           <div className="flex min-w-[380px] flex-1 flex-col gap-4">
             {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
                 remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
-            <PairColumn>
+            <PairColumn initialFocus={focusDefault}>
               <Boundary
                 label="terminal.tsx"
                 lead={<SidebarToggle />}
@@ -66,7 +70,7 @@ export default async function Shell({
                     <p className="text-sm text-zinc-600">loading terminal…</p>
                   }
                 >
-                  <Terminal />
+                  <Terminal initialFocus={focusDefault} />
                 </Suspense>
               </Boundary>
             </PairColumn>
