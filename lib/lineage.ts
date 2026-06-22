@@ -251,3 +251,35 @@ export function lineageFor(id: string): Lineage {
     successor: succ ? strip(succ) : null,
   };
 }
+
+// Each session id → the id of its chain's ROOT (the oldest /clear ancestor). A
+// session in no chain maps to itself. One scan, reusing the same parent
+// heuristic as lineageFor — powers the sidebar's "Tree" grouping, which reunites
+// /clear continuations under one header. O(N²) over a week's sessions (small N).
+export function chainRootMap(): Map<string, string> {
+  const all = scan();
+  const parentOf = (m: Meta): Meta | null => {
+    if (!m.clearBorn || !m.cwd || !m.bornAt || isStubMeta(m)) return null;
+    let best: Meta | null = null;
+    for (const c of all) {
+      if (c.id === m.id || c.cwd !== m.cwd) continue;
+      if (!c.bornAt || c.bornAt >= m.bornAt) continue;
+      if (c.lastActive < m.bornAt - ADJACENCY_MS) continue;
+      if (!best || c.bornAt > best.bornAt) best = c;
+    }
+    return best;
+  };
+  const roots = new Map<string, string>();
+  for (const m of all) {
+    const seen = new Set<string>([m.id]);
+    let cur: Meta = m;
+    let p = parentOf(cur);
+    while (p && !seen.has(p.id)) {
+      seen.add(p.id);
+      cur = p;
+      p = parentOf(cur);
+    }
+    roots.set(m.id, cur.id);
+  }
+  return roots;
+}

@@ -22,17 +22,19 @@ type Recent = {
   active: boolean;
   branch: string;
   aiTitle: string;
+  chainRoot: string;
   customTitle: string;
   favorite: boolean;
   hidden: boolean;
   related: string[];
 };
 
-type GroupBy = "none" | "date" | "project";
+type GroupBy = "none" | "date" | "project" | "tree";
 const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
   { value: "none", label: "None" },
   { value: "date", label: "Date" },
   { value: "project", label: "Project" },
+  { value: "tree", label: "Tree" },
 ];
 const STORAGE_KEY = "hq:recents-group";
 
@@ -61,6 +63,27 @@ function groupSessions(
       (a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)
     );
     return [{ label: "", sessions: sorted }];
+  }
+
+  if (mode === "tree") {
+    // Bucket by /clear chain. A multi-session chain gets the thread's current
+    // title as a header (reuniting its fragments); a lone session stays
+    // headerless (label "") so the list doesn't sprout a header per row.
+    const byChain = new Map<string, Recent[]>();
+    for (const s of sessions) {
+      const k = s.chainRoot || s.id;
+      const arr = byChain.get(k);
+      if (arr) arr.push(s);
+      else byChain.set(k, [s]);
+    }
+    return [...byChain.values()].map((ss) =>
+      ss.length > 1
+        ? {
+            label: ss[0].customTitle || ss[0].aiTitle || ss[0].id.slice(0, 8),
+            sessions: ss,
+          }
+        : { label: "", sessions: ss }
+    );
   }
 
   const map = new Map<string, Recent[]>();
@@ -211,7 +234,7 @@ export default function SidebarRecents() {
   // Restore the saved grouping (client-only → useEffect, no hydration mismatch).
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "date" || saved === "project" || saved === "none")
+    if (saved === "date" || saved === "project" || saved === "none" || saved === "tree")
       setGroupBy(saved);
   }, []);
 
@@ -376,8 +399,11 @@ export default function SidebarRecents() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
       <div className="flex items-center justify-between px-2.5">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-          Recent Sessions
+        {/* The first group's label sits here next to the group-by control —
+            "Today" / "Recents" / a thread title — so there's no redundant
+            standalone "Recent Sessions" line above it. */}
+        <span className="font-mono text-[10px] tracking-widest text-zinc-500">
+          {groups[0]?.label || "Recents"}
         </span>
         <details ref={menuRef} className="relative">
           <summary
@@ -410,10 +436,12 @@ export default function SidebarRecents() {
         <p className="px-2.5 text-xs text-zinc-600">no recent sessions</p>
       ) : (
         <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          {groups.map((g) => (
-            <div key={g.label || "all"} className="flex flex-col gap-0.5">
-              {g.label && (
-                <span className="flex items-baseline gap-1.5 px-2.5 pb-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600/80">
+          {groups.map((g, gi) => (
+            <div key={g.label || `g${gi}`} className="flex flex-col gap-0.5">
+              {/* first group's label is shown up in the top bar; only render
+                  in-list headers for groups after it */}
+              {gi > 0 && g.label && (
+                <span className="flex items-baseline gap-1.5 px-2.5 pb-0.5 pt-1 font-mono text-[10px] tracking-widest text-zinc-600/80">
                   {g.label}
                 </span>
               )}

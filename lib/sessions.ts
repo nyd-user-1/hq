@@ -100,6 +100,7 @@ export type RecentSession = {
   branch: string; // git branch at session time ("" when none / detached "HEAD")
   customTitle: string; // HQ rename (sidecar); "" when not renamed
   aiTitle: string; // Claude Code's auto-generated session title ("" if none yet)
+  chainRoot: string; // root id of this session's /clear chain (self if none) — Tree grouping
   favorite: boolean; // pinned to the top of Recents
   hidden: boolean; // soft-deleted from Recents (toggle to reveal)
   related: string[]; // cross-link tags (sidecar); [] when none
@@ -160,6 +161,7 @@ export function sessionMeta(
     // surfacing, so collapse it to empty.
     branch: branch && branch !== "HEAD" ? branch : "",
     aiTitle,
+    chainRoot: id, // default: standalone; the /api/sessions route fills in real chains
     customTitle: m.title ?? "",
     favorite: !!m.favorite,
     hidden: !!m.hidden,
