@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { writeFileAtomicSync } from "./atomic";
 
 // HQ-native per-session view metadata — favorite / hidden / custom title —
 // keyed by session id. A sidecar under ~/.claude/hq (same home as todo.json),
@@ -37,8 +38,7 @@ function read(): Store {
 }
 
 function write(store: Store): void {
-  fs.mkdirSync(STORE_DIR, { recursive: true });
-  fs.writeFileSync(STORE, JSON.stringify(store, null, 2));
+  writeFileAtomicSync(STORE, JSON.stringify(store, null, 2)); // atomic — CODE-REVIEW BUG-1
 }
 
 export function getSessionsMeta(): SessionsMeta {

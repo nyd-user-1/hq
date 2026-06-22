@@ -20,8 +20,20 @@ export type Turn = { role: "user" | "assistant"; text: string; at: string };
 // Every Claude Code transcript on the machine (across ALL project dirs), newest
 // first. The terminal observes any session — not just home — so lookups must
 // search every dir, matching what the Sessions list (lib/sessions.ts) shows.
-function allSessions(): { id: string; file: string; mtime: number }[] {
-  const out: { id: string; file: string; mtime: number }[] = [];
+type SessionRef = { id: string; file: string; mtime: number };
+let sessionsCache: { at: number; list: SessionRef[] } | null = null;
+const SESSIONS_TTL_MS = 1000;
+
+function allSessions(): SessionRef[] {
+  // The project-dir walk (readdir × N dirs + statSync per file) used to run on
+  // EVERY reader call — several times per request, and on the always-open SSE
+  // backstop. Memoize it for ~1s so concurrent callers share one walk. The live
+  // byte-size signal that actually drives the pinned terminal is read FRESH in
+  // streamSignature() (its own statSync), so this cache never adds latency to a
+  // pinned session — it only collapses the redundant directory scans (PERF-1).
+  const nowMs = Date.now();
+  if (sessionsCache && nowMs - sessionsCache.at < SESSIONS_TTL_MS) return sessionsCache.list;
+  const out: SessionRef[] = [];
   let dirs: fs.Dirent[];
   try {
     dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
@@ -51,7 +63,9 @@ function allSessions(): { id: string; file: string; mtime: number }[] {
       }
     }
   }
-  return out.sort((a, b) => b.mtime - a.mtime);
+  out.sort((a, b) => b.mtime - a.mtime);
+  sessionsCache = { at: nowMs, list: out };
+  return out;
 }
 
 // Session ids are UUIDs (globally unique), so a single match across all dirs.
@@ -83,7 +97,11 @@ function clean(text: string): string {
 // (the terminal observes any session). Falls back to the home dir for an
 // unknown id.
 export function sessionFilePath(id: string): string {
-  return findSessionFile(id) ?? path.join(SESSIONS_DIR, `${id}.jsonl`);
+  // findSessionFile only returns real on-disk basenames. The fallback below is
+  // the ONE place a raw id becomes a path, so basename() it — a crafted id like
+  // `../../../etc/foo` collapses to a bare name inside SESSIONS_DIR and can't
+  // escape (CODE-REVIEW SEC-3). A real UUID is unchanged by basename().
+  return findSessionFile(id) ?? path.join(SESSIONS_DIR, `${path.basename(id)}.jsonl`);
 }
 
 // A cheap "did anything change" number the SSE stream polls. Pinned → the file's
@@ -270,6 +288,11 @@ type Timeline = {
   more: boolean; // older items exist beyond what's returned (the tail was capped)
 };
 const fullTimelineCache = new Map<string, { mtime: number; result: Timeline }>();
+// PERF-2: the polled (non-full) tail path was NOT cached — it re-read + re-parsed
+// the 8MB tail on every 1s poll. Keyed by `${file}:${count}` → the tail content
+// (append-only ⇒ size identifies it). workingStatus (the live "now") is computed
+// separately by the route, so this content-only result is safe to cache.
+const tailTimelineCache = new Map<string, { size: number; result: Timeline }>();
 
 export function timelineFor(
   id: string | null,
@@ -284,13 +307,19 @@ export function timelineFor(
   let text: string;
   let partial = false;
   let lastWrite = 0;
+  const file = sessionFilePath(sid);
+  let size = 0;
+  const tkey = `${file}:${count}`;
   try {
-    const file = sessionFilePath(sid);
     const st = fs.statSync(file);
     lastWrite = st.mtimeMs;
+    size = st.size;
     if (full) {
       const cached = fullTimelineCache.get(file);
       if (cached && cached.mtime === st.mtimeMs) return cached.result;
+    } else {
+      const cached = tailTimelineCache.get(tkey); // PERF-2: skip re-parse when unchanged
+      if (cached && cached.size === st.size) return cached.result;
     }
     const startAt = full ? 0 : Math.max(0, st.size - TAIL_BYTES);
     partial = startAt > 0;
@@ -440,7 +469,8 @@ export function timelineFor(
     more: !full && (partial || items.length > count),
   };
   if (full && lastWrite)
-    fullTimelineCache.set(sessionFilePath(sid), { mtime: lastWrite, result });
+    fullTimelineCache.set(file, { mtime: lastWrite, result });
+  else if (!full) tailTimelineCache.set(tkey, { size, result }); // PERF-2
   return result;
 }
 
@@ -757,7 +787,9 @@ export function recentCommands(limit = 8): CommandRun[] {
   files.sort((a, b) => b.mtime - a.mtime);
 
   const runs: CommandRun[] = [];
-  for (const { file } of files.slice(0, 8)) {
+  // Scan at least `limit` files, not a hardcoded 8 — else recentCommands(20)
+  // could never surface 20 (CODE-REVIEW BUG-7).
+  for (const { file } of files.slice(0, Math.max(8, limit))) {
     const size = fs.statSync(file).size;
     const start = Math.max(0, size - 128 * 1024);
     const fd = fs.openSync(file, "r");

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { randomBytes } from "node:crypto";
+import { writeFileAtomicSync } from "./atomic";
 
 // Saved "note blocks" — a message block the user starred from a terminal, kept
 // as a specially-labeled .md under ~/.claude/hq/notes (HQ-native, same home as
@@ -28,19 +29,23 @@ export function noteTitle(content: string): string {
 }
 
 export function saveNote(input: NoteInput): string {
-  const text = (input.text || "").trim();
+  // Cap length so a runaway/hostile POST can't disk-fill the notes store
+  // (CODE-REVIEW SEC-9). 500k chars is far past any real saved block.
+  const text = (input.text || "").trim().slice(0, 500_000);
   if (!text) throw new Error("empty note");
-  fs.mkdirSync(NOTES_DIR, { recursive: true });
   const savedAt = Date.now();
   const name = `note-${savedAt}-${randomBytes(3).toString("hex")}.md`;
+  // Frontmatter values are interpolated raw — strip newlines so a value can't
+  // inject extra frontmatter keys other readers key off (CODE-REVIEW SEC-9).
+  const fm1 = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
   const fm = [
     "---",
     "note: true",
     `savedAt: ${new Date(savedAt).toISOString()}`,
-    input.sessionId ? `session: ${input.sessionId}` : "",
-    input.role ? `role: ${input.role}` : "",
-    input.project ? `project: ${input.project}` : "",
-    input.at ? `sourceAt: ${input.at}` : "",
+    input.sessionId ? `session: ${fm1(input.sessionId)}` : "",
+    input.role ? `role: ${fm1(input.role)}` : "",
+    input.project ? `project: ${fm1(input.project)}` : "",
+    input.at ? `sourceAt: ${fm1(input.at)}` : "",
     "---",
   ]
     .filter(Boolean)
@@ -48,7 +53,7 @@ export function saveNote(input: NoteInput): string {
   // Blank line AFTER the closing --- so the body never glues to the delimiter.
   // (A trailing "" in the array used to do this, but .filter(Boolean) — needed
   // to drop the optional fields — ate it too, which broke noteTitle's strip.)
-  fs.writeFileSync(path.join(NOTES_DIR, name), `${fm}\n\n${text}\n`);
+  writeFileAtomicSync(path.join(NOTES_DIR, name), `${fm}\n\n${text}\n`);
   return name;
 }
 

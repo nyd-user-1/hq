@@ -183,6 +183,7 @@ function allTranscripts(): string[] {
   return out;
 }
 
+let lastSaveAt = 0;
 function refreshCache(): void {
   if (!loaded) loadSidecar();
   const live = new Set(allTranscripts());
@@ -205,9 +206,14 @@ function refreshCache(): void {
       // unreadable / vanished mid-scan — skip
     }
   }
-  if (dirty) {
+  // Throttle persistence: getCall() (a drill-down on the pin-nav hot path) calls
+  // refreshCache, and saveSidecar synchronously rewrites the ENTIRE multi-MB
+  // index. Persist at most every 3s; the in-memory cache stays correct meanwhile
+  // and a skipped save only costs a little extra cold-start re-parse (PERF-4).
+  if (dirty && Date.now() - lastSaveAt > 3000) {
     saveSidecar();
     dirty = false;
+    lastSaveAt = Date.now();
   }
 }
 

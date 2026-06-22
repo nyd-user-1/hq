@@ -71,9 +71,12 @@ export function efficiencyFor(id: string | null): Efficiency {
   if (partial) lines.shift();
 
   // One record per API message, in order, deduped by message id (streaming
-  // writes the same usage block several times — last write wins).
+  // writes the same usage block several times — last write wins). Keyed by a
+  // Map, not adjacency: a tool_result/sidechain line written BETWEEN two partials
+  // of the same message must not break the dedupe and double-count the bleed
+  // (CODE-REVIEW BUG-3).
   const calls: CallRec[] = [];
-  let lastId: string | null = null;
+  const byId = new Map<string, number>(); // message id → its index in `calls`
   for (const line of lines) {
     if (!line.includes('"usage"')) continue;
     let e;
@@ -95,9 +98,12 @@ export function efficiencyFor(id: string | null): Efficiency {
     };
     rec.context = rec.input + rec.cw + rec.cr + rec.out;
     const mid = e.message?.id ?? null;
-    if (mid && mid === lastId) calls[calls.length - 1] = rec; // streaming dupe
-    else calls.push(rec);
-    lastId = mid;
+    if (mid != null && byId.has(mid)) {
+      calls[byId.get(mid)!] = rec; // streaming dupe (any position) — last write wins
+    } else {
+      if (mid != null) byId.set(mid, calls.length);
+      calls.push(rec);
+    }
   }
 
   if (calls.length === 0) return empty(sid);

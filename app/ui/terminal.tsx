@@ -196,10 +196,6 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 // CONTEXT_LIMIT (1M window) + PRICING_CLIFF (200k cliff marker) live in
 // lib/limits — imported above so the client bundle never pulls in node:fs.
 
-// Module-scoped so it survives re-renders; stays 1 across soft nav (proof the
-// terminal is not remounting). Resets only on a full reload.
-let mountCount = 0;
-
 // A pasted/dropped screenshot, compressed in the browser BEFORE it leaves the
 // page. Capping the long edge + re-encoding as JPEG keeps the POST small, the
 // temp file small, and the vision token cost near its floor — an image is
@@ -819,6 +815,16 @@ export default function Terminal({
   const [hasMore, setHasMore] = useState(false);
   const busyRef = useRef(false); // true mid-send → don't let a stream tick clobber the optimistic turns
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null); // pending refetch retry
+  // CODE-REVIEW FE-1/FE-2: loadTurns gets called concurrently (SSE change + the
+  // 1s working tick + a reconnect can overlap). Without a guard a slow earlier
+  // response can land last and win (stale flicker), and an in-flight fetch for a
+  // session you just left can write into shared state. loadSeqRef bumps per call
+  // so only the LATEST response commits; loadAbortRef aborts the prior request;
+  // loadQueryRef pins the target (the query encodes session/staged/sibling) so a
+  // response for a since-switched target is dropped even if it wasn't aborted.
+  const loadSeqRef = useRef(0);
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const loadQueryRef = useRef<string>("");
   const stagedAtRef = useRef(0); // when the "+" staging view was entered
   const rootRef = useRef<HTMLDivElement>(null); // pane root — to reach the enclosing boundary box
   const wasThinkingRef = useRef(false); // tracks the working→done edge for the green flash
@@ -826,6 +832,17 @@ export default function Terminal({
   const dismissRef = useRef<(() => void) | null>(null); // detaches the held-green engagement listeners
   const working = status !== null;
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
+  // CODE-REVIEW FE-5: the Esc handler used to bind on EVERY render (no deps) so
+  // its closures stayed fresh, but the terminal re-renders every 1s while working
+  // and on every keystroke — that's a lot of add/removeEventListener churn. Keep
+  // the fresh values in refs instead and bind the listener once (see below).
+  const sendingRef = useRef(sending);
+  sendingRef.current = sending;
+  const workingRef = useRef(working);
+  workingRef.current = working;
+  const escArmedRef = useRef(escArmed);
+  escArmedRef.current = escArmed;
+  const stopSendRef = useRef<() => void>(() => {});
 
   // Live REPL — only Terminal 1 drives, and only a real pinned session. When
   // `driveMode` is on, the send box routes here (warm process) instead of the
@@ -1011,11 +1028,6 @@ export default function Terminal({
     };
   }, [working, sending, interrupted, paramKey]);
 
-  useEffect(() => {
-    mountCount += 1;
-    console.log(`[terminal] mounted — count=${mountCount}`);
-  }, []);
-
   // Inject the runtime <style> on mount so the turn-state border/pulse/chip rules
   // exist the instant `.is-thinking`/`.is-done` get toggled (id-guarded; the two
   // panes share one tag).
@@ -1044,8 +1056,18 @@ export default function Terminal({
     // Once you've scrolled back to load full history, keep polling the full list
     // (cached by mtime) so live turns merge onto it instead of snapping to a tail.
     const fullQ = expandedRef.current ? (q ? "&full=1" : "?full=1") : "";
+    // CODE-REVIEW FE-1/FE-2: claim this call as the latest, record its target,
+    // and abort any in-flight fetch so a slow earlier response can't land last.
+    const mySeq = ++loadSeqRef.current;
+    loadQueryRef.current = q;
+    loadAbortRef.current?.abort();
+    const ac = new AbortController();
+    loadAbortRef.current = ac;
     try {
-      const d = await (await fetch(`/api/terminal/turns${q}${fullQ}`)).json();
+      const d = await (await fetch(`/api/terminal/turns${q}${fullQ}`, { signal: ac.signal })).json();
+      // Superseded by a newer call, or the target changed out from under us
+      // (session switch) — drop this response rather than write stale state.
+      if (mySeq !== loadSeqRef.current || loadQueryRef.current !== q) return;
       if (staged) {
         // Staging view: don't display the newest session — just keep the
         // recent-sessions list fresh and watch for a newborn (a session born
@@ -1060,6 +1082,13 @@ export default function Terminal({
       // Mid-send, the optimistic items own the view — but always refresh status
       // so the live "working" line shows even while a send is in flight.
       if (!busyRef.current) {
+        // CODE-REVIEW FE-2 (items growth): NOT capped on purpose. When NOT
+        // expanded the API already returns only a tail, so `items` is bounded
+        // there; the unbounded case is expandedRef === true, which IS the
+        // "scroll to top = full history" feature — a tail cap would silently
+        // truncate it. The server caches the full list by mtime, so the cost is
+        // re-render, not re-fetch. Capping safely needs windowed rendering (out
+        // of scope for a surgical fix), so left intact.
         setItems(d.items ?? []);
         setHasMore(d.more ?? false);
         setProject(d.project ?? "");
@@ -1086,6 +1115,10 @@ export default function Terminal({
       setLastWrite(d.lastWrite || null);
       setNow(Date.now());
     } catch {
+      // CODE-REVIEW FE-1: an abort (superseded call / session switch) is
+      // intentional — don't schedule a retry for it, and don't retry if a newer
+      // call already superseded us.
+      if (ac.signal.aborted || mySeq !== loadSeqRef.current) return;
       // Transient (dev recompile mid-fetch). Retry shortly — the stream won't
       // re-ping until the NEXT transcript write, which can be minutes away
       // (the post-/clear stale-terminal bug).
@@ -1346,6 +1379,12 @@ export default function Terminal({
   // keeps a load into an already-cold cache from flashing).
   const [coldFlash, setColdFlash] = useState<"off" | "on" | "out">("off");
   const coldFiredRef = useRef(false);
+  // CODE-REVIEW FE-6: the firing DECISION still rides `now` (it needs the 2s
+  // "just closed" window) but no longer owns the fade timers — it only bumps
+  // coldFireSeq, which arms the timeline below. Re-running on a `now` tick used
+  // to tear down the out/gone timers; now the timeline lives in its own effect
+  // keyed on that seq, so an unrelated 1s/30s tick can't clear them mid-fade.
+  const [coldFireSeq, setColdFireSeq] = useState(0);
   useEffect(() => {
     const cl =
       !working && lastWrite !== null && now > 0
@@ -1358,6 +1397,15 @@ export default function Terminal({
     }
     if (cl === null || coldFiredRef.current || -cl >= 2000) return;
     coldFiredRef.current = true;
+    setColdFireSeq((n) => n + 1); // arm the fade timeline (below)
+  }, [working, lastWrite, now]);
+
+  // CODE-REVIEW FE-6: the fade timeline, isolated from the `now` tick — keyed on
+  // the fire seq (NOT coldFlash, which it sets itself), so its own on→out→off
+  // state changes don't tear it down. Runs once per fire: on → 3s hold → out
+  // (fade) → gone by 5s → off.
+  useEffect(() => {
+    if (coldFireSeq === 0) return; // not yet fired
     setColdFlash("on");
     const out = setTimeout(() => setColdFlash("out"), 3000); // hold, then fade
     const gone = setTimeout(() => setColdFlash("off"), 5000); // unmount by 5s
@@ -1365,7 +1413,7 @@ export default function Terminal({
       clearTimeout(out);
       clearTimeout(gone);
     };
-  }, [working, lastWrite, now]);
+  }, [coldFireSeq]);
 
   // Bottom-follow: only auto-scroll when you're already at the bottom — a live turn
   // lands in view if you're watching, but never yanks you down while you read up top.
@@ -1389,20 +1437,22 @@ export default function Terminal({
   // Esc parity with the real CLI: first Esc arms ("press esc again to
   // interrupt"), second Esc within 2s interrupts. HQ can only kill runs it
   // spawned — for an external turn the second Esc says so instead of lying.
-  // No dep array: rebinding each render keeps the closures fresh.
+  // CODE-REVIEW FE-5: bound ONCE ([] deps) — the handler reads sending/working/
+  // escArmed/stopSend from refs (synced each render above) so it stays fresh
+  // without rebinding the listener on every 1s tick / keystroke.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
-      if (!sending && !working) return;
+      if (!sendingRef.current && !workingRef.current) return;
       if (escTimer.current) clearTimeout(escTimer.current);
-      if (!escArmed) {
+      if (!escArmedRef.current) {
         setEscArmed(true);
         escTimer.current = setTimeout(() => setEscArmed(false), 2000);
         return;
       }
       setEscArmed(false);
-      if (sending) {
-        stopSend();
+      if (sendingRef.current) {
+        stopSendRef.current();
       } else {
         setEscNote(
           "this turn is running in its own terminal — HQ can only interrupt runs it started"
@@ -1412,7 +1462,7 @@ export default function Terminal({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, []);
 
   // Browser default on a dropped file = navigate the tab to it, nuking HQ. Guard
   // the whole window so a stray drop OUTSIDE a terminal pane (sidebar, gaps) is a
@@ -1697,6 +1747,9 @@ export default function Terminal({
       // the POST's own error path will surface anything real
     }
   }
+  // CODE-REVIEW FE-5: keep the once-bound Esc handler pointed at the latest
+  // stopSend (it closes over no per-render state, but sync anyway for safety).
+  stopSendRef.current = stopSend;
 
   const elapsed = status
     ? Math.max(0, Math.floor((now - status.startedAt) / 1000))

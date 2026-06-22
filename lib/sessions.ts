@@ -422,6 +422,7 @@ export function getSessions(limit = 12): SessionInfo[] {
       contextTokens,
       cost: t
         ? baseCost({
+            model: t.model, // price at the session's real model, not always Opus (BUG-2)
             input: t.input,
             cacheCreate: t.cacheCreate,
             cacheRead: t.cacheRead,

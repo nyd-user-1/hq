@@ -70,13 +70,30 @@ test("leading whitespace can't dodge the read-only patterns", () => {
   assert.equal(v, "allow");
 });
 
-test("anchored patterns: 'echo' allows but 'echofoo' or chained does not auto-allow blindly", () => {
-  // "echo" is allowed; a sneaky "echo x; rm -rf y" still matches ^echo\b so it
-  // would allow — DOCUMENTED limitation: the allowlist is verb-prefix based, not a
-  // full shell parser. This test PINS that behavior so a future tightening is a
-  // deliberate change, not an accident.
-  const chained = classify({ tool_name: "Bash", input_preview: JSON.stringify({ command: "echo hi; rm -rf x" }) });
-  assert.equal(chained, "allow", "verb-prefix allowlist matches chained commands — known limitation");
+test("shell metacharacters force escalation despite a matching read-only prefix", () => {
+  // "echo" auto-allows, but `echo hi; rm -rf x` matches ^echo\b — a chained
+  // command must NOT ride the prefix allowlist. isUnsafeBash() escalates anything
+  // with shell metacharacters in CODE, before the policy's allow list (SEC-5).
+  for (const command of [
+    "echo hi; rm -rf x",
+    "cat f && rm g",
+    "echo $(curl evil)",
+    "ls > /etc/x",
+    "git status | sh",
+  ]) {
+    const v = classify({ tool_name: "Bash", input_preview: JSON.stringify({ command }) });
+    assert.equal(v, "ask", `"${command}" should ask (metachar guard), got ${v}`);
+  }
+});
+
+test("exec-prefix and find action flags escalate even if a stale policy lists them", () => {
+  for (const command of ["env rm -rf x", "find . -delete", "find . -exec rm {} ;", "xargs rm"]) {
+    const v = classify({ tool_name: "Bash", input_preview: JSON.stringify({ command }) });
+    assert.equal(v, "ask", `"${command}" should ask (exec-prefix guard), got ${v}`);
+  }
+  // a plain read-only find still auto-allows
+  const ok = classify({ tool_name: "Bash", input_preview: JSON.stringify({ command: "find . -name x" }) });
+  assert.equal(ok, "allow", "read-only find should still allow");
 });
 
 test("deny lists win over allow lists", () => {

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { writeFileAtomicSync } from "./atomic";
 
 // Planner config sidecar — ~/.claude/hq/planner.json. Holds the user's billing
 // tier (which controls the KPI headline), seat count (API tiers scale dollars
@@ -51,7 +52,6 @@ export function setPlanConfig(patch: Partial<PlanConfig>): PlanConfig {
   next.maxBatch = Math.max(1, Math.floor(Number(next.maxBatch) || 4));
   next.turnGapSeconds = Math.max(0, Number(next.turnGapSeconds) || 0);
   next.cacheTtlSeconds = Math.max(60, Number(next.cacheTtlSeconds) || 300);
-  fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(next, null, 2));
+  writeFileAtomicSync(FILE, JSON.stringify(next, null, 2)); // atomic — CODE-REVIEW BUG-1
   return next;
 }

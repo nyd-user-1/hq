@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { sessionCwd } from "@/lib/transcript";
 import { classify } from "@/lib/permission-policy";
+import { writeFileAtomicSync } from "@/lib/atomic";
 
 // HQ-driven sessions are spawned via `claude -p`, so their transcript entrypoint
 // is "sdk-cli" — which Recents filters out. Record the ids we drive in a sidecar
@@ -30,7 +31,7 @@ function recordDriven(id: string) {
     const p = path.join(dir, "repl-sessions.json");
     let arr: string[] = [];
     try { arr = JSON.parse(fs.readFileSync(p, "utf8")); } catch { /* fresh */ }
-    if (!arr.includes(id)) fs.writeFileSync(p, JSON.stringify([...arr, id].slice(-300)));
+    if (!arr.includes(id)) writeFileAtomicSync(p, JSON.stringify([...arr, id].slice(-300)));
   } catch { /* best-effort */ }
 }
 

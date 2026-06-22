@@ -19,8 +19,22 @@ export default function RefreshOnChange({
       ? `/api/firehose/stream?session=${encodeURIComponent(session)}`
       : "/api/firehose/stream";
     const es = new EventSource(url);
-    es.addEventListener("change", () => router.refresh());
-    return () => es.close();
+    // CODE-REVIEW FE-7: trailing debounce so a transcript WRITE STORM (many
+    // `change` events in quick succession) collapses to ONE router.refresh()
+    // instead of a burst of full RSC refreshes. ~250ms feels instant but coalesces.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onChange = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        router.refresh();
+      }, 250);
+    };
+    es.addEventListener("change", onChange);
+    return () => {
+      if (timer) clearTimeout(timer);
+      es.close();
+    };
   }, [session, router]);
   return null;
 }

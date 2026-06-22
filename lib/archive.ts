@@ -183,13 +183,29 @@ export type TranscriptHit = { id: string; score: number; phrase: boolean; snippe
 // identically. Cached by (file, mtime) and pre-normalized, so repeated searches
 // of an unchanged active session never re-read or re-normalize.
 const liveCache = new Map<string, { mtime: number; text: string; norm: string }>();
+const LIVE_TAIL_BYTES = 4 * 1024 * 1024;
 function liveEntry(file: string, mtime: number): { text: string; norm: string } {
   const c = liveCache.get(file);
   if (c && c.mtime === mtime) return c;
   let out = "";
   let raw = "";
   try {
-    raw = fs.readFileSync(file, "utf8");
+    // Read only the last few MB, not the whole file. The active session can be
+    // hundreds of MB; a full readFileSync per keystroke-search was a multi-second
+    // event-loop block + a huge transient allocation (CODE-REVIEW PERF-3). The
+    // tail holds the recent turns you're most likely searching mid-session; older
+    // content is covered by the next FTS index build.
+    const size = fs.statSync(file).size;
+    const start = Math.max(0, size - LIVE_TAIL_BYTES);
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(size - start);
+    fs.readSync(fd, buf, 0, buf.length, start);
+    fs.closeSync(fd);
+    raw = buf.toString("utf8");
+    if (start > 0) {
+      const nl = raw.indexOf("\n"); // drop the partial first line from the tail cut
+      if (nl !== -1) raw = raw.slice(nl + 1);
+    }
   } catch {
     // unreadable / vanished mid-read
   }
