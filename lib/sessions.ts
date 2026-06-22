@@ -99,6 +99,7 @@ export type RecentSession = {
   entrypoint: string; // "cli" = interactive terminal; "sdk-cli" = Agent SDK run
   branch: string; // git branch at session time ("" when none / detached "HEAD")
   customTitle: string; // HQ rename (sidecar); "" when not renamed
+  aiTitle: string; // Claude Code's auto-generated session title ("" if none yet)
   favorite: boolean; // pinned to the top of Recents
   hidden: boolean; // soft-deleted from Recents (toggle to reveal)
   related: string[]; // cross-link tags (sidecar); [] when none
@@ -137,7 +138,7 @@ export function sessionMeta(
   mtime: number,
   meta: SessionsMeta = {}
 ): RecentSession {
-  const { cwd, title, ref, entrypoint, branch } = headInfo(file);
+  const { cwd, title, ref, entrypoint, branch, aiTitle } = headInfo(file);
   const id = path.basename(file, ".jsonl");
   const m = meta[id] ?? {};
   const derived =
@@ -158,6 +159,7 @@ export function sessionMeta(
     // gitBranch is on most entries; "HEAD" (detached / non-branch) isn't worth
     // surfacing, so collapse it to empty.
     branch: branch && branch !== "HEAD" ? branch : "",
+    aiTitle,
     customTitle: m.title ?? "",
     favorite: !!m.favorite,
     hidden: !!m.hidden,
@@ -173,6 +175,7 @@ function headInfo(file: string): {
   ref: string | null;
   entrypoint: string | null;
   branch: string | null;
+  aiTitle: string;
 } {
   let text: string;
   try {
@@ -184,7 +187,7 @@ function headInfo(file: string): {
     fs.closeSync(fd);
     text = buf.toString("utf8");
   } catch {
-    return { cwd: null, title: "", ref: null, entrypoint: null, branch: null };
+    return { cwd: null, title: "", ref: null, entrypoint: null, branch: null, aiTitle: "" };
   }
 
   let cwd: string | null = null;
@@ -192,8 +195,9 @@ function headInfo(file: string): {
   let ref: string | null = null;
   let entrypoint: string | null = null;
   let branch: string | null = null;
+  let aiTitle = ""; // Claude Code's own "ai-title" record (its conversation title)
   for (const line of text.split("\n")) {
-    if (cwd && title && ref && entrypoint) break; // have everything
+    if (cwd && title && ref && entrypoint && aiTitle) break; // have everything
     if (!line) continue;
     let e;
     try {
@@ -204,6 +208,13 @@ function headInfo(file: string): {
     if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
     if (!entrypoint && typeof e.entrypoint === "string") entrypoint = e.entrypoint;
     if (!branch && typeof e.gitBranch === "string") branch = e.gitBranch;
+    // Claude Code writes its own conversation title as an "ai-title" record — the
+    // same memorable name claude.ai shows. ~75% of sessions have one; reading it
+    // (not generating it) keeps HQ pure-read. First one in the head wins.
+    if (!aiTitle && e.type === "ai-title" && typeof e.aiTitle === "string") {
+      const t = e.aiTitle.trim();
+      if (t) aiTitle = t;
+    }
     if (e.type !== "user" || e.isSidechain || e.isMeta) continue;
     const content = e.message?.content;
     const raw =
@@ -226,7 +237,7 @@ function headInfo(file: string): {
       if (m) ref = m[1].toLowerCase();
     }
   }
-  return { cwd, title, ref, entrypoint, branch };
+  return { cwd, title, ref, entrypoint, branch, aiTitle };
 }
 
 // Every transcript across all project dirs touched in the last 7 days, newest

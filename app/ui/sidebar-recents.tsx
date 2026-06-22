@@ -21,6 +21,7 @@ type Recent = {
   lastActive: number;
   active: boolean;
   branch: string;
+  aiTitle: string;
   customTitle: string;
   favorite: boolean;
   hidden: boolean;
@@ -421,6 +422,9 @@ export default function SidebarRecents() {
                 const openHref = pairParam
                   ? `${pathname}?session=${s.id}&pair=${pairParam}`
                   : `${pathname}?session=${s.id}`;
+                // Label precedence: your rename → Claude's ai-title → the id.
+                const label = s.customTitle || s.aiTitle || s.id.slice(0, 8);
+                const titled = !!(s.customTitle || s.aiTitle);
 
                 if (editing === s.id) {
                   return (
@@ -457,25 +461,24 @@ export default function SidebarRecents() {
                     <Link
                       href={openHref}
                       scroll={false}
-                      title={`${s.project} · ${s.customTitle || s.title}`}
+                      title={`${s.project} · ${s.customTitle || s.aiTitle || s.title} · ${s.id.slice(0, 8)}`}
                       className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-sm transition-colors ${
                         active
                           ? "text-zinc-100"
                           : "text-zinc-400 group-hover:text-zinc-200"
                       }`}
                     >
-                      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        {/* just the id (or custom title) — project + branch moved
-                            to the ⋮ menu */}
-                        {s.customTitle ? (
-                          <span className="min-w-0 break-words font-mono text-xs text-zinc-200">
-                            {s.customTitle}
-                          </span>
-                        ) : (
-                          <span className="min-w-0 break-words font-mono text-xs">
-                            {s.id.slice(0, 8)}
-                          </span>
-                        )}
+                      <span className="flex min-w-0 flex-1 items-center gap-x-1.5">
+                        {/* label: rename → Claude's ai-title → id. Single line +
+                            truncate (full name on hover, full id in the ⋮ menu) so
+                            the row height never changes — IDs no longer wrap. */}
+                        <span
+                          className={`min-w-0 flex-1 truncate font-mono text-xs ${
+                            titled ? "text-zinc-200" : ""
+                          }`}
+                        >
+                          {label}
+                        </span>
                         {s.related?.length > 0 && (
                           <span
                             title={`related: ${s.related.join(", ")}`}
