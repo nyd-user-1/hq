@@ -45,7 +45,8 @@ function dateBucket(ts: number, now: number): string {
   ).getTime();
   if (ts >= startOfToday) return "Today";
   if (ts >= startOfToday - 86_400_000) return "Yesterday";
-  return "Previous 7 days";
+  // Older than yesterday → the calendar date, claude.ai-style ("Jun 19").
+  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 // Buckets the (already newest-first) list per the chosen mode, preserving order.
@@ -73,9 +74,9 @@ function groupSessions(
   }
 
   if (mode === "date") {
-    return ["Today", "Yesterday", "Previous 7 days"]
-      .filter((l) => map.has(l))
-      .map((label) => ({ label, sessions: map.get(label)! }));
+    // Sessions arrive newest-first, so the Map's insertion order is already
+    // Today → Yesterday → Jun 19 → Jun 18 … — just keep it.
+    return [...map.entries()].map(([label, sessions]) => ({ label, sessions }));
   }
   // project — order groups by their most-recent session
   return [...map.entries()]
@@ -193,7 +194,7 @@ export default function SidebarRecents() {
   const pairParam = params.get("pair"); // terminal 2's session (if open)
   const [sessions, setSessions] = useState<Recent[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  const [groupBy, setGroupBy] = useState<GroupBy>("date"); // default: grouped by day (claude.ai-style)
   const [showHidden, setShowHidden] = useState(false);
   const [editing, setEditing] = useState<string | null>(null); // session id being edited inline
   const [editField, setEditField] = useState<"title" | "project" | "related">("title");
@@ -414,7 +415,6 @@ export default function SidebarRecents() {
               {g.label && (
                 <span className="flex items-baseline gap-1.5 px-2.5 pb-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600/80">
                   {g.label}
-                  <span className="text-zinc-700">{g.sessions.length}</span>
                 </span>
               )}
               {g.sessions.map((s) => {
