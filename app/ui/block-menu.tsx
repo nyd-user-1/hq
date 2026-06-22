@@ -132,7 +132,7 @@ export default function BlockMenu({
         aria-label="Block actions"
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`absolute right-2 top-2 rounded-md border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-500 transition hover:text-zinc-200 focus:opacity-100 ${
+        className={`absolute right-2 top-2 rounded p-1 text-zinc-500 transition-opacity hover:text-zinc-200 focus:opacity-100 ${
           open || favorite || saved || reaction
             ? "opacity-100"
             : "opacity-0 group-hover/turn:opacity-100"

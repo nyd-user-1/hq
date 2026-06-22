@@ -323,6 +323,54 @@ function openHref(h: Hit, q: string): string {
 }
 
 // Loading shimmer for the drill-in viewer while content fetches.
+// The drilled-in body as plain text, for the header copy-contents button.
+function viewerText(body: ViewerBody | null): string {
+  if (!body) return "";
+  if (body.format === "turns")
+    return body.turns.map((t) => `${t.role}: ${t.text}`).join("\n\n");
+  return body.content;
+}
+
+// Copy the open file/note/transcript's contents — a clipboard chip in the reader
+// header, flashing a check on copy.
+function ViewerCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!text) return null;
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }}
+      aria-label="Copy contents"
+      title="Copy contents"
+      className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-zinc-500 transition-colors hover:text-zinc-200"
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {copied ? (
+          <path d="M20 6 9 17l-5-5" />
+        ) : (
+          <>
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+          </>
+        )}
+      </svg>
+      {copied ? "copied" : "copy"}
+    </button>
+  );
+}
+
 function ViewerSkeleton() {
   const widths = [92, 68, 84, 74, 58, 80, 48];
   return (
@@ -682,6 +730,7 @@ export default function CommandPalette() {
                 >
                   {viewing.kind}
                 </span>
+                <ViewerCopyButton text={viewerText(body)} />
                 <button
                   onClick={() => openInPanel(viewing)}
                   className="shrink-0 font-mono text-[10px] text-zinc-500 transition-colors hover:text-zinc-200"
