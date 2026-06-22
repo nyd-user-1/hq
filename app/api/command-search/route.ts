@@ -96,7 +96,10 @@ export async function GET(req: Request) {
   const ranked: Ranked[] = [];
 
   order.forEach((scope, ci) => {
-    const { hits, building: b } = search(q, scope, "rel", PER);
+    // A single-corpus chip view is a recency feed (newest first), so pull the
+    // NEWEST matches at full depth; the unscoped "all" search stays relevance-
+    // ranked + corpus-balanced.
+    const { hits, building: b } = search(q, scope, scoped ? "new" : "rel", scoped ? limit : PER);
     if (b) building = true;
     // Gentle corpus-priority weight: top corpus ~1.46 → last ~1.0. It nudges,
     // never dominates — an exact-title match in a low-priority corpus still wins
@@ -107,9 +110,14 @@ export async function GET(req: Request) {
     });
   });
 
-  // Tier first (exact > prefix > contains/phrase > scattered), RRF score within
-  // the tier. Dedupe by kind+ref, keeping the highest-ranked instance.
-  ranked.sort((a, b) => a.tier - b.tier || b.score - a.score);
+  // Scoped: a recency feed — newest last-activity first, with an exact filename
+  // match still pinned to the very top. Unscoped: tier (exact > prefix > phrase >
+  // scattered) then RRF score. Dedupe by kind+ref, keeping the first (best) one.
+  ranked.sort((a, b) =>
+    scoped
+      ? (a.tier === -1 ? 0 : 1) - (b.tier === -1 ? 0 : 1) || b.hit.at - a.hit.at
+      : a.tier - b.tier || b.score - a.score,
+  );
   const seen = new Set<string>();
   const hits: SearchHit[] = [];
   for (const r of ranked) {
