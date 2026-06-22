@@ -3,11 +3,13 @@ import {
   timelineFor,
   workingStatus,
   lastTurnInterrupted,
+  detectRivalBranch,
 } from "@/lib/transcript";
 import { getSessions, getRecentSessions, listLaunchProjects } from "@/lib/sessions";
 import { latestHandoff } from "@/lib/vault";
 import { lineageFor, sessionBornAt } from "@/lib/lineage";
 import { getSessionsMeta } from "@/lib/sessions-meta";
+import { handoffsFor } from "@/lib/handoffs"; // HQ↔terminal control-transfer markers (NOT vault's latestHandoff above)
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +36,33 @@ export async function GET(req: Request) {
   const full = url.searchParams.get("full") === "1";
   const { id: resolved, items, project, contextTokens, model, lastWrite, more } =
     timelineFor(target, 24, full);
+  // Merge HQ↔terminal handoff markers (sidecar) into the timeline by `at`. The
+  // sidecar is the ONLY source — HQ never writes these into the .jsonl. When NOT
+  // full, `items` is a tail, so floor markers at the tail's first `at` (older ones
+  // belong to scrollback, surfaced when full=1). resolved-only (staged has none).
+  // IMPORTANT: `items` is a CACHED array reference (timelineFor returns the same
+  // array it memoizes) — build a NEW array; never push/sort it in place, or the
+  // cache is corrupted and markers re-duplicate on every poll.
+  let timeline = items;
+  if (resolved) {
+    const floor = full ? "" : (items[0]?.at ?? "");
+    const marks = handoffsFor(resolved)
+      .filter((h) => h.at >= floor)
+      .map((h) => ({ kind: "handoff" as const, direction: h.direction, at: h.at }));
+    if (marks.length) {
+      timeline = [...items, ...marks].sort((a, b) =>
+        a.at < b.at ? -1 : a.at > b.at ? 1 : 0, // ISO `at` ⇒ chronological
+      );
+    }
+  }
   const status = workingStatus(resolved);
   // Only meaningful when NOT working: did the last turn end on a hard interrupt?
   // Drives the terminal's red "interrupted — awaiting new direction" border.
   const interrupted = !status && lastTurnInterrupted(resolved);
+  // Divergence net: did a rival (still-open TUI) process write a divergent leaf
+  // into the same transcript HQ's warm repl is driving? Transcript-derived
+  // knownLeaf — no extra input. Rides this 1s poll; no new endpoint.
+  const rival = detectRivalBranch(resolved);
   // A fresh session (only local-command records, e.g. right after /clear) gets
   // resume options: recent sessions to follow, the latest handoff memo to copy.
   // Computed only then — this route polls at 1s while a turn is in flight.
@@ -72,10 +97,13 @@ export async function GET(req: Request) {
   }
   return NextResponse.json({
     id: resolved,
-    items,
+    items: timeline, // transcript items + merged handoff markers (chronological)
     project,
     status,
     interrupted,
+    diverged: rival.diverged,
+    rivalLeafUuid: rival.rivalLeafUuid,
+    rivalPreview: rival.rivalPreview,
     contextTokens,
     model,
     lastWrite,

@@ -19,6 +19,7 @@ import {
   reapIdle,
   type PermissionDecision,
 } from "@/lib/repl";
+import { recordHandoff } from "@/lib/handoffs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -93,9 +94,11 @@ export async function POST(req: Request) {
   if (action === "send") {
     ensureRepl(session, { model: body.model }); // idempotent — starts if needed
     const ok = sendTurn(session, { text: body.text ?? "", images: body.images ?? [] });
+    if (ok) recordHandoff(session, "to-hq"); // HQ took the wheel (idempotent — only the first send writes)
     return NextResponse.json({ ok });
   }
   if (action === "stop") {
+    recordHandoff(session, "to-terminal"); // wheel released to the TUI (deliberate stop only; reaper/grace bypass this route)
     return NextResponse.json({ ok: stopRepl(session) });
   }
   if (action === "answer") {

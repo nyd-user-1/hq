@@ -199,6 +199,7 @@ export type TimelineItem =
       turnTokens?: number; // set on the LAST assistant card of a work block: the whole block's output-token burn
     }
   | { kind: "command"; command: string; arg: string; at: string } // local command marker (/clear, /model, …)
+  | { kind: "handoff"; direction: "to-hq" | "to-terminal"; at: string } // HQ took/released the wheel (sidecar-sourced, merged in the turns route — transcript.ts never produces this)
   | {
       kind: "tool";
       id: string;
@@ -720,6 +721,154 @@ export function lastTurnInterrupted(id: string | null): boolean {
     return flatText.includes("[Request interrupted by user]");
   }
   return false;
+}
+
+// ── Divergence net: a rival branch in the same transcript ─────────────────────
+// HQ's warm repl drives a session by `--resume`-ing INTO its <id>.jsonl. If a
+// TUI process is ALSO still open on that same session and the user types there,
+// the CLI writes a divergent leaf into the very same file — a real fork in the
+// transcript tree. This detects that: a leaf that is NOT a descendant of HQ's
+// own newest write AND is newer than it. RECON ONLY — never edits the .jsonl.
+//
+// Why each guard is correctness-critical (all verified against real on-disk
+// transcripts): (1) DESCENDANT, not parentUuid-equality — one HQ turn spans many
+// consecutive uuids sharing a message.id, so a parent-equality test self-flags HQ
+// mid-stream; isAncestor(knownLeaf, L) makes every HQ continuation benign.
+// (2) RECENCY is required — a transcript holds many stale abandoned leaves (24+
+// pre-takeover `cli` branches in one real file); without `L.timestamp >
+// knownLeaf.timestamp` the predicate cries wolf on every dead branch. (3)
+// entrypoint is a CONFIRMING/labeling signal, not a hard AND-filter — a rival
+// authored by ANOTHER sdk-cli process (a stray `claude -p` / a second HQ) is
+// still a rival; gating on entrypoint would blind-spot it.
+export type RivalBranch = {
+  diverged: boolean;
+  rivalLeafUuid?: string;
+  rivalPreview?: string;
+  rivalEntrypoint?: string;
+};
+type SpineRec = {
+  uuid: string;
+  parentUuid: string | null;
+  type: string;
+  entrypoint?: string;
+  timestamp: string;
+  text: string;
+};
+export function detectRivalBranch(
+  id: string | null,
+  knownLeafUuid?: string,
+): RivalBranch {
+  const sid = id ?? latestSessionId();
+  if (!sid) return { diverged: false };
+  let text: string;
+  try {
+    const file = sessionFilePath(sid);
+    const st = fs.statSync(file);
+    const startAt = Math.max(0, st.size - TAIL_BYTES);
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(st.size - startAt);
+    fs.readSync(fd, buf, 0, buf.length, startAt);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return { diverged: false };
+  }
+  // Spine parse: keep only records carrying BOTH uuid and parentUuid (the tree
+  // backbone — user/assistant/attachment/system). Non-spine metadata records
+  // (last-prompt, mode, ai-title, file-history-snapshot, the leading summary
+  // record) have no uuid and must be ignored. Skip sidechains (Task sub-agents).
+  const lines = text.split("\n");
+  const byUuid = new Map<string, SpineRec>();
+  for (const line of lines) {
+    if (!line) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e.isSidechain) continue;
+    if (typeof e.uuid !== "string" || e.parentUuid === undefined) continue;
+    byUuid.set(e.uuid, {
+      uuid: e.uuid,
+      parentUuid: e.parentUuid ?? null,
+      type: e.type,
+      entrypoint: e.entrypoint,
+      timestamp: e.timestamp ?? "",
+      text: blocksToText(e.message?.content),
+    });
+  }
+  if (byUuid.size === 0) return { diverged: false };
+  // Leaves = uuids that are never any record's parentUuid (the tips of the tree).
+  const parents = new Set<string>();
+  for (const r of byUuid.values()) if (r.parentUuid) parents.add(r.parentUuid);
+  const leaves: SpineRec[] = [];
+  for (const r of byUuid.values()) if (!parents.has(r.uuid)) leaves.push(r);
+  // knownLeaf = HQ's own newest write. Caller-supplied (must be present in the
+  // tail) wins; otherwise the transcript-derived default — the newest sdk-cli
+  // record (the repl spawns `claude -p` stream-json, entrypoint='sdk-cli').
+  // Assumes HQ is the only sdk-cli writer (true in single-HQ use). Before HQ's
+  // first sdk-cli write (resumed a cli session, no turn sent) there's none → no
+  // detection yet, which is correct: nothing for HQ to defend.
+  let known: SpineRec | undefined =
+    knownLeafUuid && byUuid.has(knownLeafUuid)
+      ? byUuid.get(knownLeafUuid)
+      : undefined;
+  if (!known) {
+    for (const r of byUuid.values()) {
+      if (r.entrypoint !== "sdk-cli") continue;
+      if (!known || r.timestamp > known.timestamp) known = r;
+    }
+  }
+  if (!known) return { diverged: false };
+  const knownLeaf = known;
+  // isAncestor: walk L's parent chain (cycle-guarded); does it pass through anc?
+  const isAncestor = (anc: string, leaf: SpineRec): boolean => {
+    let cur: string | null = leaf.uuid;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur)) {
+      if (cur === anc) return true;
+      seen.add(cur);
+      cur = byUuid.get(cur)?.parentUuid ?? null;
+    }
+    return false;
+  };
+  // A rival is a leaf that does NOT extend HQ's leaf and is newer than it. Pick
+  // the newest such leaf. A leaf whose ancestor line fell outside the tail looks
+  // rootless — the recency gate already suppresses it unless it's genuinely newer
+  // than knownLeaf, and the client latch never auto-clears, so a truncated
+  // ancestor can't be misread into a false all-clear.
+  let rival: SpineRec | null = null;
+  for (const L of leaves) {
+    if (L.uuid === knownLeaf.uuid) continue;
+    if (isAncestor(knownLeaf.uuid, L)) continue; // HQ's own continuation → benign
+    if (L.timestamp <= knownLeaf.timestamp) continue; // stale/pre-takeover branch
+    if (!rival || L.timestamp > rival.timestamp) rival = L;
+  }
+  if (!rival) return { diverged: false };
+  // Preview: the nearest text-bearing node from the rival leaf upward (a leaf is
+  // often a bare user turn or a tool_result with no reply yet).
+  let preview = "";
+  {
+    let cur: string | null = rival.uuid;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur)) {
+      const r = byUuid.get(cur);
+      const t = r?.text.trim();
+      if (t) {
+        preview = t.slice(0, 200);
+        break;
+      }
+      seen.add(cur);
+      cur = r?.parentUuid ?? null;
+    }
+  }
+  return {
+    diverged: true,
+    rivalLeafUuid: rival.uuid,
+    rivalPreview: preview || undefined,
+    rivalEntrypoint: rival.entrypoint,
+  };
 }
 
 // The working directory a session belongs to (its project root), read from the

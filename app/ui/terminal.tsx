@@ -685,7 +685,12 @@ export default function Terminal({
   const [lastWrite, setLastWrite] = useState<number | null>(null);
   const [idCopied, setIdCopied] = useState(false); // header session-id copy flash
   const [focusMode, setFocusMode] = useState(initialFocus); // centered "conversation shell" — focus is the DEFAULT, seeded from the hq-focus cookie; the not-connected state forces it on regardless
-  const [driveMode, setDriveMode] = useState(false); // "Drive from HQ": route the send box to the live REPL (Terminal 1 only)
+  // "Live in HQ": HQ owns a warm REPL for this session — set true on the first
+  // send (see doSend) and cleared on stop / session switch. PASSIVE status only:
+  // the send box ALWAYS routes through the warm REPL now, so this no longer GATES
+  // routing — it drives the SSE subscription (useRepl `enabled`), the live
+  // overlay, and the header status pill ("live in HQ" vs "observing").
+  const [live, setLive] = useState(false);
   const [starting, setStarting] = useState<string | null>(null); // a project being born-and-driven from the staging view
   const [searchQuery, setSearchQuery] = useState(""); // raw input — updates instantly so typing never lags
   const [appliedQuery, setAppliedQuery] = useState(""); // debounced — what the (heavy) DOM walk actually runs
@@ -707,6 +712,11 @@ export default function Terminal({
   const escTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   const [interrupted, setInterrupted] = useState(false); // last turn ended on a hard interrupt
+  // A rival (TUI) branch was written into the SAME transcript HQ is driving.
+  // LATCHED: once raised it stays until the session switches or the user acts —
+  // a later HQ write advances knownLeaf past the rival, so a stateless recompute
+  // would otherwise drop the banner while the fork still exists.
+  const [diverged, setDiverged] = useState<{ leaf?: string; preview?: string } | null>(null);
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
   const [projects, setProjects] = useState<{ name: string; path: string }[]>([]); // launcher chips: history-derived {name, path}
   const [newProjectName, setNewProjectName] = useState(""); // "+ new project" input in the staging view
@@ -767,6 +777,11 @@ export default function Terminal({
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // debounce orange→green
   const dismissRef = useRef<(() => void) | null>(null); // detaches the held-green engagement listeners
   const working = status !== null;
+  // Locked = a non-live (HQ doesn't own it) session that's mid-turn: sending would
+  // --resume a SECOND process and interleave/corrupt. The send box disables until it
+  // goes idle. (Channel-aware externals are fork-free too, but HQ can't detect them
+  // until the Phase-4 id-stamp — so for now any non-live busy session reads locked.)
+  const locked = !live && working;
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
   // CODE-REVIEW FE-5: the Esc handler used to bind on EVERY render (no deps) so
   // its closures stayed fresh, but the terminal re-renders every 1s while working
@@ -780,21 +795,56 @@ export default function Terminal({
   escArmedRef.current = escArmed;
   const stopSendRef = useRef<() => void>(() => {});
 
-  // Live REPL — only Terminal 1 drives, and only a real pinned session. When
-  // `driveMode` is on, the send box routes here (warm process) instead of the
-  // one-shot -p; tokens stream back live and tool permissions surface as cards.
-  const drivenSessionRef = useRef<string | null>(null); // which session drive was turned on FOR
-  const repl = useRepl(resolvedId, driveMode && paramKey === "session");
-  // Drive is PER-SESSION: switching the pinned session turns it back off, so HQ
-  // never auto-drives whatever you click (which spawned orphan processes + churned
-  // Recents). Re-enable per session via the pill. `pinned` is immediate (URL), so
-  // it doesn't false-trip during the birth→navigate handoff to the new id.
+  // Live REPL — the send box ALWAYS routes here now (both terminals, any real
+  // pinned session). `live` flips true on the first send (doSend / birthAndDrive),
+  // which opens the SSE so streamed tokens + tool-permission cards surface. Warm-
+  // on-first-send (not warm-on-pin): enabling on every clicked session would
+  // recordDriven() orphan processes + churn Recents — so the SSE opens only for
+  // sessions you actually sent to, which also makes "observing"→"live" meaningful.
+  const drivenSessionRef = useRef<string | null>(null); // which session `live` was turned on FOR
+  // The REPL hook MUST target the same id doSend/stopSend use for the optimistic
+  // turn + refs + guard: `pinned ?? resolvedId`. `pinned` updates immediately from
+  // the URL on a session switch, while `resolvedId` only catches up via the poll
+  // (gated by !busyRef). Keying on `resolvedId` alone let `repl.send`/`repl.stop`
+  // POST a STALE session during the switch window while the optimistic turn
+  // rendered under the new `pinned` — the send landed in the wrong transcript.
+  const replTarget = pinned ?? resolvedId;
+  const repl = useRepl(replTarget, live && !!replTarget);
+  // `live` is PER-SESSION: switching the pinned session resets it, so HQ never
+  // keeps claiming "live" for a session you navigated away from. `pinned` is
+  // immediate (URL), so it doesn't false-trip during the birth→navigate handoff.
   useEffect(() => {
-    if (driveMode && pinned && drivenSessionRef.current && pinned !== drivenSessionRef.current) {
-      setDriveMode(false);
+    if (live && pinned && drivenSessionRef.current && pinned !== drivenSessionRef.current) {
+      setLive(false);
       drivenSessionRef.current = null;
     }
-  }, [pinned, driveMode]);
+  }, [pinned, live]);
+  // Clear the divergence latch on a session switch — keyed PURELY on the pin, NOT
+  // folded into the live-gated effect above. The banner latches while merely
+  // OBSERVING (detection rides the poll regardless of `live`), and
+  // drivenSessionRef is null until you send — so a live-gated clear would strand
+  // a stale banner when you observe→switch without ever sending. This fires on
+  // every pin change; loadTurns then refetches and re-latches if the new session
+  // also diverged. Same-session polls don't change `pinned`, so the latch holds.
+  useEffect(() => {
+    setDiverged(null);
+  }, [pinned]);
+  // Optimistic in-flight (`sending`/`busyRef`) is set synchronously in doSend so
+  // the stop button + flash morph instantly; the REPL's own `busy` lags the SSE
+  // round-trip. Clear them on repl.busy's TRUE→FALSE edge (a turn finished) —
+  // tracked via a prev-busy ref so the initial busy=false doesn't clear them
+  // before the send even lands. Failure paths are covered explicitly, NOT by the
+  // poll: if repl.send's POST fails (or sendTurn returns {ok:false}), busy never
+  // rises over SSE, so use-repl lowers it on the failed POST AND doSend clears the
+  // flags + surfaces an error inline; stop clears them outright.
+  const prevReplBusyRef = useRef(false);
+  useEffect(() => {
+    if (prevReplBusyRef.current && !repl.busy) {
+      setSending(false);
+      busyRef.current = false;
+    }
+    prevReplBusyRef.current = repl.busy;
+  }, [repl.busy]);
 
   // In-session find-in-page. `q` is the DEBOUNCED query — the heavy DOM walk +
   // highlight build runs off this, so typing into the box stays instant even on a
@@ -1032,6 +1082,11 @@ export default function Terminal({
       }
       setStatus(d.status ?? null);
       setInterrupted(d.interrupted ?? false);
+      // LATCH the divergence net: raise on a rival, but NEVER clear on !diverged
+      // here — HQ's next write advances knownLeaf past the rival, so a server
+      // recompute returns diverged:false while the fork still exists. The latch
+      // clears only on session-switch (the [pinned] effect) or an explicit action.
+      if (d.diverged) setDiverged({ leaf: d.rivalLeafUuid, preview: d.rivalPreview });
       setContextTokens(d.contextTokens ?? 0);
       setModel(d.model ?? "");
       setLastWrite(d.lastWrite || null);
@@ -1827,90 +1882,60 @@ export default function Terminal({
       await birthAndDrive(target, first);
       return;
     }
-    // Drive mode: route to the warm live REPL (streams back over SSE) instead of
-    // the one-shot -p. Optimistic user turn shows immediately; the reply streams
-    // into the live overlay, then lands via the transcript poll like any turn.
-    if (driveMode) {
-      const prompt = draft.trim();
-      const imgs = attachments;
-      if (!prompt && imgs.length === 0) return;
-      const optimistic = [
-        prompt,
-        imgs.length ? `📎 ${imgs.length} image${imgs.length > 1 ? "s" : ""} attached` : "",
-      ].filter(Boolean).join("\n\n");
-      setItems((t) => [
-        ...t,
-        { kind: "turn", role: "user", text: optimistic, at: new Date().toISOString() },
-      ]);
-      setDraft("");
-      setAttachments([]);
-      await repl.send(prompt, imgs.map(({ data, mime }) => ({ data, mime })));
-      return;
-    }
-    const target = pinned ?? resolvedId;
+    // Locked: this session is working in its own terminal — sending would --resume a
+    // second process and interleave. The box is disabled; this guards the Enter path.
+    if (locked) return;
+    // ALWAYS route through the warm live REPL — no driveMode gate, no one-shot
+    // `-p` dead-end. The send streams back over SSE and lands via the transcript
+    // poll like any turn. `live` is flipped HERE (synchronously) so the SSE
+    // effect opens BEFORE/with the send — buffer-replay (lib/repl subscribe)
+    // catches the connect gap so a permission ask is never silently swallowed.
+    // Same id the REPL hook is keyed to (`replTarget`), so the optimistic turn,
+    // sendTargetRef, drivenSessionRef, the guard, and `repl.send`'s captured
+    // sessionId are provably this render's value — no stale-resolvedId split.
+    const target = replTarget;
     const prompt = draft.trim();
     const imgs = attachments; // snapshot — survives the clear below
     if (!target || sending || (!prompt && imgs.length === 0)) return;
     sendTargetRef.current = target;
-    setAttachments([]);
     stoppedRef.current = false;
-    setSending(true);
-    busyRef.current = true;
     setError(null);
     const optimistic = [
       prompt,
-      imgs.length
-        ? `📎 ${imgs.length} image${imgs.length > 1 ? "s" : ""} attached`
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+      imgs.length ? `📎 ${imgs.length} image${imgs.length > 1 ? "s" : ""} attached` : "",
+    ].filter(Boolean).join("\n\n");
     setItems((t) => [
       ...t,
-      {
-        kind: "turn",
-        role: "user",
-        text: optimistic,
-        at: new Date().toISOString(),
-      },
+      { kind: "turn", role: "user", text: optimistic, at: new Date().toISOString() },
     ]);
     setDraft("");
-    try {
-      const res = await fetch("/api/terminal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          sessionId: target,
-          model: chosenModel ?? undefined, // picker override → claude --model
-          images: imgs.map(({ data, mime }) => ({ data, mime })),
-        }),
-      });
-      if (!res.ok) {
-        // an interrupt already left its marker in the timeline — no error line
-        setError(
-          stoppedRef.current
-            ? null
-            : (await res.text()) || `error ${res.status}`
-        );
-        return;
-      }
-      const data = await res.json();
-      if (data?.output)
-        setItems((t) => [
-          ...t,
-          {
-            kind: "turn",
-            role: "assistant",
-            text: String(data.output).trim(),
-            at: new Date().toISOString(),
-          },
-        ]);
-    } catch (e) {
-      setError(stoppedRef.current ? null : String(e));
-    } finally {
+    setAttachments([]);
+    drivenSessionRef.current = target; // bind `live` to THIS session (auto-clear tracks it)
+    setLive(true); // open the SSE + render the live overlay (permission cards)
+    // setSending/busyRef are the IMMEDIATE optimistic in-flight flags: `sending`
+    // morphs the send→stop button (repl.busy lags the SSE round-trip) and drives
+    // the flash; `busyRef` guards the optimistic turn from the 1s poll clobbering
+    // it mid-stream. Both clear on repl.busy's true→false edge (effect below).
+    setSending(true);
+    busyRef.current = true;
+    // First send honors the model picker (spawn-time --model); a mid-session
+    // model change needs a process restart and is out of scope — see risks.
+    const sent = await repl.send(
+      prompt,
+      imgs.map(({ data, mime }) => ({ data, mime })),
+      chosenModel ?? undefined,
+    );
+    // If the send never landed (network/route failure, or sendTurn returned
+    // {ok:false}), no SSE event will rise/lower `busy`, so the repl.busy edge
+    // effect can't clear the optimistic flags. Clear them HERE and surface the
+    // error — otherwise the next poll silently replaces the optimistic turn with
+    // server truth (which lacks this message) and it vanishes with no trace.
+    if (!sent || sent.ok === false) {
       setSending(false);
       busyRef.current = false;
+      setLive(false);
+      drivenSessionRef.current = null;
+      setError("couldn't send — the live session may have closed; try again");
     }
   }
 
@@ -1939,8 +1964,8 @@ export default function Terminal({
       if (!res.ok) throw new Error((await res.text()) || `error ${res.status}`);
       const data = await res.json();
       if (data?.sessionId) {
-        drivenSessionRef.current = data.sessionId; // bind drive to the newborn (survives the navigate)
-        setDriveMode(true);
+        drivenSessionRef.current = data.sessionId; // bind `live` to the newborn (survives the navigate)
+        setLive(true);
         // A first message typed in the send box rides straight into the newborn
         // (ensureRepl by id is idempotent — finds this exact warm process).
         const first = (firstPrompt ?? "").trim();
@@ -1967,10 +1992,12 @@ export default function Terminal({
     }
   }
 
-  // Kill the HQ-spawned run; the in-flight POST settles and cleans up state.
-  // Aims at the snapshotted send target, so it kills the right run even if a
-  // different session card was clicked since. Drops the CLI-style interrupt
-  // marker into the timeline — same record the real terminal shows.
+  // Release HQ's warm process — "hand the wheel back to your TUI". Drops the
+  // CLI-style interrupt marker into the timeline, then stops the REPL (SIGTERM
+  // the warm child); the NEXT send re-resumes from the on-disk transcript (cold
+  // start). This is now "release the live process", not "abort just this run" —
+  // there's no mid-turn abort-but-keep-warm primitive (see risks). Also clears
+  // the optimistic in-flight flags since repl.busy may never have risen.
   async function stopSend() {
     const target = sendTargetRef.current;
     if (!target) return;
@@ -1984,12 +2011,14 @@ export default function Terminal({
         at: new Date().toISOString(),
       },
     ]);
+    setSending(false);
+    busyRef.current = false;
     try {
-      await fetch(`/api/terminal?session=${encodeURIComponent(target)}`, {
-        method: "DELETE",
-      });
+      await repl.stop(); // {action:'stop'} → stopRepl (releases the warm process)
+      setLive(false);
+      drivenSessionRef.current = null;
     } catch {
-      // the POST's own error path will surface anything real
+      // best-effort — the next send re-resumes from disk
     }
   }
   // CODE-REVIEW FE-5: keep the once-bound Esc handler pointed at the latest
@@ -2021,7 +2050,7 @@ export default function Terminal({
   // Driving a freshly-birthed session has no transcript yet — but HQ owns a live
   // process, so it's NOT "not connected": show the chat + a usable send box.
   const notConnected =
-    !staged && !driveMode && (previewInstall || (!loading && items.length === 0));
+    !staged && !live && (previewInstall || (!loading && items.length === 0));
   const centered = notConnected || focusMode;
   const colWrap = centered
     ? "mx-auto flex w-full max-w-3xl flex-col gap-4 px-4"
@@ -2029,7 +2058,9 @@ export default function Terminal({
   // The send (↑) button is live only when there's something to send to a real
   // session; while a run is in flight it morphs into the red stop button.
   const canSend =
-    (draft.trim() !== "" || attachments.length > 0) && (staged || !notConnected);
+    (draft.trim() !== "" || attachments.length > 0) &&
+    (staged || !notConnected) &&
+    !locked;
 
   // The cache meter — top-right in the header (and the footer in the centered
   // shell). ctx moved out to sit beside the session id (ctxMeter, below).
@@ -2301,43 +2332,52 @@ export default function Terminal({
             </div>
           </details>
         )}
-        {/* Drive toggle — "drive from HQ": route the send box to the warm live
-            REPL instead of the one-shot -p. Green pill while driving (dot pulses
-            mid-turn); releasing it stops the process so the TUI can take the wheel.
-            Terminal 1 + a real pinned session only. ml-auto pushes the whole
-            right cluster (drive · focus) to the edge. */}
-        {resolvedId && !notConnected && paramKey === "session" && (
+        {/* "live in HQ" — shown ONLY while HQ owns this session's process (you drove
+            it / +new). No lock badge: the one fork-risk state — a non-channel-aware
+            session working in its own terminal — is signalled by the SEND BOX itself
+            (it disables + shows the lock placeholder). ml-auto pushes the right
+            cluster; when not live the focus toggle below carries ml-auto instead. */}
+        {live && resolvedId && !notConnected && (
           <button
             type="button"
             onClick={() =>
-              setDriveMode((d) => {
-                const next = !d;
-                if (next) drivenSessionRef.current = resolvedId; // bind drive to THIS session
-                else { repl.stop(); drivenSessionRef.current = null; } // releasing → stop
-                return next;
+              setLive(() => {
+                repl.stop();
+                drivenSessionRef.current = null;
+                return false;
               })
             }
-            title={
-              driveMode
-                ? "driving from HQ — click to release (the TUI can take over)"
-                : "drive this session from HQ (minimize your TUI first)"
-            }
-            className={`ml-auto flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-px font-mono text-[10px] transition-colors ${
-              driveMode
-                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
-                : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
-            }`}
+            title="live in HQ — HQ owns this session's process. Click to release so the terminal can take over."
+            className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-1.5 py-px font-mono text-[10px] text-emerald-300 transition-colors"
           >
             <span
               className={`size-1.5 rounded-full ${
-                driveMode
-                  ? repl.busy
-                    ? "animate-pulse bg-emerald-400"
-                    : "bg-emerald-400"
-                  : "bg-zinc-600"
+                repl.busy ? "animate-pulse bg-emerald-400" : "bg-emerald-400"
               }`}
             />
-            {driveMode ? "driving" : "drive"}
+            live in HQ
+          </button>
+        )}
+        {/* Resume in terminal — hand the wheel back to the TUI. Copies
+            `claude --resume <id>` AND stops HQ's warm process (the route's stop
+            action records the to-terminal handoff divider). Stopping is MANDATORY,
+            not optional: one active writer at a time (lib/repl.ts) — handing the
+            TUI the wheel while HQ still drives is the interleave-corruption the
+            whole design forbids. So Resume = stop + copy, and it flips `live` off
+            to match the pill-release path. Only while live + a real pinned session. */}
+        {live && resolvedId && !notConnected && paramKey === "session" && (
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(`claude --resume ${resolvedId}`);
+              repl.stop(); // POSTs stop → records to-terminal
+              setLive(false);
+              drivenSessionRef.current = null;
+            }}
+            title="copy `claude --resume <id>` and release HQ's process so the TUI can take over"
+            className="flex shrink-0 items-center gap-1 rounded-md border border-zinc-700 px-1.5 py-px font-mono text-[10px] text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300"
+          >
+            resume in terminal
           </button>
         )}
         {/* Layout toggle — flips this live session between two real modes: "focus
@@ -2351,7 +2391,7 @@ export default function Terminal({
           <Tooltip
             label={focusMode ? "Wide screen" : "Focus mode"}
             placement="bottom"
-            className={paramKey === "session" && !staged ? undefined : "ml-auto"}
+            className={live ? undefined : "ml-auto"}
           >
           <button
             type="button"
@@ -2547,7 +2587,35 @@ export default function Terminal({
         )}
         {notConnected && <OnboardingConversation />}
         {!previewInstall && items.map((it, i) =>
-          it.kind === "command" ? (
+          it.kind === "handoff" ? (
+            // HQ↔terminal control-transfer divider — cloned from the /clear
+            // command divider below. Emerald when HQ takes the wheel (matches the
+            // live pill + overlay), zinc when the TUI takes it back, so the eye
+            // reads "green = HQ has it".
+            <div
+              key={i}
+              className={`flex items-center gap-2 font-mono text-[11px] ${
+                it.direction === "to-hq" ? "text-emerald-400" : "text-zinc-500"
+              }`}
+            >
+              <span
+                className={`h-px w-6 shrink-0 ${
+                  it.direction === "to-hq" ? "bg-emerald-500/40" : "bg-zinc-800"
+                }`}
+              />
+              <span className="shrink-0">
+                {it.direction === "to-hq"
+                  ? "▸ HQ is now driving this session"
+                  : "◂ resumed in terminal"}
+                {it.at && ` · ${new Date(it.at).toLocaleTimeString()}`}
+              </span>
+              <span
+                className={`h-px min-w-6 flex-1 ${
+                  it.direction === "to-hq" ? "bg-emerald-500/40" : "bg-zinc-800"
+                }`}
+              />
+            </div>
+          ) : it.kind === "command" ? (
             <div
               key={i}
               className="flex items-center gap-2 font-mono text-[11px] text-zinc-600"
@@ -2571,11 +2639,13 @@ export default function Terminal({
             renderTool(it, i)
           )
         )}
-        {/* Live REPL overlay (drive mode): the in-flight assistant turn streaming
-            token-by-token, the current turn's tool calls, and any pending
-            permission asks as Approve/Deny cards. Completed turns still land via
-            the transcript poll above; this is the instant layer on top. */}
-        {driveMode &&
+        {/* Live REPL overlay (while `live`): the in-flight assistant turn
+            streaming token-by-token, the current turn's tool calls, and any
+            pending permission asks as Approve/Deny cards. CRITICAL: gated on
+            `live` (true on every routed send) so a tool that needs approval is
+            never silently swallowed. Completed turns still land via the
+            transcript poll above; this is the instant layer on top. */}
+        {live &&
           (repl.liveText || repl.liveTools.length > 0 || repl.permissions.length > 0) && (
             <div className="flex flex-col gap-2">
               {(repl.liveText || repl.liveTools.length > 0) && (
@@ -2745,6 +2815,43 @@ export default function Terminal({
       {/* Bottom dock — status + composer, centered to the conversation column
           when `centered` (else `display:contents`, unchanged). */}
       <div className={colWrap}>
+      {/* Divergence net — a rival (still-open TUI) process wrote a branch into the
+          SAME transcript HQ is driving. A distinct amber banner ABOVE the status
+          line (not folded into the interrupt border). LATCHED client-side; gated
+          on !staged (the staging view follows the newest session, not this one).
+          v1 actions stay IN-TERMINAL (no panel nav → no pin-carrying needed):
+          "keep HQ" dismisses the latch; "view" is a v1 no-op placeholder. */}
+      {!staged && diverged && (
+        <div className="flex flex-col gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-mono text-xs text-amber-300">
+          <p className="flex items-baseline gap-1.5">
+            <span aria-hidden>⚠</span>
+            <span>The terminal also wrote here — you have a branch.</span>
+          </p>
+          {diverged.preview && (
+            <p className="truncate pl-5 text-[11px] text-amber-200/70" title={diverged.preview}>
+              {diverged.preview}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2 pl-5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => setDiverged(null)}
+              title="dismiss — keep HQ's branch as the active conversation"
+              className="rounded border border-amber-500/40 px-1.5 py-0.5 text-[11px] text-amber-300 transition-colors hover:bg-amber-500/20"
+            >
+              keep HQ
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiverged(null)}
+              title="dismiss this notice (v1 — branch viewer not yet wired)"
+              className="rounded border border-amber-500/20 px-1.5 py-0.5 text-[11px] text-amber-300/70 transition-colors hover:bg-amber-500/20"
+            >
+              dismiss
+            </button>
+          </div>
+        </div>
+      )}
       {/* Status / live-working indicator — decoupled from the message scroll so
           it sits as a bar DIRECTLY above the send box: always visible (never
           scrolls away) and it frees the send box's top-right corner for its
@@ -2932,15 +3039,17 @@ export default function Terminal({
               }
             }}
             rows={1}
-            disabled={notConnected}
+            disabled={notConnected || locked}
             placeholder={
               notConnected
                 ? "run HQ locally and open a session to chat here"
-                : staged
-                  ? selectedTarget
-                    ? `message ${selectedTarget.name} — ↵ launches it`
-                    : "write your first message — ↵ launches in ~/hq (or pick a project)"
-                  : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
+                : locked
+                  ? `🔒 ${project || "this session"} is working in its terminal — locked until it's idle (sending would fork it)`
+                  : staged
+                    ? selectedTarget
+                      ? `message ${selectedTarget.name} — ↵ launches it`
+                      : "write your first message — ↵ launches in ~/hq (or pick a project)"
+                    : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
             }
             className="scrollbar-slim max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />

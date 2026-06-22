@@ -13,7 +13,8 @@ export type ReplPermission = {
 };
 
 // Client side of the live REPL. Given a session id + an `enabled` flag (the
-// "Drive from HQ" toggle), it starts the warm process, opens the SSE feed, and
+// "live in HQ" status — true once HQ owns a warm process for this session, set
+// on the first send), it starts the warm process, opens the SSE feed, and
 // folds streaming events into a small live state: the in-flight assistant text
 // (token-by-token), the current turn's tool calls, and any pending permission
 // asks. Completed turns still land via the terminal's normal transcript poll —
@@ -39,12 +40,20 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
   );
 
   const send = useCallback(
-    async (text: string, images?: { data: string; mime: string }[]) => {
-      if (!sessionId) return;
+    async (text: string, images?: { data: string; mime: string }[], model?: string) => {
+      if (!sessionId) return null;
       setLiveText("");
       setLiveTools([]);
       setBusy(true);
-      await post({ action: "send", session: sessionId, text, images });
+      // post() swallows fetch-layer failures (`.catch(() => null)`) and the route
+      // returns `{ ok: false }` (200) when sendTurn can't write. In BOTH cases no
+      // hq_sent/result SSE event ever arrives to lower `busy` — so we MUST clear
+      // it here, or the terminal's optimistic `sending`/`busyRef` strand true and
+      // the transcript poll (gated on !busyRef) freezes. Returning the result lets
+      // doSend surface the failure to the user (the message never landed).
+      const r = await post({ action: "send", session: sessionId, text, images, model });
+      if (!r || r.ok === false) setBusy(false);
+      return r as { ok?: boolean } | null;
     },
     [sessionId, post],
   );
@@ -67,6 +76,13 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
   useEffect(() => {
     if (!enabled || !sessionId) {
       setRunning(false);
+      // setBusy(false) here is load-bearing: releasing `live` mid-turn (session
+      // switch / pill / Resume) closes the SSE, so a `result` event can never
+      // arrive to lower `busy`. Lowering it on disable gives the terminal's
+      // repl.busy true→false edge-effect a single source of truth for clearing
+      // its optimistic `sending`/`busyRef` flags — without it, those strand true
+      // and the next session's transcript poll freezes (busyRef gates the commit).
+      setBusy(false);
       setLiveText("");
       setLiveTools([]);
       setPermissions([]);
