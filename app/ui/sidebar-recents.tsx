@@ -435,7 +435,7 @@ export default function SidebarRecents() {
       {loaded && !sessions.length ? (
         <p className="px-2.5 text-xs text-zinc-600">no recent sessions</p>
       ) : (
-        <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        <div className="scrollbar-none mt-2.5 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {groups.map((g, gi) => (
             <div key={g.label || `g${gi}`} className="flex flex-col gap-0.5">
               {/* first group's label is shown up in the top bar; only render
