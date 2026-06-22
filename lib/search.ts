@@ -88,8 +88,57 @@ function readDir(dir: string, accept: (n: string) => boolean): FileDoc[] {
   }
   return out;
 }
+// Every per-project memory dir under ~/.claude/projects/*/memory. Claude writes
+// memory under the slug of the CWD it was launched from, so a note can live under
+// the home-dir slug OR a project-cwd slug (e.g. -Users-brendanstanton-Code-hq) —
+// HQ used to read only the home-dir slug, so project memory (MEMORY.md, handoffs,
+// hq-product-description.md…) was invisible to search. Scan them all.
+function memoryDirs(): string[] {
+  let slugs: string[];
+  try {
+    slugs = fs.readdirSync(PROJECTS_ROOT);
+  } catch {
+    return [];
+  }
+  const dirs: string[] = [];
+  for (const slug of slugs) {
+    const dir = path.join(PROJECTS_ROOT, slug, "memory");
+    try {
+      if (fs.statSync(dir).isDirectory()) dirs.push(dir);
+    } catch {
+      // this project has no memory dir
+    }
+  }
+  return dirs;
+}
+// Resolve a memory note's basename to its real path across all memory dirs (newest
+// wins when the same name exists in two slugs — handoffs are written to both).
+// Basename-only, joined to known dirs, so a crafted name can't walk out.
+function findMemoryFile(name: string): string | null {
+  const base = path.basename(name);
+  if (!base.endsWith(".md")) return null;
+  let best: { path: string; mtime: number } | null = null;
+  for (const dir of memoryDirs()) {
+    try {
+      const full = path.join(dir, base);
+      const m = fs.statSync(full).mtimeMs;
+      if (!best || m > best.mtime) best = { path: full, mtime: m };
+    } catch {
+      // not in this dir
+    }
+  }
+  return best?.path ?? null;
+}
 const memoryDocs = () =>
-  memoRead("memoryDocs", () => readDir(MEMORY_DIR, (n) => n.endsWith(".md") && n !== "MEMORY.md"));
+  memoRead("memoryDocs", () => {
+    const byName = new Map<string, FileDoc>();
+    for (const dir of memoryDirs())
+      for (const f of readDir(dir, (n) => n.endsWith(".md") && n !== "MEMORY.md")) {
+        const prev = byName.get(f.name);
+        if (!prev || f.mtime > prev.mtime) byName.set(f.name, f); // same note in two slugs → keep newest
+      }
+    return [...byName.values()];
+  });
 const noteDocs = () => memoRead("noteDocs", () => readDir(NOTES_DIR, (n) => n.endsWith(".md")));
 const scriptDocs = () => memoRead("scriptDocs", () => readDir(SCRIPTS_DIR, isScript));
 
@@ -791,20 +840,14 @@ export function metadataCorpus(): CorpusItem[] {
 }
 
 // Absolute path of a memory file — for the reader's click-to-copy path header.
+// Resolved across all memory dirs (falls back to the home-slug dir if not found).
 export function memoryFilePath(name: string): string {
-  return path.join(MEMORY_DIR, path.basename(name));
+  return findMemoryFile(name) ?? path.join(MEMORY_DIR, path.basename(name));
 }
 
 // Corpus scale, for the empty-state "N sessions · M memory notes" line.
 export function corpusCounts(): { sessions: number; memory: number } {
-  let memory = 0;
-  try {
-    memory = fs
-      .readdirSync(MEMORY_DIR)
-      .filter((n) => n.endsWith(".md") && n !== "MEMORY.md").length;
-  } catch {
-    // no memory dir
-  }
+  const memory = memoryDocs().length; // deduped across every project memory dir
   let sessions = 0;
   try {
     sessions = getArchiveSessions().length;
@@ -817,10 +860,10 @@ export function corpusCounts(): { sessions: number; memory: number } {
 // Full content of one memory file, for the result-click "open" view.
 // Basename-only so a crafted ?open= can't walk out of the memory dir.
 export function getMemoryFile(name: string): string | null {
-  const base = path.basename(name);
-  if (!base.endsWith(".md")) return null;
+  const full = findMemoryFile(name);
+  if (!full) return null;
   try {
-    return fs.readFileSync(path.join(MEMORY_DIR, base), "utf8");
+    return fs.readFileSync(full, "utf8");
   } catch {
     return null;
   }

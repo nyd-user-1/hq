@@ -60,6 +60,13 @@ const PER = 25; // hits pulled per corpus — deep enough to lazy-load through
 // (already narrowed per-corpus by lib/search) outranks scattered tokens.
 function tier(h: SearchHit, ql: string): number {
   const title = h.title.toLowerCase();
+  // Dropping an exact file name (or full repo path) should surface THAT file above
+  // everything — even a coincidental exact-title match in another corpus. Strip a
+  // trailing :line[:col] so a chip dropped verbatim ("components.ts:97") still hits.
+  if (h.kind === "file") {
+    const fileQl = ql.replace(/(\.[a-z0-9]+):\d+(:\d+)?$/i, "$1");
+    if (title === fileQl || h.ref.toLowerCase() === fileQl) return -1;
+  }
   if (title === ql) return 0;
   if (title.startsWith(ql)) return 1;
   if (title.includes(ql) || h.phrase) return 2;
