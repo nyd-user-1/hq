@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import Markdown from "@/app/ui/md";
+import BlockMenu from "@/app/ui/block-menu";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
 import TodoMenu from "@/app/ui/todo-menu";
@@ -15,6 +16,7 @@ import { useRepl } from "@/app/ui/use-repl";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
+import type { BlockMeta, Reaction } from "@/lib/block-meta";
 
 // Minimal typing for the CSS Custom Highlight API (not yet in the TS DOM lib).
 // In-session find-in-page registers Ranges here to overlay highlights WITHOUT
@@ -279,83 +281,6 @@ function CopyChip({ label, text }: { label: string; text: string }) {
       className="shrink-0 rounded-md border border-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-200"
     >
       {copied ? "copied ✓" : label}
-    </button>
-  );
-}
-
-// Sibling of the copy button: save a message block as a searchable note (.md
-// under ~/.claude/hq/notes). Flips to a green check and stays lit once saved
-// (the block also takes a blue border).
-function NoteButton({ saved, onSave }: { saved: boolean; onSave: () => void }) {
-  return (
-    <button
-      onClick={onSave}
-      title={saved ? "saved as note" : "save as a searchable note"}
-      aria-label="Save as note"
-      className={`absolute right-9 top-2 rounded-md border bg-zinc-900 p-1.5 transition ${
-        saved
-          ? "border-green-600/60 text-green-400 opacity-100"
-          : "border-zinc-700 text-zinc-500 opacity-0 hover:text-zinc-200 focus:opacity-100 group-hover/turn:opacity-100"
-      }`}
-    >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {saved ? (
-          <path d="M20 6 9 17l-5-5" />
-        ) : (
-          <>
-            <path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <path d="M15 3v5h5" />
-            <line x1="8" y1="13" x2="14" y2="13" />
-            <line x1="8" y1="17" x2="14" y2="17" />
-          </>
-        )}
-      </svg>
-    </button>
-  );
-}
-
-// Hover-reveal copy button for a message block — grab a reply/prompt verbatim
-// instead of asking Claude to reprint it.
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-      aria-label="Copy message"
-      className="absolute right-2 top-2 rounded-md border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-500 opacity-0 transition-opacity hover:text-zinc-200 focus:opacity-100 group-hover/turn:opacity-100"
-    >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {copied ? (
-          <path d="M20 6 9 17l-5-5" className="text-green-500" />
-        ) : (
-          <>
-            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-          </>
-        )}
-      </svg>
     </button>
   );
 }
@@ -742,6 +667,10 @@ export default function Terminal({
   const [draft, setDraft] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null); // send box — for auto-grow
   const [savedNotes, setSavedNotes] = useState<Set<string>>(new Set()); // blocks saved as notes (keyed by text)
+  // Per-block view state (favorite / hidden / 👍👎), keyed by the block's stable
+  // id (jsonl uuid, falling back to its timestamp). Hydrated from the block-meta
+  // sidecar whenever the shown session changes.
+  const [blockMeta, setBlockMeta] = useState<Record<string, BlockMeta>>({});
   const [attachments, setAttachments] = useState<Attachment[]>([]); // staged screenshots
   const [dragOver, setDragOver] = useState<null | "file" | "todo">(null); // drop-zone hint
   const dragDepth = useRef(0); // enter/leave depth — kills the child-element flicker
@@ -1559,6 +1488,208 @@ export default function Terminal({
     }
   }
 
+  // ── Per-block actions (favorite / hide / 👍👎 / save-as-code) ──────────────
+  type TurnItem = Extract<TimelineItem, { kind: "turn" }>;
+  // The block id used to key block-meta: the source jsonl uuid, falling back to
+  // the timestamp (items that predate uuid plumbing still key on `at`).
+  const blockKey = (it: { uuid?: string; at?: string }) => it.uuid || it.at || "";
+
+  // Hydrate this session's block-meta whenever the shown session changes.
+  const metaSessionId = pinned ?? resolvedId;
+  useEffect(() => {
+    if (!metaSessionId) {
+      setBlockMeta({});
+      return;
+    }
+    let alive = true;
+    fetch(`/api/block-meta?session=${encodeURIComponent(metaSessionId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setBlockMeta(d.meta ?? {});
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [metaSessionId]);
+
+  // Optimistically merge a patch onto a block's meta, then persist it. A 👍/👎
+  // also carries the block text so the server can log it to feedback.jsonl.
+  async function patchBlock(
+    it: TurnItem,
+    patch: { favorite?: boolean; hidden?: boolean; reaction?: Reaction | null },
+  ) {
+    const sessionId = pinned ?? resolvedId;
+    const id = blockKey(it);
+    if (!sessionId || !id) return;
+    setBlockMeta((m) => {
+      const next = { ...m };
+      const cur: BlockMeta = { ...(next[id] ?? {}) };
+      if (typeof patch.favorite === "boolean") {
+        if (patch.favorite) cur.favorite = true;
+        else delete cur.favorite;
+      }
+      if (typeof patch.hidden === "boolean") {
+        if (patch.hidden) cur.hidden = true;
+        else delete cur.hidden;
+      }
+      if (patch.reaction !== undefined) {
+        if (patch.reaction) cur.reaction = patch.reaction;
+        else delete cur.reaction;
+      }
+      if (Object.keys(cur).length === 0) delete next[id];
+      else next[id] = cur;
+      return next;
+    });
+    try {
+      await fetch("/api/block-meta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          blockId: id,
+          ...patch,
+          text: patch.reaction ? it.text : undefined,
+          project,
+        }),
+      });
+    } catch {
+      /* optimistic update stands; a failed persist self-heals on reload */
+    }
+  }
+
+  const toggleBlockFavorite = (it: TurnItem) =>
+    patchBlock(it, { favorite: !blockMeta[blockKey(it)]?.favorite });
+  const toggleBlockHidden = (it: TurnItem) =>
+    patchBlock(it, { hidden: !blockMeta[blockKey(it)]?.hidden });
+  const reactToBlock = (it: TurnItem, r: Reaction) =>
+    patchBlock(it, { reaction: blockMeta[blockKey(it)]?.reaction === r ? null : r });
+
+  // "Save as code": pull the fenced code from a reply (fallback: the whole block)
+  // and save it as a note that renders as a clean, copy-pasteable code block.
+  async function saveCodeBlock(it: TurnItem) {
+    if (!it.text?.trim()) return;
+    const fences = [...it.text.matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((m) =>
+      m[1].replace(/\s+$/, ""),
+    );
+    const code = (fences.length ? fences.join("\n\n") : it.text).trim();
+    const text = `Code · ${project || it.role || "session"}\n\n\`\`\`\n${code}\n\`\`\``;
+    try {
+      await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          role: it.role,
+          at: it.at,
+          sessionId: pinned ?? resolvedId,
+          project,
+        }),
+      });
+    } catch {
+      setError("couldn't save code");
+    }
+  }
+
+  // One transcript turn: the "● claude · time" header (with a ★ when favorited),
+  // then the block — or, when hidden, a collapsed "hidden block · show" stub that
+  // keeps it out of view without removing it from the transcript.
+  const renderTurn = (it: TurnItem, i: number) => {
+    const meta = blockMeta[blockKey(it)] ?? {};
+    return (
+      <div key={i} className="flex flex-col gap-1">
+        <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+          <span>
+            <span
+              className={`mr-1.5 normal-case ${
+                it.role === "user" ? "text-blue-500" : "text-orange-500"
+              }`}
+            >
+              ●
+            </span>
+            {it.role === "user" ? "you" : "claude"}
+            {it.at && (
+              <span className="ml-2 normal-case tracking-normal text-zinc-600">
+                {new Date(it.at).toLocaleTimeString()}
+              </span>
+            )}
+          </span>
+          {meta.favorite && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-label="favorited"
+              className="shrink-0 text-yellow-300"
+            >
+              <path d="M12 2l2.9 6.3 6.8.8-5 4.6 1.3 6.7L12 17.8 5.7 21l1.3-6.7-5-4.6 6.8-.8z" />
+            </svg>
+          )}
+        </div>
+        {meta.hidden ? (
+          <button
+            type="button"
+            onClick={() => toggleBlockHidden(it)}
+            className="flex w-full items-center gap-2 rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-left font-mono text-[11px] text-zinc-600 transition-colors hover:text-zinc-300"
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+              <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+              <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+              <path d="m2 2 20 20" />
+            </svg>
+            hidden block · <span className="text-zinc-400 underline">show</span>
+          </button>
+        ) : (
+          <div
+            data-role={it.role}
+            className={`group/turn relative break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
+              savedNotes.has(it.text)
+                ? it.role === "user"
+                  ? "whitespace-pre-wrap border-blue-500/70 bg-zinc-900 text-zinc-100"
+                  : "border-blue-500/70 bg-zinc-900/40 text-zinc-300"
+                : it.role === "user"
+                  ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
+                  : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
+            }`}
+          >
+            <BlockMenu
+              saved={savedNotes.has(it.text)}
+              favorite={!!meta.favorite}
+              hidden={!!meta.hidden}
+              reaction={meta.reaction ?? null}
+              onCopy={() => navigator.clipboard.writeText(it.text)}
+              onFavorite={() => toggleBlockFavorite(it)}
+              onSaveNote={() => saveNoteBlock(it)}
+              onSaveCode={() => saveCodeBlock(it)}
+              onReact={(r) => reactToBlock(it, r)}
+              onHide={() => toggleBlockHidden(it)}
+            />
+            {it.role === "assistant" ? <Markdown text={it.text} /> : it.text}
+            {it.role === "assistant" && it.turnTokens ? (
+              <span
+                title="output tokens this whole work block burned (every API call from your prompt to this reply)"
+                className="absolute -bottom-[9px] right-3 rounded-md border border-zinc-800 bg-zinc-950 px-1.5 py-px font-mono text-[10px] text-zinc-500"
+              >
+                block · {fmtTokens(it.turnTokens)} tok
+              </span>
+            ) : null}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Auto-grow the send box from 1 line up to ~8, then scroll — mirrors the CLI
   // input. Runs on every draft change (incl. the post-send clear → shrinks back).
   useEffect(() => {
@@ -2343,50 +2474,7 @@ export default function Terminal({
               <span className="h-px min-w-6 flex-1 bg-zinc-800" />
             </div>
           ) : it.kind === "turn" ? (
-            <div key={i} className="flex flex-col gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-                <span
-                  className={`mr-1.5 normal-case ${
-                    it.role === "user" ? "text-blue-500" : "text-orange-500"
-                  }`}
-                >
-                  ●
-                </span>
-                {it.role === "user" ? "you" : "claude"}
-                {it.at && (
-                  <span className="ml-2 normal-case tracking-normal text-zinc-600">
-                    {new Date(it.at).toLocaleTimeString()}
-                  </span>
-                )}
-              </span>
-              <div
-                data-role={it.role}
-                className={`group/turn relative break-words rounded-md border p-3 font-mono text-xs leading-relaxed ${
-                  savedNotes.has(it.text)
-                    ? it.role === "user"
-                      ? "whitespace-pre-wrap border-blue-500/70 bg-zinc-900 text-zinc-100"
-                      : "border-blue-500/70 bg-zinc-900/40 text-zinc-300"
-                    : it.role === "user"
-                      ? "whitespace-pre-wrap border-zinc-700 bg-zinc-900 text-zinc-100"
-                      : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
-                }`}
-              >
-                <NoteButton
-                  saved={savedNotes.has(it.text)}
-                  onSave={() => saveNoteBlock(it)}
-                />
-                <CopyButton text={it.text} />
-                {it.role === "assistant" ? <Markdown text={it.text} /> : it.text}
-                {it.role === "assistant" && it.turnTokens ? (
-                  <span
-                    title="output tokens this whole work block burned (every API call from your prompt to this reply)"
-                    className="absolute -bottom-[9px] right-3 rounded-md border border-zinc-800 bg-zinc-950 px-1.5 py-px font-mono text-[10px] text-zinc-500"
-                  >
-                    block · {fmtTokens(it.turnTokens)} tok
-                  </span>
-                ) : null}
-              </div>
-            </div>
+            renderTurn(it, i)
           ) : (
             <details
               key={i}

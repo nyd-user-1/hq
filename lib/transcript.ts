@@ -195,6 +195,7 @@ export type TimelineItem =
       role: "user" | "assistant";
       text: string;
       at: string;
+      uuid?: string; // the source jsonl entry's uuid — a stable per-block key for HQ block-meta (favorite/hide/react)
       turnTokens?: number; // set on the LAST assistant card of a work block: the whole block's output-token burn
     }
   | { kind: "command"; command: string; arg: string; at: string } // local command marker (/clear, /model, …)
@@ -404,6 +405,7 @@ export function timelineFor(
               role: "assistant",
               text: b.text,
               at,
+              uuid: e.uuid,
             };
             items.push(reply);
             lastReply = reply;
@@ -454,7 +456,7 @@ export function timelineFor(
       const t = clean(raw);
       if (!t) continue;
       closeBlock(); // a new prompt ends the previous work block
-      items.push({ kind: "turn", role: "user", text: t, at });
+      items.push({ kind: "turn", role: "user", text: t, at, uuid: e.uuid });
     }
   }
 
