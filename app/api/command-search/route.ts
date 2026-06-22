@@ -58,14 +58,19 @@ const PER = 25; // hits pulled per corpus — deep enough to lazy-load through
 // Relevance tier from how the query matches the title (lower = better). Exact
 // title and prefix are what a user almost always means; a contiguous-phrase hit
 // (already narrowed per-corpus by lib/search) outranks scattered tokens.
+// Kinds whose `ref` IS a filename/path — dropping that exact name should surface
+// the file above everything. memory/note/script keep the extension on `ref`
+// ("hq-product-description.md") while their title drops it, so match on ref too.
+const FILE_KINDS = new Set(["file", "memory", "note", "script", "doc"]);
+
 function tier(h: SearchHit, ql: string): number {
   const title = h.title.toLowerCase();
-  // Dropping an exact file name (or full repo path) should surface THAT file above
-  // everything — even a coincidental exact-title match in another corpus. Strip a
-  // trailing :line[:col] so a chip dropped verbatim ("components.ts:97") still hits.
-  if (h.kind === "file") {
+  // An exact file-name (or path) match floats to a top tier — above even a
+  // coincidental exact-title match in another corpus. Strip a trailing :line[:col]
+  // so a chip dropped verbatim ("components.ts:97") still counts.
+  if (FILE_KINDS.has(h.kind)) {
     const fileQl = ql.replace(/(\.[a-z0-9]+):\d+(:\d+)?$/i, "$1");
-    if (title === fileQl || h.ref.toLowerCase() === fileQl) return -1;
+    if (h.ref.toLowerCase() === fileQl || title === fileQl) return -1;
   }
   if (title === ql) return 0;
   if (title.startsWith(ql)) return 1;

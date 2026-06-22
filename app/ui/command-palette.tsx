@@ -331,8 +331,9 @@ function viewerText(body: ViewerBody | null): string {
   return body.content;
 }
 
-// Copy the open file/note/transcript's contents — a clipboard chip in the reader
-// header, flashing a check on copy.
+// Copy the open file/note/transcript's contents — an icon button in the body's
+// top-right cluster, flashing a check on copy. Icon-only so it pairs with the
+// open-in-panel icon beside it.
 function ViewerCopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   if (!text) return null;
@@ -345,11 +346,13 @@ function ViewerCopyButton({ text }: { text: string }) {
       }}
       aria-label="Copy contents"
       title="Copy contents"
-      className="flex shrink-0 items-center gap-1 font-mono text-[10px] text-zinc-500 transition-colors hover:text-zinc-200"
+      className={`flex shrink-0 items-center rounded p-0.5 transition-colors hover:text-zinc-200 ${
+        copied ? "text-emerald-400" : "text-zinc-500"
+      }`}
     >
       <svg
-        width="13"
-        height="13"
+        width="14"
+        height="14"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -366,7 +369,6 @@ function ViewerCopyButton({ text }: { text: string }) {
           </>
         )}
       </svg>
-      {copied ? "copied" : "copy"}
     </button>
   );
 }
@@ -730,16 +732,39 @@ export default function CommandPalette() {
                 >
                   {viewing.kind}
                 </span>
-                <ViewerCopyButton text={viewerText(body)} />
-                <button
-                  onClick={() => openInPanel(viewing)}
-                  className="shrink-0 font-mono text-[10px] text-zinc-500 transition-colors hover:text-zinc-200"
-                >
-                  ↗ open in panel
-                </button>
               </div>
-              <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto pr-1">
-                <ViewerBodyView body={body} />
+              <div className="relative min-h-0 flex-1">
+                {/* Copy + open-in-panel float top-right of the BODY (over the
+                    content), pinned as it scrolls. Both lucide icons so they pair. */}
+                <div className="absolute right-2 top-1 z-10 flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/90 px-1.5 py-1">
+                  <ViewerCopyButton text={viewerText(body)} />
+                  <span className="h-3.5 w-px bg-zinc-800" />
+                  <button
+                    onClick={() => openInPanel(viewing)}
+                    aria-label="Open in panel"
+                    title="Open in panel"
+                    className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
+                  >
+                    {/* lucide square-arrow-out-up-right */}
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+                      <path d="m21 3-9 9" />
+                      <path d="M15 3h6v6" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="scrollbar-none h-full overflow-y-auto pr-1">
+                  <ViewerBodyView body={body} />
+                </div>
               </div>
             </div>
           ) : (
