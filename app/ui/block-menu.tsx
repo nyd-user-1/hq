@@ -67,6 +67,8 @@ export default function BlockMenu({
   hidden,
   reaction,
   showReactions = true,
+  triggerClass = "absolute right-2 top-2",
+  revealClass = "opacity-0 group-hover/turn:opacity-100",
   onCopy,
   onFavorite,
   onSaveNote,
@@ -79,6 +81,8 @@ export default function BlockMenu({
   hidden: boolean;
   reaction: Reaction | null;
   showReactions?: boolean; // 👍/👎 only make sense on Claude's replies
+  triggerClass?: string; // kebab position (absolute for blocks, inline for tool steps)
+  revealClass?: string; // hover-reveal class (which group it follows)
   onCopy: () => void;
   onFavorite: () => void;
   onSaveNote: () => void;
@@ -108,6 +112,7 @@ export default function BlockMenu({
   }, [open]);
 
   const toggle = (e: React.MouseEvent) => {
+    e.preventDefault(); // inside a <summary>: don't toggle the <details>
     e.stopPropagation();
     if (open) {
       setOpen(false);
@@ -132,10 +137,8 @@ export default function BlockMenu({
         aria-label="Block actions"
         aria-haspopup="menu"
         aria-expanded={open}
-        className={`absolute right-2 top-2 rounded p-1 text-zinc-500 transition-opacity hover:text-zinc-200 focus:opacity-100 ${
-          open || favorite || saved || reaction
-            ? "opacity-100"
-            : "opacity-0 group-hover/turn:opacity-100"
+        className={`${triggerClass} rounded p-1 text-zinc-500 transition-opacity hover:text-zinc-200 focus:opacity-100 ${
+          open || favorite || saved || reaction ? "opacity-100" : revealClass
         }`}
       >
         <Kebab />

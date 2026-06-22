@@ -1516,11 +1516,11 @@ export default function Terminal({
   // Optimistically merge a patch onto a block's meta, then persist it. A 👍/👎
   // also carries the block text so the server can log it to feedback.jsonl.
   async function patchBlock(
-    it: TurnItem,
+    id: string,
+    text: string,
     patch: { favorite?: boolean; hidden?: boolean; reaction?: Reaction | null },
   ) {
     const sessionId = pinned ?? resolvedId;
-    const id = blockKey(it);
     if (!sessionId || !id) return;
     setBlockMeta((m) => {
       const next = { ...m };
@@ -1549,7 +1549,7 @@ export default function Terminal({
           sessionId,
           blockId: id,
           ...patch,
-          text: patch.reaction ? it.text : undefined,
+          text: patch.reaction ? text : undefined,
           project,
         }),
       });
@@ -1559,15 +1559,23 @@ export default function Terminal({
   }
 
   const toggleBlockFavorite = (it: TurnItem) =>
-    patchBlock(it, { favorite: !blockMeta[blockKey(it)]?.favorite });
+    patchBlock(blockKey(it), it.text, { favorite: !blockMeta[blockKey(it)]?.favorite });
   const toggleBlockHidden = (it: TurnItem) =>
-    patchBlock(it, { hidden: !blockMeta[blockKey(it)]?.hidden });
+    patchBlock(blockKey(it), it.text, { hidden: !blockMeta[blockKey(it)]?.hidden });
   const reactToBlock = (it: TurnItem, r: Reaction) =>
-    patchBlock(it, { reaction: blockMeta[blockKey(it)]?.reaction === r ? null : r });
+    patchBlock(blockKey(it), it.text, {
+      reaction: blockMeta[blockKey(it)]?.reaction === r ? null : r,
+    });
+  // Tool steps key block-meta on their tool_use id; the saved content is the detail.
+  type ToolItem = Extract<TimelineItem, { kind: "tool" }>;
+  const toggleToolFavorite = (it: ToolItem) =>
+    patchBlock(it.id, it.detail, { favorite: !blockMeta[it.id]?.favorite });
+  const toggleToolHidden = (it: ToolItem) =>
+    patchBlock(it.id, it.detail, { hidden: !blockMeta[it.id]?.hidden });
 
   // "Save as code": pull the fenced code from a reply (fallback: the whole block)
   // and save it as a note that renders as a clean, copy-pasteable code block.
-  async function saveCodeBlock(it: TurnItem) {
+  async function saveCodeBlock(it: { text: string; role?: string; at?: string }) {
     if (!it.text?.trim()) return;
     const fences = [...it.text.matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((m) =>
       m[1].replace(/\s+$/, ""),
@@ -1688,6 +1696,89 @@ export default function Terminal({
           </div>
         )}
       </div>
+    );
+  };
+
+  // One tool step (Bash / Edit / Write / Read …) — the same ⋮ menu as a turn,
+  // inline on the <details> summary row. Hidden → a "hidden step · show" stub.
+  const renderTool = (it: ToolItem, i: number) => {
+    const meta = blockMeta[it.id] ?? {};
+    if (meta.hidden) {
+      return (
+        <button
+          key={i}
+          type="button"
+          onClick={() => toggleToolHidden(it)}
+          className="flex w-full items-center gap-2 rounded-md border border-dashed border-zinc-800 bg-zinc-900/30 px-3 py-1.5 text-left font-mono text-[11px] text-zinc-600 transition-colors hover:text-zinc-300"
+        >
+          <span className="text-zinc-600">{it.tool}</span>
+          hidden step · <span className="text-zinc-400 underline">show</span>
+        </button>
+      );
+    }
+    return (
+      <details
+        key={i}
+        className="group group/turn relative rounded-md border border-zinc-800 bg-zinc-900/30"
+      >
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 font-mono text-xs marker:content-none [&::-webkit-details-marker]:hidden">
+          <span className="text-zinc-600 transition-transform group-open:rotate-90">›</span>
+          <span
+            className={`shrink-0 text-[10px] uppercase tracking-wide ${
+              it.isError ? "text-red-400" : "text-zinc-500"
+            }`}
+          >
+            {it.tool}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-zinc-300">{it.title}</span>
+          {meta.favorite && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-label="favorited"
+              className="shrink-0 text-yellow-300"
+            >
+              <path d="M12 2l2.9 6.3 6.8.8-5 4.6 1.3 6.7L12 17.8 5.7 21l1.3-6.7-5-4.6 6.8-.8z" />
+            </svg>
+          )}
+          {(it.resultTokens ?? 0) >= 1000 && (
+            <span
+              className={`shrink-0 text-[10px] ${
+                (it.resultTokens ?? 0) >= 12000
+                  ? "text-red-400"
+                  : (it.resultTokens ?? 0) >= 4000
+                    ? "text-amber-400"
+                    : "text-zinc-600"
+              }`}
+              title="rough context cost of this step (input + result, ~4 chars/token)"
+            >
+              ~{fmtTokens(it.resultTokens ?? 0)} tok
+            </span>
+          )}
+          <BlockMenu
+            saved={savedNotes.has(it.detail)}
+            favorite={!!meta.favorite}
+            hidden={!!meta.hidden}
+            reaction={null}
+            showReactions={false}
+            triggerClass="shrink-0"
+            revealClass="opacity-0 group-hover:opacity-100"
+            onCopy={() => navigator.clipboard.writeText(it.detail)}
+            onFavorite={() => toggleToolFavorite(it)}
+            onSaveNote={() =>
+              saveNoteBlock({ text: `${it.tool} · ${it.title}\n\n${it.detail}`, role: "assistant", at: it.at })
+            }
+            onSaveCode={() => saveCodeBlock({ text: it.detail, role: "assistant", at: it.at })}
+            onReact={() => {}}
+            onHide={() => toggleToolHidden(it)}
+          />
+        </summary>
+        <pre className="scrollbar-none max-h-72 overflow-auto whitespace-pre-wrap break-words border-t border-zinc-800 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
+          {it.detail}
+        </pre>
+      </details>
     );
   };
 
@@ -2477,41 +2568,7 @@ export default function Terminal({
           ) : it.kind === "turn" ? (
             renderTurn(it, i)
           ) : (
-            <details
-              key={i}
-              className="group rounded-md border border-zinc-800 bg-zinc-900/30"
-            >
-              <summary className="flex cursor-pointer list-none items-baseline gap-2 px-3 py-1.5 font-mono text-xs marker:content-none [&::-webkit-details-marker]:hidden">
-                <span className="text-zinc-600 transition-transform group-open:rotate-90">
-                  ›
-                </span>
-                <span
-                  className={`shrink-0 text-[10px] uppercase tracking-wide ${
-                    it.isError ? "text-red-400" : "text-zinc-500"
-                  }`}
-                >
-                  {it.tool}
-                </span>
-                <span className="min-w-0 truncate text-zinc-300">{it.title}</span>
-                {(it.resultTokens ?? 0) >= 1000 && (
-                  <span
-                    className={`ml-auto shrink-0 text-[10px] ${
-                      (it.resultTokens ?? 0) >= 12000
-                        ? "text-red-400"
-                        : (it.resultTokens ?? 0) >= 4000
-                          ? "text-amber-400"
-                          : "text-zinc-600"
-                    }`}
-                    title="rough context cost of this step (input + result, ~4 chars/token)"
-                  >
-                    ~{fmtTokens(it.resultTokens ?? 0)} tok
-                  </span>
-                )}
-              </summary>
-              <pre className="scrollbar-none max-h-72 overflow-auto whitespace-pre-wrap break-words border-t border-zinc-800 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-                {it.detail}
-              </pre>
-            </details>
+            renderTool(it, i)
           )
         )}
         {/* Live REPL overlay (drive mode): the in-flight assistant turn streaming
