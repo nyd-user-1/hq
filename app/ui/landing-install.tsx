@@ -152,13 +152,13 @@ const SEED: { role: "user" | "assistant"; text: string }[] = [
   {
     role: "assistant",
     text:
-      "Welcome to HQ — the observability and control layer over Claude Code. I read the files Claude Code already writes to disk: transcripts, token usage, memory, skills, and your git history. No database, no auth, no telemetry.\n\nTo run me on your own machine:\n```bash\nnpm i -g @nysgpt/hq\n```",
+      "Welcome to hq— the observability and control layer over Claude Code. I read the files Claude Code already writes to disk: transcripts, token usage, memory, skills, your git history. No database, no auth, no telemetry. And hq does more than watch: type into a live session from here and it lands in the running terminal, no fork, one transcript.\n\nTo run me on your own machine:\n```bash\nnpm i -g @nysgpt/hq\n```",
   },
   { role: "user", text: "how do I open it?" },
   {
     role: "assistant",
     text:
-      "From inside any Claude Code session, run:\n```bash\nhq\n```\nI'll open at localhost:3002, pinned to that session as Terminal 1 — then I mirror the transcript live, as Claude writes to disk.",
+      "From inside any Claude Code session, run:\n```bash\nhq\n```\nI'll open at localhost:3002, pinned to that session as Terminal 1 — I mirror its transcript live as Claude writes to disk, and you can drive it from the send box: start in the terminal, drift to hq, drift back, all one conversation.",
   },
 ];
 

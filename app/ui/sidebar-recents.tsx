@@ -22,6 +22,7 @@ type Recent = {
   title: string;
   lastActive: number;
   active: boolean;
+  live: boolean;
   branch: string;
   aiTitle: string;
   chainRoot: string;
@@ -496,10 +497,14 @@ export default function SidebarRecents() {
               </span>
             )}
           </span>
-          {/* green = active within the cache window */}
+          {/* live NOW (a connected channel) pulses bright + glows; merely-active is a calm green */}
           <span
             className={`size-1.5 shrink-0 rounded-full ${
-              s.active ? "bg-green-500" : "bg-transparent"
+              s.live
+                ? "animate-pulse bg-emerald-400 shadow-[0_0_6px_1px_rgba(52,211,153,0.7)]"
+                : s.active
+                  ? "bg-green-500"
+                  : "bg-transparent"
             }`}
           />
         </Link>

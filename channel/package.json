@@ -1,0 +1,12 @@
+{
+  "name": "hq-channel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HQ's Claude Code channel server — pushes dashboard events into a live session. Isolated from HQ's runtime deps (next/react/react-dom) on purpose: Claude Code spawns this as its own subprocess, so the MCP SDK never enters HQ's bundle.",
+  "bin": { "hq-channel": "./hq-channel.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  }
+}

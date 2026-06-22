@@ -19,6 +19,7 @@ import path from "node:path";
 import { sessionCwd } from "@/lib/transcript";
 import { classify } from "@/lib/permission-policy";
 import { writeFileAtomicSync } from "@/lib/atomic";
+import { allocChannel, channelServerPath } from "@/lib/channel";
 
 // HQ-driven sessions are spawned via `claude -p`, so their transcript entrypoint
 // is "sdk-cli" — which Recents filters out. Record the ids we drive in a sidecar
@@ -131,9 +132,23 @@ function spawnRepl(
   opts: { cwd: string; resumeId?: string; sessionId?: string; model?: string },
 ): Repl {
   const port = process.env.HQ_PORT ?? process.env.PORT ?? "3002";
-  const mcpConfig = JSON.stringify({
-    mcpServers: { "hq-approve": { command: "node", args: [shimPath()] } },
-  });
+
+  // Channels are OPT-IN (HQ_CHANNELS=1): a research-preview path must never be
+  // able to destabilize the proven drive flow until it's been live-tested. When
+  // on, merge a per-session channel server ALONGSIDE the permission shim (don't
+  // clobber it) and load it past the dev allowlist. See lib/channel.ts.
+  const ch = process.env.HQ_CHANNELS === "1" ? allocChannel(key) : null;
+  const mcpServers: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {
+    "hq-approve": { command: "node", args: [shimPath()] },
+  };
+  if (ch) {
+    mcpServers["hq"] = {
+      command: "node",
+      args: [channelServerPath()],
+      env: { HQ_CHANNEL_PORT: String(ch.port), HQ_CHANNEL_TOKEN: ch.token, HQ_REPL_SESSION: key },
+    };
+  }
+  const mcpConfig = JSON.stringify({ mcpServers });
 
   const args = [
     "-p",
@@ -145,6 +160,7 @@ function spawnRepl(
     "--permission-mode", "default",
     "--mcp-config", mcpConfig,
     "--permission-prompt-tool", "mcp__hq-approve__approve",
+    ...(ch ? ["--dangerously-load-development-channels", "server:hq"] : []),
     ...(opts.model ? ["--model", opts.model] : []),
     // resume an existing session, OR birth a new one with a preassigned id.
     ...(opts.resumeId

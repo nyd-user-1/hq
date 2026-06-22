@@ -10,6 +10,7 @@ import { latestHandoff } from "@/lib/vault";
 import { lineageFor, sessionBornAt } from "@/lib/lineage";
 import { getSessionsMeta } from "@/lib/sessions-meta";
 import { handoffsFor } from "@/lib/handoffs"; // HQ↔terminal control-transfer markers (NOT vault's latestHandoff above)
+import { channelFor } from "@/lib/channel"; // channel-in: is a live push-channel open for this session?
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,12 @@ export async function GET(req: Request) {
     }
   }
   const status = workingStatus(resolved);
+  // channel-in: a live push-channel (~/.claude/hq/channels/<resolved>.json) means
+  // this session can be DRIVEN BY PUSH (no --resume fork) even while busy. Keyed on
+  // `resolved` — the post-self-pin transcript id the client renders + compares — so
+  // discovery filename, channelFor() lookup, and the client's send target all align.
+  // channelFor is a cheap single-file fs read; fine on this 1s poll.
+  const channelConnected = !!(resolved && channelFor(resolved));
   // Only meaningful when NOT working: did the last turn end on a hard interrupt?
   // Drives the terminal's red "interrupted — awaiting new direction" border.
   const interrupted = !status && lastTurnInterrupted(resolved);
@@ -100,6 +107,7 @@ export async function GET(req: Request) {
     items: timeline, // transcript items + merged handoff markers (chronological)
     project,
     status,
+    channelConnected, // channel-in: push-drivable (fork-free) even while working
     interrupted,
     diverged: rival.diverged,
     rivalLeafUuid: rival.rivalLeafUuid,

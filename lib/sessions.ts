@@ -5,6 +5,7 @@ import { getUsage, perFileTotals, weighted } from "./usage";
 import { baseCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
 import { projectsRoot } from "./config";
+import { listChannels } from "./channel";
 
 // Fleet view: every Claude Code session on this machine, from the same
 // transcripts the token meter parses. Burn comes from the meter's file
@@ -96,6 +97,7 @@ export type RecentSession = {
   title: string;
   lastActive: number;
   active: boolean;
+  live: boolean; // genuinely live RIGHT NOW (a connected channel) — a brighter, pulsing dot than merely-active
   entrypoint: string; // "cli" = interactive terminal; "sdk-cli" = Agent SDK run
   branch: string; // git branch at session time ("" when none / detached "HEAD")
   customTitle: string; // HQ rename (sidecar); "" when not renamed
@@ -157,6 +159,7 @@ export function sessionMeta(
     title: title || `${project} session`,
     lastActive: mtime,
     active: Date.now() - mtime < ACTIVE_MS,
+    live: false, // transcript-derived; live-now tracking is for connected channel sessions
     entrypoint: entrypoint || "cli",
     // gitBranch is on most entries; "HEAD" (detached / non-branch) isn't worth
     // surfacing, so collapse it to empty.
@@ -300,17 +303,83 @@ function hqDrivenIds(): Set<string> {
   }
 }
 
+// A process is alive if signal-0 doesn't throw ESRCH (EPERM = alive, not ours).
+function pidAlive(pid?: number): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+// LIVE channel-connected sessions (claude-hq), surfaced from their discovery files
+// so a just-launched session is PINNABLE in the sidebar BEFORE it has a transcript
+// — the first send then bootstraps the .jsonl via the channel. This mirrors how HQ
+// knows a "+ new session" by its id at birth: for an external claude-hq session the
+// discovery file IS that birth record (the REAL session id + cwd, written at launch).
+// Only externally-launched discovery files carry a pid; HQ-spawned ones don't and
+// already have transcripts — so the live-pid filter cleanly selects the transcript-
+// less terminals we need to surface, and drops stale (crashed) discovery files.
+function channelSessions(meta: SessionsMeta): RecentSession[] {
+  const home = os.homedir();
+  const out: RecentSession[] = [];
+  for (const ch of listChannels()) {
+    if (!ch.id || !pidAlive(ch.pid)) continue;
+    const cwd = ch.cwd ?? null;
+    const m = meta[ch.id] ?? {};
+    const derived =
+      (cwd ? codeSlug(cwd) : null) ??
+      (cwd && cwd !== home ? path.basename(cwd) : "Unassigned");
+    const project = m.project || derived;
+    out.push({
+      id: ch.id,
+      project,
+      cwd,
+      title: m.title || `${project} session`,
+      lastActive: (ch.startedAt ?? 0) * 1000 || Date.now(), // discovery startedAt is seconds
+      active: true, // a live channel IS active
+      live: true, // and live RIGHT NOW — the sidebar dot pulses bright
+      entrypoint: "cli",
+      branch: "",
+      aiTitle: "",
+      chainRoot: ch.id,
+      customTitle: m.title ?? "",
+      favorite: !!m.favorite,
+      hidden: !!m.hidden,
+      archived: !!m.archived,
+      related: m.related ?? [],
+    });
+  }
+  return out;
+}
+
 function sessionsOfKind(kind: "interactive" | "sdk", limit: number): RecentSession[] {
   const meta = getSessionsMeta();
   const driven = hqDrivenIds();
   const out: RecentSession[] = [];
+  const seen = new Set<string>();
   for (const { file, mtime } of recentFiles()) {
     const m = sessionMeta(file, mtime, meta);
     // an HQ-driven session counts as interactive even though it's sdk-cli
     const isSdk = m.entrypoint === "sdk-cli" && !driven.has(m.id);
     if (kind === "sdk" ? !isSdk : isSdk) continue;
     out.push(m);
+    seen.add(m.id);
     if (out.length >= limit) break;
+  }
+  // Surface LIVE channel sessions that have no transcript yet (interactive list
+  // only), so a just-launched claude-hq session is pinnable from turn one. Dedup
+  // against the file scan — one that already has a .jsonl keeps its richer entry.
+  // Newest-first after the merge, then re-cap to the limit.
+  if (kind === "interactive") {
+    const extra = channelSessions(meta).filter((c) => !seen.has(c.id));
+    if (extra.length) {
+      out.push(...extra);
+      out.sort((a, b) => b.lastActive - a.lastActive);
+      return out.slice(0, limit);
+    }
   }
   return out;
 }

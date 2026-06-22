@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# claude-hq — launch a normal Claude Code TUI session that HQ can push into.
+#
+# Same as `claude`, but attaches HQ's channel so the dashboard can inject
+# messages / signals / permission relay into THIS live session — one session, no
+# fork. You start here in the terminal, drift to HQ, drift back, and it's all one
+# conversation. See channel/hq-channel.mjs + channel/README.md.
+#
+# Usage:  claude-hq [any normal claude args]
+set -euo pipefail
+
+# Resolve through symlinks so an npm-installed PATH shim still finds the channel
+# server at the real install location — mirrors bin/hq.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  dir="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$dir/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+CHANNEL="$SCRIPT_DIR/../channel/hq-channel.mjs"
+[[ -f "$CHANNEL" ]] || { echo "[claude-hq] channel server not found at $CHANNEL" >&2; exit 1; }
+
+# Register the channel in this dir's LOCAL scope (absolute path) so Claude's
+# --dangerously-load-development-channels can RESOLVE server:hq — it only reads
+# persistent config scopes (user/project/local), never --mcp-config inline.
+# Re-add quietly so the path stays current; the server stays dormant in normal
+# sessions and only activates because we export HQ_CHANNEL_ACTIVE below.
+claude mcp remove hq --scope local >/dev/null 2>&1 || true
+claude mcp add hq --scope local -- node "$CHANNEL" >/dev/null 2>&1 || true
+
+export HQ_CHANNEL_ACTIVE=1
+
+# Discovery is keyed by HQ_REPL_SESSION: hq-channel.mjs sets ID = HQ_REPL_SESSION
+# || ext_<rand> and writes ~/.claude/hq/channels/<ID>.json. Forcing a known id
+# lets HQ address THIS external session by its REAL session id (not an opaque
+# ext_ one). --session-id is ILLEGAL with --resume/--continue/--from-pr, so we
+# only force it on a NEW session; on a resume we key discovery off the resumed
+# id when we can derive it. --fork-session mints a fresh id we can't know up
+# front, so suppress derivation and let the ext_ fallback apply.
+resuming=0; resumed_id=""; fork=0
+argv=("$@"); i=0
+while [ "$i" -lt "${#argv[@]}" ]; do
+  a="${argv[$i]}"
+  case "$a" in
+    -c|--continue|--from-pr) resuming=1 ;;
+    --from-pr=*)             resuming=1 ;;
+    --fork-session)          fork=1 ;;
+    -r|--resume)
+      resuming=1; j=$((i+1))
+      if [ "$j" -lt "${#argv[@]}" ]; then
+        case "${argv[$j]}" in -*) ;; *) resumed_id="${argv[$j]}" ;; esac
+      fi ;;
+    --resume=*) resuming=1; resumed_id="${a#--resume=}" ;;
+  esac
+  i=$((i+1))
+done
+
+# Styled banner (ANSI), mirrors HQ's ● status dot. Heads-up primes the user for
+# Claude Code's own "development channels" warning (unavoidable until our channel
+# is on Anthropic's allowlist — research preview).
+printf '\n\033[1;32m●\033[0m \033[1mhq-activated\033[0m \033[2m· Welcome to your favorite AI-dev tool.\033[0m\n\033[2m  (Claude shows a one-time “development channels” warning next — expected; pick “local development”.)\033[0m\n\n' >&2
+
+if [ "$resuming" -eq 1 ]; then
+  # Resume path: id is fixed by the resumed session; can't pass --session-id.
+  # Key discovery off the resumed id when we know it AND aren't forking.
+  [ "$fork" -eq 0 ] && [ -n "$resumed_id" ] && export HQ_REPL_SESSION="$resumed_id"
+  exec claude --dangerously-load-development-channels server:hq "$@"
+else
+  # New session: PREASSIGN the id so discovery is keyed by the real session id.
+  uuid="$(uuidgen | tr 'A-F' 'a-f')"
+  export HQ_REPL_SESSION="$uuid"
+  exec claude --session-id "$uuid" --dangerously-load-development-channels server:hq "$@"
+fi

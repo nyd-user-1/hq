@@ -711,6 +711,10 @@ export default function Terminal({
   const [escNote, setEscNote] = useState<string | null>(null); // why Esc couldn't interrupt
   const escTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
+  // channel-in: a live push-channel is open for this session (from the turns poll).
+  // When true the session is fork-free (push, not --resume), so it is NEVER `locked`
+  // even mid-turn — and doSend routes through POST /api/channel instead of the warm REPL.
+  const [channelConnected, setChannelConnected] = useState(false);
   const [interrupted, setInterrupted] = useState(false); // last turn ended on a hard interrupt
   // A rival (TUI) branch was written into the SAME transcript HQ is driving.
   // LATCHED: once raised it stays until the session switches or the user acts —
@@ -779,9 +783,12 @@ export default function Terminal({
   const working = status !== null;
   // Locked = a non-live (HQ doesn't own it) session that's mid-turn: sending would
   // --resume a SECOND process and interleave/corrupt. The send box disables until it
-  // goes idle. (Channel-aware externals are fork-free too, but HQ can't detect them
-  // until the Phase-4 id-stamp — so for now any non-live busy session reads locked.)
-  const locked = !live && working;
+  // goes idle. EXEMPTION (channel-in): a channel-connected session is driven by PUSH
+  // (POST /api/channel), not --resume, so it is fork-free and NEVER locked even while
+  // busy — that is the whole point of channel-in. This supersedes the old "any
+  // non-live busy session reads locked" caveat: a session with a live push-channel
+  // (detected via channelConnected from the turns poll) stays sendable mid-turn.
+  const locked = !live && !channelConnected && working;
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
   // CODE-REVIEW FE-5: the Esc handler used to bind on EVERY render (no deps) so
   // its closures stayed fresh, but the terminal re-renders every 1s while working
@@ -1081,6 +1088,10 @@ export default function Terminal({
         }
       }
       setStatus(d.status ?? null);
+      // OUTSIDE the busyRef gate (above) on purpose: the fork-lock exemption needs
+      // this fresh DURING an in-flight send (exactly when `locked` is read), and a
+      // channel push to a busy session keeps it true across the working-tick.
+      setChannelConnected(d.channelConnected ?? false);
       setInterrupted(d.interrupted ?? false);
       // LATCH the divergence net: raise on a rival, but NEVER clear on !diverged
       // here — HQ's next write advances knownLeaf past the rival, so a server
@@ -1885,6 +1896,46 @@ export default function Terminal({
     // Locked: this session is working in its own terminal — sending would --resume a
     // second process and interleave. The box is disabled; this guards the Enter path.
     if (locked) return;
+    // CHANNEL-IN: a channel-connected session is driven by PUSH (no fork). Append the
+    // optimistic user turn, POST /api/channel, and let the EXISTING transcript poll +
+    // SSE render the reply — channel pushes PERSIST to the .jsonl as normal turns, so
+    // the observe path picks them up. NO setLive(true) (that would spawn a SECOND warm
+    // REPL = the fork we are avoiding), NO repl.send, NO `sending` (no warm process →
+    // no repl.busy edge to clear it → no stop button); the in-flight signal is the
+    // poll's `working` status + the optimistic turn. Images ride along EXACTLY like
+    // the driven path: posted as base64 to /api/channel, which writes them to
+    // ~/.claude/hq-pastes and pushes `@<path>` mentions so Claude reads them as vision.
+    if (channelConnected) {
+      const target = pinned ?? resolvedId;
+      const prompt = draft.trim();
+      const imgs = attachments;
+      if (!target || (!prompt && imgs.length === 0)) return;
+      const optimistic = [
+        prompt,
+        imgs.length ? `📎 ${imgs.length} image${imgs.length > 1 ? "s" : ""} attached` : "",
+      ].filter(Boolean).join("\n\n");
+      setItems((t) => [
+        ...t,
+        { kind: "turn", role: "user", text: optimistic, at: new Date().toISOString() },
+      ]);
+      setDraft("");
+      setAttachments([]);
+      setError(null);
+      busyRef.current = true; // protect the optimistic turn through the 1s working-tick poll
+      const res = await fetch("/api/channel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          session: target,
+          content: prompt,
+          source: "hq",
+          images: imgs.map(({ data, mime }) => ({ data, mime })),
+        }),
+      }).catch(() => null);
+      busyRef.current = false; // free the next observe poll to commit the channel reply
+      if (!res || !res.ok) setError("channel closed — reopen the session with claude-hq and try again");
+      return;
+    }
     // ALWAYS route through the warm live REPL — no driveMode gate, no one-shot
     // `-p` dead-end. The send streams back over SSE and lands via the transcript
     // poll like any turn. `live` is flipped HERE (synchronously) so the SSE
@@ -2050,7 +2101,10 @@ export default function Terminal({
   // Driving a freshly-birthed session has no transcript yet — but HQ owns a live
   // process, so it's NOT "not connected": show the chat + a usable send box.
   const notConnected =
-    !staged && !live && (previewInstall || (!loading && items.length === 0));
+    !staged &&
+    !live &&
+    !channelConnected && // a live channel session with no transcript yet is READY, not "blank" — show a typeable terminal, not the install demo
+    (previewInstall || (!loading && items.length === 0));
   const centered = notConnected || focusMode;
   const colWrap = centered
     ? "mx-auto flex w-full max-w-3xl flex-col gap-4 px-4"
