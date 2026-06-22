@@ -75,7 +75,7 @@ const TERMINAL_RUNTIME_CSS = `
 }
 /* Find-in-page highlights (CSS Custom Highlight API). */
 ::highlight(hq-search-session),
-::highlight(hq-search-pair) { background-color: rgba(250, 204, 21, 0.28); color: #fde68a; }
+::highlight(hq-search-pair) { background-color: rgba(250, 204, 21, 0.45); color: #fef9c3; }
 ::highlight(hq-search-active-session),
 ::highlight(hq-search-active-pair) { background-color: #facc15; color: #18181b; }
 /* Search: any tool-step accordion CONTAINING a match takes the send box's yellow
@@ -1219,6 +1219,20 @@ export default function Terminal({
     hlActiveName,
     registerVisibleHighlights,
   ]);
+
+  // Manual-expand re-paint: registerVisibleHighlights skips matches inside a
+  // COLLAPSED tool step, and otherwise only re-runs when match-nav opens one. So
+  // opening a collapsed <details> BY HAND would leave the matches it reveals
+  // unpainted (they're counted, but the yellow never lands) until you navigate.
+  // `toggle` doesn't bubble — capture it on the container — and re-light on every
+  // open/close so revealed hits paint and hidden ones drop.
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !searchActive) return;
+    const onToggle = () => registerVisibleHighlights();
+    container.addEventListener("toggle", onToggle, true);
+    return () => container.removeEventListener("toggle", onToggle, true);
+  }, [searchActive, registerVisibleHighlights]);
 
   // Navigate to the active hit: reveal it if it's tucked inside a collapsed tool
   // step (then re-light the now-visible siblings), paint it the brighter active
