@@ -1,0 +1,22 @@
+#!/bin/sh
+# HQ pre-push gate — automates AGENTS.md's "build before push" rule so it can't be
+# skipped by accident. Runs the isolated build (catches prerender/Suspense errors)
+# + eslint over the source. Bypass in a real pinch with `git push --no-verify`.
+#
+# One-time setup on a fresh clone:  git config core.hooksPath .githooks
+set -e
+
+echo "▶ pre-push gate: build:check + eslint (bypass with --no-verify)…"
+
+if ! env -u NODE_ENV npm run build:check >/tmp/hq-prepush.log 2>&1; then
+  cat /tmp/hq-prepush.log
+  echo "✗ build:check failed — push aborted."
+  exit 1
+fi
+
+if ! npx eslint app lib scripts; then
+  echo "✗ eslint failed — push aborted."
+  exit 1
+fi
+
+echo "✓ pre-push gate passed."

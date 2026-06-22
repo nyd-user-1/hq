@@ -161,8 +161,8 @@ export default function Cmd() {
         </CopyText>
       </div>
       <p className="mt-3 text-xs text-zinc-400">
-        Claude Code's built-in slash commands. They act on your live session (or
-        open a TUI), so — unlike Skills — they can't run via{" "}
+        Claude Code&apos;s built-in slash commands. They act on your live session
+        (or open a TUI), so — unlike Skills — they can&apos;t run via{" "}
         <code className="font-mono text-zinc-300">claude -p</code>. Copy one, paste
         into your terminal. ({COMMANDS.length} commands)
       </p>

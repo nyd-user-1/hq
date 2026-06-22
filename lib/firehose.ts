@@ -166,7 +166,15 @@ export function firehoseFor(id: string | null): Firehose {
   const items: FireItem[] = [];
   let lastCwd: string | null = null, lastBranch: string | null = null, lastVer: string | null = null, lastUuid: string | null = null;
 
-  const meta = (e: any) => {
+  const meta = (e: {
+    isSidechain?: boolean;
+    cwd?: string;
+    gitBranch?: string;
+    version?: string;
+    parentUuid?: string;
+    uuid?: string;
+    interruptedMessageId?: string;
+  }) => {
     if (e.isSidechain) items.push({ t: "meta", text: "sidechain" });
     const bits: string[] = [];
     if (e.cwd && e.cwd !== lastCwd) { bits.push(`cwd ${e.cwd}`); lastCwd = e.cwd; }

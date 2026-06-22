@@ -141,7 +141,7 @@ export default function ComposeTray() {
       </div>
 
       <p className="text-[11px] text-zinc-600">
-        drops into Terminal 1's message box — review and send from there.
+        drops into Terminal 1&apos;s message box — review and send from there.
       </p>
     </div>
   );
