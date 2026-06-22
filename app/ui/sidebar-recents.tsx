@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ago } from "@/lib/ago";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
 // first, labelled by the short session id (+ a dim project suffix, or a custom
@@ -489,7 +490,7 @@ export default function SidebarRecents() {
                     <Link
                       href={openHref}
                       scroll={false}
-                      title={`${s.project} · ${s.customTitle || s.aiTitle || s.title} · ${s.id.slice(0, 8)}`}
+                      title={`${s.project} · ${s.customTitle || s.aiTitle || s.title} · ${s.id.slice(0, 8)} · ${ago(s.lastActive)}`}
                       className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2.5 text-sm transition-colors ${
                         active
                           ? "text-zinc-100"
@@ -498,8 +499,8 @@ export default function SidebarRecents() {
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-x-1.5">
                         {/* label: rename → Claude's ai-title → id. Single line +
-                            truncate (full name on hover, full id in the ⋮ menu) so
-                            the row height never changes — IDs no longer wrap. */}
+                            truncate (full name + last-activity on hover, full id
+                            in the ⋮ menu) so the row height never changes. */}
                         <span
                           className={`min-w-0 flex-1 truncate font-mono text-xs ${
                             titled ? "text-zinc-200" : ""
