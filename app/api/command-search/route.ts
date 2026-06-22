@@ -82,6 +82,10 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = (searchParams.get("q") ?? "").trim();
   const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit")) || 120));
+  // Scope filter (⌘K chip / "/file " prefix): restrict to one corpus, or "all".
+  const reqScope = searchParams.get("scope") ?? "all";
+  const scoped = reqScope !== "all" && ORDER.includes(reqScope as SearchScope);
+  const order = scoped ? [reqScope as SearchScope] : ORDER;
   if (!q) return NextResponse.json({ hits: [], building: false });
 
   warmDocs(); // keep the docs mirror fresh in the palette path too
@@ -91,7 +95,7 @@ export async function GET(req: Request) {
   type Ranked = { hit: SearchHit; tier: number; score: number };
   const ranked: Ranked[] = [];
 
-  ORDER.forEach((scope, ci) => {
+  order.forEach((scope, ci) => {
     const { hits, building: b } = search(q, scope, "rel", PER);
     if (b) building = true;
     // Gentle corpus-priority weight: top corpus ~1.46 → last ~1.0. It nudges,
@@ -124,7 +128,7 @@ export async function GET(req: Request) {
   // keeps it to genuine misspellings — clean substring matches are the server's
   // job above. Cheap; transcripts/docs fuzzy is the Phase-2 trigram index.
   const toks = queryTokens(q);
-  if (toks.length && hits.length < limit) {
+  if (!scoped && toks.length && hits.length < limit) {
     const fz: { item: CorpusItem; d: number }[] = [];
     for (const item of metadataCorpus()) {
       const key = `${item.kind}:${item.ref}`;

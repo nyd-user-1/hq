@@ -439,6 +439,35 @@ function ViewerBodyView({ body }: { body: ViewerBody | null }) {
 
 const PAGE = 25; // how many search results to reveal per lazy-load step
 
+// ⌘K scope filter (Option C): a chip row + a typed "/alias " prefix both narrow
+// the search to one corpus. Chips are the common corpora; the alias map also
+// accepts the rarer ones as prefixes. "all" = no filter.
+const SCOPE_CHIPS: { scope: string; label: string }[] = [
+  { scope: "all", label: "All" },
+  { scope: "files", label: "Files" },
+  { scope: "sessions", label: "Sessions" },
+  { scope: "memory", label: "Memory" },
+  { scope: "notes", label: "Notes" },
+  { scope: "commits", label: "Commits" },
+  { scope: "todos", label: "Todos" },
+  { scope: "docs", label: "Docs" },
+];
+const SCOPE_ALIASES: Record<string, string> = {
+  file: "files", files: "files",
+  session: "sessions", sessions: "sessions",
+  memory: "memory", mem: "memory",
+  note: "notes", notes: "notes",
+  commit: "commits", commits: "commits",
+  todo: "todos", todos: "todos",
+  doc: "docs", docs: "docs",
+  transcript: "transcripts", transcripts: "transcripts",
+  component: "components", components: "components",
+  project: "projects", projects: "projects",
+  skill: "skills", skills: "skills",
+  script: "scripts", scripts: "scripts",
+  sdk: "sdk",
+};
+
 export default function CommandPalette() {
   const { open, setOpen } = useCommand();
   const router = useRouter();
@@ -448,6 +477,7 @@ export default function CommandPalette() {
 
   const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState("");
+  const [scope, setScope] = useState("all"); // ⌘K corpus filter (chip or /prefix)
   const [sel, setSel] = useState(0);
   const [hits, setHits] = useState<Hit[]>([]);
   const [shown, setShown] = useState(PAGE); // lazy-load window over the Search results
@@ -479,7 +509,7 @@ export default function CommandPalette() {
     const t = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/command-search?q=${encodeURIComponent(query)}&limit=200`,
+          `/api/command-search?q=${encodeURIComponent(query)}&scope=${scope}&limit=200`,
           { signal: ctrl.signal }
         );
         const data = await res.json();
@@ -499,7 +529,7 @@ export default function CommandPalette() {
       ctrl.abort(); // cancel the in-flight request so fast typing can't pile up
       clearTimeout(t);
     };
-  }, [q]);
+  }, [q, scope]);
 
   // Fetch the drilled-in result's body (skeleton while it loads).
   useEffect(() => {
@@ -598,6 +628,7 @@ export default function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     setQ("");
+    setScope("all");
     setSel(0);
     setHits([]);
     setShown(PAGE);
@@ -779,17 +810,61 @@ export default function CommandPalette() {
                   ref={inputRef}
                   value={q}
                   onChange={(e) => {
-                    setQ(e.target.value);
+                    const v = e.target.value;
+                    // "/file foo" (a recognized alias + space) flips the scope
+                    // chip and strips the prefix — type-to-filter, Slack-style.
+                    const m = v.match(/^\/([a-z]+)\s([\s\S]*)$/i);
+                    const sc = m && SCOPE_ALIASES[m[1].toLowerCase()];
+                    if (sc) {
+                      setScope(sc);
+                      setQ(m![2]);
+                    } else {
+                      setQ(v);
+                    }
                     setSel(0);
                   }}
-                  onKeyDown={onKeyDown}
-                  placeholder="Type a command, or search everything…"
+                  onKeyDown={(e) => {
+                    // Backspace on an empty query clears an active scope chip.
+                    if (e.key === "Backspace" && !q && scope !== "all") {
+                      e.preventDefault();
+                      setScope("all");
+                      return;
+                    }
+                    onKeyDown(e);
+                  }}
+                  placeholder={
+                    scope === "all"
+                      ? "Type a command, or search everything…"
+                      : `Search ${scope}…`
+                  }
                   spellCheck={false}
                   className="w-full bg-transparent font-mono text-[14px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
                 />
                 <kbd className="shrink-0 rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 font-mono text-[9px] text-zinc-500">
                   esc
                 </kbd>
+              </div>
+
+              {/* scope filter — a thin chip row to narrow to one corpus (same as
+                  a "/file " etc. typed prefix). Sits under the input, before the
+                  results, and flex-wraps. */}
+              <div className="flex flex-wrap items-center gap-1">
+                {SCOPE_CHIPS.map((s) => (
+                  <button
+                    key={s.scope}
+                    onClick={() => {
+                      setScope(s.scope);
+                      inputRef.current?.focus();
+                    }}
+                    className={`rounded-md px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors ${
+                      scope === s.scope
+                        ? "bg-blue-500/20 text-blue-300"
+                        : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
 
               {/* results */}
