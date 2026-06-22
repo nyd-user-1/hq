@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
-import { sessionMeta, cleanText, type RecentSession } from "./sessions";
+import { sessionMeta, type RecentSession } from "./sessions";
+import { extractEntryText } from "../scripts/lib/extract-entry.mjs";
 import { scoreNorm, snippetAround, normalize } from "./text-search";
 import { openSearchDb } from "./sqlite";
 
@@ -11,7 +12,7 @@ import { openSearchDb } from "./sqlite";
 // so a logic change like "stop lowercasing" must invalidate via version).
 // MUST equal VERSION in scripts/build-search-index.mjs. v3 = the SQLite FTS5
 // sink (was a JSON file through v2).
-export const INDEX_VERSION = 3;
+export const INDEX_VERSION = 4; // v4: tool_use input paths/commands indexed (extract-entry.mjs)
 
 // The Session Archive: every Claude Code session ever (not the 7-day Recents
 // window), browseable and full-text searchable. ~106 transcripts / ~2GB here.
@@ -217,12 +218,7 @@ function liveEntry(file: string, mtime: number): { text: string; norm: string } 
     } catch {
       continue;
     }
-    if (e.type !== "user" && e.type !== "assistant") continue;
-    const content = e.message?.content;
-    if (typeof content === "string") out += cleanText(content) + "\n";
-    else if (Array.isArray(content))
-      for (const b of content)
-        if (b?.type === "text" && b.text) out += cleanText(b.text) + "\n";
+    out += extractEntryText(e); // shared with scripts/build-search-index.mjs
   }
   const entry = { mtime, text: out, norm: normalize(out) };
   liveCache.set(file, entry);

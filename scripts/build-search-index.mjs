@@ -29,6 +29,7 @@ import path from "node:path";
 import os from "node:os";
 import readline from "node:readline";
 import { DatabaseSync } from "node:sqlite";
+import { extractEntryText } from "./lib/extract-entry.mjs";
 
 const ROOT = path.join(os.homedir(), ".claude", "projects");
 const HQ_DIR = path.join(os.homedir(), ".claude", "hq");
@@ -36,17 +37,8 @@ const OUT = path.join(HQ_DIR, "search.db");
 const TMP = OUT + ".tmp";
 // Keep in sync with INDEX_VERSION in lib/archive.ts. Bumping it forces a full
 // rebuild (prev rows are only reused when the prior db's version matches).
-const VERSION = 3;
-
-// Same cleaning as lib/sessions.cleanText — strip system-reminders (else every
-// session matches common project terms from the injected memory index) + tags.
-function cleanText(t) {
-  return t
-    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// v4: tool_use input paths/commands are now indexed too (see extract-entry.mjs).
+const VERSION = 4;
 
 async function extract(file) {
   let out = "";
@@ -63,12 +55,7 @@ async function extract(file) {
       } catch {
         continue;
       }
-      if (e.type !== "user" && e.type !== "assistant") continue;
-      const c = e.message?.content;
-      if (typeof c === "string") out += cleanText(c) + "\n";
-      else if (Array.isArray(c))
-        for (const b of c)
-          if (b?.type === "text" && b.text) out += cleanText(b.text) + "\n";
+      out += extractEntryText(e); // shared with lib/archive.ts — must not drift
     }
   } catch {
     // unreadable
