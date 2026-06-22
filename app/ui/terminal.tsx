@@ -1668,6 +1668,7 @@ export default function Terminal({
               favorite={!!meta.favorite}
               hidden={!!meta.hidden}
               reaction={meta.reaction ?? null}
+              showReactions={it.role === "assistant"}
               onCopy={() => navigator.clipboard.writeText(it.text)}
               onFavorite={() => toggleBlockFavorite(it)}
               onSaveNote={() => saveNoteBlock(it)}
