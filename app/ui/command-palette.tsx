@@ -73,6 +73,14 @@ type Command = {
 const kindTag = (k: string): string =>
   (KIND_TAG as Record<string, string>)[k] ?? "bg-zinc-800/60 text-zinc-300";
 
+// The icon mirror of kindTag: just the `text-…` accent, so a result's leading
+// glyph reads in its corpus color (todo amber, memory violet, commit orange)
+// instead of one uniform tint — matching the kind badge on the right.
+const kindIconColor = (k: string): string =>
+  kindTag(k)
+    .split(" ")
+    .find((c) => c.startsWith("text-")) ?? "text-zinc-500";
+
 const STATIC_SECTIONS: Section[] = ["Actions", "Navigate"];
 
 const SVG = {
@@ -500,7 +508,9 @@ export default function CommandPalette() {
   // lazy-loaded list; we reveal PAGE at a time client-side.
   useEffect(() => {
     const query = q.trim();
-    if (!query) {
+    // Empty query: "all" is the launcher (no feed); a scope chip browses that
+    // whole corpus newest-first (the API returns recent() for an empty q+scope).
+    if (!query && scope === "all") {
       setHits([]);
       setShown(PAGE);
       return;
@@ -521,10 +531,9 @@ export default function CommandPalette() {
       } catch {
         if (alive) setHits([]); // ignore aborts (alive is already false then)
       }
-      // 90ms (was 160): the server is fast now — docsText is memoized, commits
-      // cached, the rest is FTS5 — so a shorter debounce stays responsive
-      // without hammering, and search feels closer to per-keystroke.
-    }, 90);
+      // Typed search debounces 90ms (server is fast: memoized docs, cached
+      // commits, FTS5); a chip-click browse (empty q) fires at once.
+    }, query ? 90 : 0);
     return () => {
       alive = false;
       ctrl.abort(); // cancel the in-flight request so fast typing can't pile up
@@ -618,22 +627,27 @@ export default function CommandPalette() {
   // window. flat = selection order over what's actually rendered.
   const { groups, flat, total } = useMemo(() => {
     const query = q.trim().toLowerCase();
-    const scored = commands
-      .map((c) => ({ c, s: rank(c, query) }))
-      .filter((x) => x.s > 0)
-      .sort((a, b) => b.s - a.s);
-    const grouped: { section: Section; items: Command[] }[] = STATIC_SECTIONS.map(
-      (section) => ({
-        section,
-        items: scored.filter((x) => x.c.section === section).map((x) => x.c),
-      })
-    ).filter((g) => g.items.length > 0);
+    const grouped: { section: Section; items: Command[] }[] = [];
+    // A scope chip turns ⌘K into a corpus browser — suppress the launcher
+    // (Actions/Navigate) so the chosen corpus fills the list. "all" keeps them.
+    if (scope === "all") {
+      const scored = commands
+        .map((c) => ({ c, s: rank(c, query) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s);
+      STATIC_SECTIONS.forEach((section) => {
+        const items = scored
+          .filter((x) => x.c.section === section)
+          .map((x) => x.c);
+        if (items.length) grouped.push({ section, items });
+      });
+    }
     if (searchCommands.length)
       grouped.push({ section: "Search", items: searchCommands.slice(0, shown) });
     const flatList: Command[] = [];
     grouped.forEach((g) => g.items.forEach((c) => flatList.push(c)));
     return { groups: grouped, flat: flatList, total: searchCommands.length };
-  }, [commands, searchCommands, q, shown]);
+  }, [commands, searchCommands, q, shown, scope]);
 
   const selIdx = Math.min(sel, Math.max(0, flat.length - 1));
 
@@ -922,6 +936,7 @@ export default function CommandPalette() {
                     key={s.scope}
                     onClick={() => {
                       setScope(s.scope);
+                      setSel(0);
                       inputRef.current?.focus();
                     }}
                     className={`rounded-md px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors ${
@@ -953,7 +968,10 @@ export default function CommandPalette() {
                       )}
                       <div className="flex flex-col gap-0.5">
                         <div className="px-2.5 pb-1 pt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">
-                          {g.section}
+                          {g.section === "Search" && scope !== "all"
+                            ? SCOPE_CHIPS.find((c) => c.scope === scope)?.label ??
+                              g.section
+                            : g.section}
                         </div>
                         {g.items.map((cmd) => {
                           const idx = flat.indexOf(cmd);
@@ -975,7 +993,11 @@ export default function CommandPalette() {
                             >
                               <span
                                 className={`shrink-0 ${isHit ? "mt-0.5" : ""} ${
-                                  isSel ? "text-orange-400" : "text-zinc-500"
+                                  isHit
+                                    ? kindIconColor(cmd.kind ?? "")
+                                    : isSel
+                                      ? "text-orange-400"
+                                      : "text-zinc-500"
                                 }`}
                               >
                                 {cmd.icon}

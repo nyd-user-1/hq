@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   search,
+  recent,
   queryTokens,
   metadataCorpus,
   type SearchScope,
@@ -86,7 +87,13 @@ export async function GET(req: Request) {
   const reqScope = searchParams.get("scope") ?? "all";
   const scoped = reqScope !== "all" && ORDER.includes(reqScope as SearchScope);
   const order = scoped ? [reqScope as SearchScope] : ORDER;
-  if (!q) return NextResponse.json({ hits: [], building: false });
+  // Empty query: a scope chip browses that whole corpus newest-first (recent()
+  // honors the sort + per-corpus recency); unscoped "all" stays the launcher.
+  if (!q)
+    return NextResponse.json({
+      hits: scoped ? recent(reqScope as SearchScope, "new", limit) : [],
+      building: false,
+    });
 
   warmDocs(); // keep the docs mirror fresh in the palette path too
   const ql = q.toLowerCase();
