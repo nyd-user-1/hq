@@ -3181,12 +3181,12 @@ export default function Terminal({
               notConnected
                 ? "run HQ locally and open a session to chat here"
                 : locked
-                  ? `🔒 ${project || "this session"} is working in its terminal — locked until it's idle (sending would fork it)`
+                  ? "🔒 locked while active"
                   : staged
                     ? selectedTarget
                       ? `message ${selectedTarget.name} — ↵ launches it`
                       : "write your first message — ↵ launches in ~/hq (or pick a project)"
-                    : `message ${project || "session"} — ↵ send · ⇧↵ newline · paste a screenshot`
+                    : "↵ send · ⇧↵ newline"
             }
             className="scrollbar-slim max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
           />
