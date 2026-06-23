@@ -113,5 +113,7 @@ export default function Markdown({ text }: { text: string }) {
   }
   flush();
 
-  return <div className="space-y-2">{blocks}</div>;
+  // break-words (overflow-wrap, inherited) so long unbreakable tokens — UUIDs,
+  // paths, flags — wrap instead of running off a narrow reader (e.g. ⌘K).
+  return <div className="space-y-2 break-words">{blocks}</div>;
 }

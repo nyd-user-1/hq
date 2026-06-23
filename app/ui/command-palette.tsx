@@ -480,7 +480,7 @@ export default function CommandPalette() {
   const { open, setOpen } = useCommand();
   const router = useRouter();
   const { toggle: togglePlanner } = usePlanner();
-  const { toggle: toggleText, openEdit } = useTextEditor();
+  const { toggle: toggleText } = useTextEditor();
   const [editNonce, setEditNonce] = useState(0); // bumped on hq:file-edited → re-fetch the open file
   const { toggle: toggleSidebar } = useSidebar();
 
@@ -492,6 +492,9 @@ export default function CommandPalette() {
   const [shown, setShown] = useState(PAGE); // lazy-load window over the Search results
   const [viewing, setViewing] = useState<Hit | null>(null); // drilled-in result
   const [body, setBody] = useState<ViewerBody | null>(null); // its fetched content
+  const [editing, setEditing] = useState(false); // reader inline-edit mode (pencil)
+  const [draft, setDraft] = useState(""); // the editable buffer (raw file content)
+  const [savingEdit, setSavingEdit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -660,6 +663,7 @@ export default function CommandPalette() {
     setHits([]);
     setShown(PAGE);
     setViewing(null);
+    setEditing(false);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
@@ -689,16 +693,21 @@ export default function CommandPalette() {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        setViewing(null);
-        requestAnimationFrame(() => inputRef.current?.focus());
+        if (editing) {
+          setEditing(false); // first Esc leaves edit mode, not the reader
+        } else {
+          setViewing(null);
+          requestAnimationFrame(() => inputRef.current?.focus());
+        }
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, viewing]);
+  }, [open, viewing, editing]);
 
   const backToResults = useCallback(() => {
     setViewing(null);
+    setEditing(false);
     requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
@@ -720,7 +729,10 @@ export default function CommandPalette() {
   // Pencil → fetch the RAW file (frontmatter and all) and open it in the Text
   // editor in edit mode. The editor floats over the palette; on save it fires
   // hq:file-edited, which re-fetches the body here.
-  const openEditor = useCallback(async () => {
+  // Pencil → load the RAW file (frontmatter and all) into an inline editor that
+  // replaces the reader body — edit in place, no separate modal floating behind
+  // the palette.
+  const startEdit = useCallback(async () => {
     if (!viewing) return;
     try {
       const res = await fetch(
@@ -728,16 +740,41 @@ export default function CommandPalette() {
       );
       if (!res.ok) return;
       const d = await res.json();
-      openEdit({
-        kind: viewing.kind,
-        ref: viewing.ref,
-        title: viewing.title || viewing.ref,
-        content: typeof d?.content === "string" ? d.content : "",
-      });
+      setDraft(typeof d?.content === "string" ? d.content : "");
+      setEditing(true);
     } catch {
       /* leave the reader as-is on a fetch error */
     }
-  }, [viewing, openEdit]);
+  }, [viewing]);
+
+  // Save → POST the buffer straight back to the file; hq:file-edited bumps
+  // editNonce so the reader re-fetches the saved body, then we exit edit mode.
+  const saveEdit = useCallback(async () => {
+    if (!viewing || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      const res = await fetch("/api/file-edit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: viewing.kind,
+          ref: viewing.ref,
+          content: draft,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      window.dispatchEvent(
+        new CustomEvent("hq:file-edited", {
+          detail: { kind: viewing.kind, ref: viewing.ref },
+        })
+      );
+      setEditing(false);
+    } catch {
+      /* keep editing so the buffer isn't lost on a failed save */
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [viewing, draft, savingEdit]);
 
   const execute = useCallback(
     (cmd?: Command) => {
@@ -803,7 +840,7 @@ export default function CommandPalette() {
         <Boundary label="command-palette.tsx">
           {viewing ? (
             // ── drill-in viewer: the palette IS the reader ──────────────────
-            <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
               <div className="flex items-center gap-3 border-b border-dashed border-zinc-800 pb-3">
                 <button
                   onClick={backToResults}
@@ -820,19 +857,65 @@ export default function CommandPalette() {
                   {viewing.kind}
                 </span>
               </div>
-              <div className="relative min-h-0 flex-1">
-                {/* Copy + open-in-panel float top-right of the BODY (over the
-                    content), pinned as it scrolls. Both lucide icons so they pair. */}
+              <div className="relative min-h-0 min-w-0 flex-1">
+                {/* Action cluster floats top-right of the body, pinned as it
+                    scrolls. Edit mode → Save / Cancel; otherwise Edit · Copy ·
+                    Open (lucide icons so they pair). */}
                 <div className="absolute right-2 top-1 z-10 flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/90 px-1.5 py-1">
-                  {canEdit(viewing) && (
+                  {editing ? (
                     <>
                       <button
-                        onClick={openEditor}
-                        aria-label="Edit file"
-                        title="Edit file"
+                        onClick={saveEdit}
+                        disabled={savingEdit}
+                        className="px-0.5 font-mono text-[11px] text-emerald-400 transition-colors hover:text-emerald-300 disabled:text-zinc-600"
+                      >
+                        {savingEdit ? "saving…" : "save"}
+                      </button>
+                      <span className="h-3.5 w-px bg-zinc-800" />
+                      <button
+                        onClick={() => setEditing(false)}
+                        className="px-0.5 font-mono text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
+                      >
+                        cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {canEdit(viewing) && (
+                        <>
+                          <button
+                            onClick={startEdit}
+                            aria-label="Edit file"
+                            title="Edit file"
+                            className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
+                          >
+                            {/* lucide pencil */}
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+                              <path d="m15 5 4 4" />
+                            </svg>
+                          </button>
+                          <span className="h-3.5 w-px bg-zinc-800" />
+                        </>
+                      )}
+                      <ViewerCopyButton text={viewerText(body)} />
+                      <span className="h-3.5 w-px bg-zinc-800" />
+                      <button
+                        onClick={() => openInPanel(viewing)}
+                        aria-label="Open in panel"
+                        title="Open in panel"
                         className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
                       >
-                        {/* lucide pencil */}
+                        {/* lucide square-arrow-out-up-right */}
                         <svg
                           width="14"
                           height="14"
@@ -843,41 +926,27 @@ export default function CommandPalette() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         >
-                          <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-                          <path d="m15 5 4 4" />
+                          <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+                          <path d="m21 3-9 9" />
+                          <path d="M15 3h6v6" />
                         </svg>
                       </button>
-                      <span className="h-3.5 w-px bg-zinc-800" />
                     </>
                   )}
-                  <ViewerCopyButton text={viewerText(body)} />
-                  <span className="h-3.5 w-px bg-zinc-800" />
-                  <button
-                    onClick={() => openInPanel(viewing)}
-                    aria-label="Open in panel"
-                    title="Open in panel"
-                    className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
-                  >
-                    {/* lucide square-arrow-out-up-right */}
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
-                      <path d="m21 3-9 9" />
-                      <path d="M15 3h6v6" />
-                    </svg>
-                  </button>
                 </div>
-                <div className="scrollbar-none h-full overflow-y-auto pr-1">
-                  <ViewerBodyView body={body} />
-                </div>
+                {editing ? (
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    spellCheck={false}
+                    autoFocus
+                    className="scrollbar-none h-full w-full resize-none rounded-md bg-zinc-900/50 p-3 font-mono text-[12px] leading-relaxed text-zinc-100 ring-1 ring-zinc-800/60 focus:outline-none focus:ring-zinc-700/70"
+                  />
+                ) : (
+                  <div className="scrollbar-none h-full min-w-0 overflow-x-hidden overflow-y-auto pr-1">
+                    <ViewerBodyView body={body} />
+                  </div>
+                )}
               </div>
             </div>
           ) : (

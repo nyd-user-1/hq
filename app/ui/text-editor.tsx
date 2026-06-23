@@ -156,7 +156,7 @@ export default function TextEditor() {
           dismiss();
         }
       }}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md sm:p-6"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md sm:p-6"
     >
       <div className="relative flex h-[500px] max-h-[90vh] w-[800px] max-w-[92vw] flex-col rounded-lg bg-zinc-950 shadow-2xl">
         {/* close chip resting on the dashed top line, top-RIGHT corner. data-keep
@@ -214,7 +214,7 @@ export default function TextEditor() {
               editTarget ? "Edit the file, then ↵ to save…" : "Paste your text here, then ↵ to save…"
             }
             spellCheck={false}
-            className="min-h-0 w-full flex-1 resize-none rounded-lg bg-zinc-900/50 p-4 text-[15px] leading-relaxed text-zinc-100 ring-1 ring-zinc-800/60 transition-colors placeholder:text-zinc-600 focus:outline-none focus:ring-zinc-700/70"
+            className="scrollbar-none min-h-0 w-full flex-1 resize-none rounded-lg bg-zinc-900/50 p-4 text-[15px] leading-relaxed text-zinc-100 ring-1 ring-zinc-800/60 transition-colors placeholder:text-zinc-600 focus:outline-none focus:ring-zinc-700/70"
           />
 
           {/* footer: live counts + status (left) · keys + save (right) */}
