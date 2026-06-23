@@ -715,6 +715,14 @@ export default function Terminal({
   // When true the session is fork-free (push, not --resume), so it is NEVER `locked`
   // even mid-turn — and doSend routes through POST /api/channel instead of the warm REPL.
   const [channelConnected, setChannelConnected] = useState(false);
+  // warn-before-fork: a non-channel-aware, not-yet-live session resume-FORKS on the
+  // first send (a 2nd process on one transcript → the divergence net fires). `locked`
+  // only blocks the WORKING case; an IDLE plain session would fork silently. So the
+  // first such send is gated behind an explicit confirm. `forkWarn` holds the pending
+  // target while the card is up; `forkAckRef` remembers sessions already acknowledged
+  // (once per session — a nudge, not a nag).
+  const [forkWarn, setForkWarn] = useState<string | null>(null);
+  const forkAckRef = useRef<Set<string>>(new Set());
   const [interrupted, setInterrupted] = useState(false); // last turn ended on a hard interrupt
   // A rival (TUI) branch was written into the SAME transcript HQ is driving.
   // LATCHED: once raised it stays until the session switches or the user acts —
@@ -1948,6 +1956,14 @@ export default function Terminal({
     const prompt = draft.trim();
     const imgs = attachments; // snapshot — survives the clear below
     if (!target || sending || (!prompt && imgs.length === 0)) return;
+    // WARN-BEFORE-FORK: reaching here with `!live` means a brand-new warm REPL is
+    // about to --resume this session = a fork (staged/locked/channel cases already
+    // returned above). Gate that FIRST send behind an explicit confirm, once per
+    // session. The draft is left untouched so confirm just re-sends it.
+    if (!live && !forkAckRef.current.has(target)) {
+      setForkWarn(target);
+      return;
+    }
     sendTargetRef.current = target;
     stoppedRef.current = false;
     setError(null);
@@ -1988,6 +2004,14 @@ export default function Terminal({
       drivenSessionRef.current = null;
       setError("couldn't send — the live session may have closed; try again");
     }
+  }
+
+  // Acknowledge the fork warning and proceed: remember this session so we never
+  // re-warn it, then re-enter doSend — which now sails past the gate and forks.
+  function confirmFork() {
+    if (forkWarn) forkAckRef.current.add(forkWarn);
+    setForkWarn(null);
+    doSend();
   }
 
   // New-session-from-HQ: birth a fresh `claude` in the project dir via the REPL
@@ -2917,6 +2941,50 @@ export default function Terminal({
               className="rounded border border-amber-500/20 px-1.5 py-0.5 text-[11px] text-amber-300/70 transition-colors hover:bg-amber-500/20"
             >
               dismiss
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Warn-before-fork — this session isn't channel-aware, so the next send
+          can't push into the live terminal; it resumes a COPY and answers here,
+          and the two surfaces diverge. Gate the first such send behind an
+          explicit, plain-language confirm (set in doSend; cleared by either
+          button). Amber like the divergence net — same family, but PREVENTION
+          (before the fork) rather than DETECTION (after). */}
+      {forkWarn && (
+        <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 font-mono text-xs text-amber-200">
+          <p className="flex items-baseline gap-1.5 font-semibold text-amber-300">
+            <span aria-hidden>⚠</span>
+            <span>Sending will fork this session.</span>
+          </p>
+          <p className="pl-5 leading-relaxed text-amber-200/90">
+            This session wasn’t launched channel-aware, so hq can’t type into your
+            live terminal. Pressing send resumes a <em>copy</em> from disk and
+            answers <em>here</em> — your open terminal keeps its own thread, so the
+            two diverge (that’s the “you have a branch” warning).
+          </p>
+          <p className="pl-5 leading-relaxed text-amber-200/70">
+            Recommended: minimize or close the terminal for this session and keep
+            working in hq only, so there’s a single writer. (To avoid forking
+            entirely, relaunch it with <span className="text-amber-200">claude-hq</span> — a
+            channel-aware session pushes in live, no fork.)
+          </p>
+          <div className="flex flex-wrap gap-2 pl-5 pt-0.5">
+            <button
+              type="button"
+              onClick={confirmFork}
+              title="resume a copy here and continue in hq (forks the terminal's branch)"
+              className="rounded border border-amber-500/60 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-500/25"
+            >
+              Fork &amp; continue in hq
+            </button>
+            <button
+              type="button"
+              onClick={() => setForkWarn(null)}
+              title="cancel — leave your draft in the box and don’t send"
+              className="rounded border border-amber-500/20 px-2 py-0.5 text-[11px] text-amber-300/70 transition-colors hover:bg-amber-500/20"
+            >
+              Cancel
             </button>
           </div>
         </div>
