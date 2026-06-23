@@ -90,7 +90,27 @@ function clean(text: string): string {
   return text
     .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "")
     .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "")
+    // Channel-in envelope: hq pushes a REAL user message into a live session
+    // wrapped in <channel source="hq" …>…</channel>. The shell is plumbing — keep
+    // the inner text the user actually typed (mirrors the TUI's "← hq:" render).
+    .replace(/<channel\b[^>]*>\n?/g, "")
+    .replace(/\n?<\/channel>/g, "")
     .trim();
+}
+
+// A task-notification is a SYNTHETIC user record the harness injects when a
+// background agent comes to rest — NOT a turn the user typed. Pull its
+// human-readable summary (+ duration) so it can render as a quiet status marker
+// the way the TUI does. Returns null when `text` isn't a task-notification.
+function taskNotificationStatus(text: string): string | null {
+  if (!text.includes("<task-notification>")) return null;
+  const summary =
+    text.match(/<summary>([\s\S]*?)<\/summary>/)?.[1].trim() ||
+    "background agent came to rest";
+  const ms = Number(text.match(/<duration_ms>(\d+)<\/duration_ms>/)?.[1]);
+  return Number.isFinite(ms) && ms > 0
+    ? `${summary} · ${Math.round(ms / 1000)}s`
+    : summary;
 }
 
 // Absolute path of a session's transcript — searched across ALL project dirs
@@ -145,7 +165,11 @@ export function parseTurns(
     if (entry.type !== "user" && entry.type !== "assistant") continue;
     const t = clean(blocksToText(entry.message?.content));
     if (!t) continue;
-    if (t.includes("<command-name>") || t.includes("<local-command-stdout>"))
+    if (
+      t.includes("<command-name>") ||
+      t.includes("<local-command-stdout>") ||
+      t.includes("<task-notification>")
+    )
       continue;
     const prev = turns[turns.length - 1];
     if (prev && prev.role === entry.type) prev.text += `\n\n${t}`;
@@ -199,6 +223,7 @@ export type TimelineItem =
       turnTokens?: number; // set on the LAST assistant card of a work block: the whole block's output-token burn
     }
   | { kind: "command"; command: string; arg: string; at: string } // local command marker (/clear, /model, …)
+  | { kind: "status"; text: string; at: string } // synthetic harness event (a background agent came to rest) — a quiet marker, NOT a user turn
   | { kind: "handoff"; direction: "to-hq" | "to-terminal"; at: string } // HQ took/released the wheel (sidecar-sourced, merged in the turns route — transcript.ts never produces this)
   | {
       kind: "tool";
@@ -350,6 +375,11 @@ export function timelineFor(
   // workingStatus); the total is stamped on the block's last assistant card.
   let blockTokens = new Map<string, number>();
   let lastReply: TurnItem | null = null;
+  // channel-in return path: the model answers a pushed message by CALLING
+  // mcp__hq__reply, so the real answer is the tool payload and the surrounding
+  // prose is plumbing. After promoting a reply to a turn, fold the ONE text-only
+  // recap message that immediately follows it ("Replied to HQ. Short version…").
+  let suppressNextReplyRecap = false;
   const closeBlock = () => {
     if (lastReply) {
       let t = 0;
@@ -359,6 +389,34 @@ export function timelineFor(
     blockTokens = new Map();
     lastReply = null;
   };
+
+  // Pre-scan: which message ids are reply-loaders? The CLI streams each content
+  // block as its own JSONL line under one message.id, so the "let me load the
+  // reply tool" prose and the ToolSearch that loads it are SEPARATE lines — a
+  // per-line check can't see across them. Collect the ids up front so the lead-in
+  // prose can be dropped when its sibling ToolSearch targets mcp__hq__reply.
+  const replyLoaderMids = new Set<string>();
+  for (const line of lines) {
+    if (!line) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (e.type !== "assistant") continue;
+    const bl = Array.isArray(e.message?.content) ? e.message.content : [];
+    if (
+      e.message?.id &&
+      bl.some(
+        (b: { type?: string; name?: string; input?: unknown }) =>
+          b?.type === "tool_use" &&
+          b.name === "ToolSearch" &&
+          JSON.stringify(b.input ?? "").includes("mcp__hq__reply")
+      )
+    )
+      replyLoaderMids.add(e.message.id);
+  }
 
   for (const line of lines) {
     if (!line) continue;
@@ -394,8 +452,22 @@ export function timelineFor(
           Math.max(blockTokens.get(mid) ?? 0, u?.output_tokens ?? 0)
         );
       const blocks = Array.isArray(c) ? c : [];
+      // A message that loads the reply tool (a deferred-tool ToolSearch selecting
+      // mcp__hq__reply) is pure plumbing — its "let me load the reply tool" prose
+      // and the ToolSearch chip both get dropped below. Keyed on the pre-scanned
+      // message id so the lead-in prose (a separate streamed line) is caught too.
+      const isReplyLoader = !!(
+        e.message?.id && replyLoaderMids.has(e.message.id)
+      );
+      // Fold the single text-only recap message that trails a promoted reply.
+      if (suppressNextReplyRecap) {
+        suppressNextReplyRecap = false;
+        if (blocks.length > 0 && blocks.every((b) => b?.type === "text"))
+          continue; // tokens already counted above; just don't render the recap
+      }
       for (const b of blocks) {
         if (b?.type === "text" && (b.text ?? "").trim()) {
+          if (isReplyLoader) continue; // drop the "let me load the reply tool" lead-in
           const prev = items[items.length - 1];
           if (prev && prev.kind === "turn" && prev.role === "assistant") {
             prev.text += `\n${b.text}`;
@@ -412,6 +484,32 @@ export function timelineFor(
             lastReply = reply;
           }
         } else if (b?.type === "tool_use") {
+          // The deferred-tool load that fetches mcp__hq__reply's schema — plumbing.
+          if (
+            b.name === "ToolSearch" &&
+            JSON.stringify(b.input ?? "").includes("mcp__hq__reply")
+          )
+            continue;
+          // The reply itself: the channel-in ANSWER lives in the payload, not in
+          // prose. Promote it to a CLAUDE turn so the closing beat reads like a
+          // drive/observe answer, then fold the recap that follows.
+          if (b.name === "mcp__hq__reply") {
+            const replyText =
+              typeof b.input?.text === "string" ? b.input.text.trim() : "";
+            if (replyText) {
+              const reply: TurnItem = {
+                kind: "turn",
+                role: "assistant",
+                text: replyText,
+                at,
+                uuid: e.uuid,
+              };
+              items.push(reply);
+              lastReply = reply;
+            }
+            suppressNextReplyRecap = true;
+            continue;
+          }
           const input = inputDetail(b.name, b.input);
           const step: ToolItem = {
             kind: "tool",
@@ -454,9 +552,18 @@ export function timelineFor(
         continue;
       }
       if (raw.includes("<local-command-stdout>")) continue;
+      // A background agent came to rest — render the TUI's quiet status line, not
+      // the raw <task-notification> dump. It's mid-turn (Claude resumes the same
+      // work block after), so DON'T closeBlock and DON'T count it as a prompt.
+      const status = taskNotificationStatus(raw);
+      if (status) {
+        items.push({ kind: "status", text: status, at });
+        continue;
+      }
       const t = clean(raw);
       if (!t) continue;
       closeBlock(); // a new prompt ends the previous work block
+      suppressNextReplyRecap = false; // a fresh prompt is never a reply recap
       items.push({ kind: "turn", role: "user", text: t, at, uuid: e.uuid });
     }
   }
@@ -565,7 +672,8 @@ export function workingStatus(id: string | null): WorkingStatus | null {
       typeof c === "string" &&
       (c.includes("<command-name>") ||
         c.includes("<local-command-stdout>") ||
-        c.includes("<local-command-caveat>"));
+        c.includes("<local-command-caveat>") ||
+        c.includes("<task-notification>")); // synthetic agent-rest event, not a prompt
     const flatText =
       typeof c === "string"
         ? c
@@ -704,7 +812,8 @@ export function lastTurnInterrupted(id: string | null): boolean {
       typeof c === "string" &&
       (c.includes("<command-name>") ||
         c.includes("<local-command-stdout>") ||
-        c.includes("<local-command-caveat>"))
+        c.includes("<local-command-caveat>") ||
+        c.includes("<task-notification>"))
     )
       continue; // meta record
     const blocks = Array.isArray(c) ? c : [];

@@ -2687,6 +2687,21 @@ export default function Terminal({
               )}
               <span className="h-px min-w-6 flex-1 bg-zinc-800" />
             </div>
+          ) : it.kind === "status" ? (
+            // A background agent came to rest — the quiet inline marker that
+            // mirrors the TUI, instead of the raw <task-notification> dump
+            // masquerading as a user turn.
+            <div
+              key={i}
+              className="flex items-center gap-2 font-mono text-[11px] text-zinc-500"
+            >
+              <span className="h-px w-6 shrink-0 bg-zinc-800" />
+              <span className="shrink-0">
+                <span className="mr-1 text-zinc-600">⟲</span>
+                {it.text}
+              </span>
+              <span className="h-px min-w-6 flex-1 bg-zinc-800" />
+            </div>
           ) : it.kind === "turn" ? (
             renderTurn(it, i)
           ) : (
