@@ -4,6 +4,7 @@ import Markdown from "@/app/ui/md";
 import SearchInput from "@/app/ui/search-input";
 import RefreshWhile from "@/app/ui/refresh-while";
 import CopyText from "@/app/ui/copy-text";
+import ReaderActions from "@/app/ui/reader-actions";
 import { ago } from "@/lib/ago";
 import { turnsFor } from "@/lib/transcript";
 import { retainedTranscriptText } from "@/lib/archive";
@@ -39,11 +40,13 @@ function ReaderShell({
   back,
   label,
   copy,
+  actions,
   children,
 }: {
   back: string;
   label: string;
   copy?: string;
+  actions?: React.ReactNode; // floating reader-action cluster (pencil/copy), pinned top-right
   children: React.ReactNode;
 }) {
   return (
@@ -69,7 +72,10 @@ function ReaderShell({
           </span>
         )}
       </div>
-      <div className="scrollbar-none min-h-0 flex-1 overflow-auto">{children}</div>
+      <div className="relative min-h-0 flex-1">
+        {actions}
+        <div className="scrollbar-none h-full overflow-auto">{children}</div>
+      </div>
     </Boundary>
   );
 }
@@ -206,12 +212,20 @@ export default async function Search({
             memory/{open}
           </CopyText>
         </div>
-        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto text-sm">
-          {content ? (
-            <Markdown text={content} />
-          ) : (
-            <p className="text-xs text-zinc-600">memory file not found</p>
-          )}
+        <div className="relative min-h-0 flex-1">
+          <ReaderActions
+            kind="memory"
+            refId={open}
+            title={`memory/${open}`}
+            text={content ?? ""}
+          />
+          <div className="scrollbar-none h-full overflow-y-auto text-sm">
+            {content ? (
+              <Markdown text={content} />
+            ) : (
+              <p className="text-xs text-zinc-600">memory file not found</p>
+            )}
+          </div>
         </div>
       </Boundary>
     );
@@ -293,12 +307,20 @@ export default async function Search({
             note
           </span>
         </div>
-        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto text-sm">
-          {content ? (
-            <Markdown text={body} />
-          ) : (
-            <p className="text-xs text-zinc-600">note not found</p>
-          )}
+        <div className="relative min-h-0 flex-1">
+          <ReaderActions
+            kind="note"
+            refId={openNote}
+            title="note"
+            text={body}
+          />
+          <div className="scrollbar-none h-full overflow-y-auto text-sm">
+            {content ? (
+              <Markdown text={body} />
+            ) : (
+              <p className="text-xs text-zinc-600">note not found</p>
+            )}
+          </div>
         </div>
       </Boundary>
     );
@@ -339,7 +361,19 @@ export default async function Search({
   if (openFile) {
     const content = getRepoFile(openFile);
     return (
-      <ReaderShell back={back} label={openFile} copy={openFile}>
+      <ReaderShell
+        back={back}
+        label={openFile}
+        copy={openFile}
+        actions={
+          <ReaderActions
+            kind="file"
+            refId={openFile}
+            title={openFile}
+            text={content ?? ""}
+          />
+        }
+      >
         {content ? (
           <pre className={CODE_BODY}>{content}</pre>
         ) : (
