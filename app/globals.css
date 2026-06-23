@@ -10,6 +10,22 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Semantic brand tokens — the zinc/blue palette hq already uses inline, named
+     once so components (and the design-sync conventions header) reference tokens
+     instead of raw hex. Generates utilities: bg-surface-2, border-line,
+     text-muted, text-accent, … Additive — the zinc-* utilities still work. */
+  --color-surface-0: #09090b; /* page (zinc-950) */
+  --color-surface-1: #18181b; /* raised (zinc-900) */
+  --color-surface-2: #27272a; /* chip / control (zinc-800) */
+  --color-surface-3: #3f3f46; /* hover / active (zinc-700) */
+  --color-line: #27272a; /* default border (zinc-800) */
+  --color-line-strong: #3f3f46; /* emphasized border (zinc-700) */
+  --color-muted: #a1a1aa; /* secondary text (zinc-400) */
+  --color-subtle: #71717a; /* tertiary text (zinc-500) */
+  --color-accent: #2563eb; /* brand blue (blue-600) */
+  --color-success: #22c55e; /* green-500 */
+  --color-danger: #ef4444; /* red-500 */
 }
 
 /* Demo-style rerender flash: a freshly mounted boundary holds blue, then
