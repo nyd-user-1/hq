@@ -729,6 +729,10 @@ export default function Terminal({
   // a later HQ write advances knownLeaf past the rival, so a stateless recompute
   // would otherwise drop the banner while the fork still exists.
   const [diverged, setDiverged] = useState<{ leaf?: string; preview?: string } | null>(null);
+  // Sessions where the user already acknowledged the divergence banner. The rival
+  // TUI writes a NEW leaf every turn, so re-latching per-leaf nags forever — once
+  // dismissed, suppress it for that whole session (this tab's lifetime).
+  const divergeAckRef = useRef<Set<string>>(new Set());
   const [resume, setResume] = useState<ResumeOptions>(null); // fresh-session resume options
   const [projects, setProjects] = useState<{ name: string; path: string }[]>([]); // launcher chips: history-derived {name, path}
   const [newProjectName, setNewProjectName] = useState(""); // "+ new project" input in the staging view
@@ -1105,7 +1109,8 @@ export default function Terminal({
       // here — HQ's next write advances knownLeaf past the rival, so a server
       // recompute returns diverged:false while the fork still exists. The latch
       // clears only on session-switch (the [pinned] effect) or an explicit action.
-      if (d.diverged) setDiverged({ leaf: d.rivalLeafUuid, preview: d.rivalPreview });
+      if (d.diverged && !divergeAckRef.current.has(pinned ?? d.id ?? ""))
+        setDiverged({ leaf: d.rivalLeafUuid, preview: d.rivalPreview });
       setContextTokens(d.contextTokens ?? 0);
       setModel(d.model ?? "");
       setLastWrite(d.lastWrite || null);
@@ -2928,7 +2933,10 @@ export default function Terminal({
           <div className="flex flex-wrap gap-2 pl-5 pt-0.5">
             <button
               type="button"
-              onClick={() => setDiverged(null)}
+              onClick={() => {
+                divergeAckRef.current.add(pinned ?? resolvedId ?? "");
+                setDiverged(null);
+              }}
               title="dismiss — keep HQ's branch as the active conversation"
               className="rounded border border-amber-500/40 px-1.5 py-0.5 text-[11px] text-amber-300 transition-colors hover:bg-amber-500/20"
             >
@@ -2936,7 +2944,10 @@ export default function Terminal({
             </button>
             <button
               type="button"
-              onClick={() => setDiverged(null)}
+              onClick={() => {
+                divergeAckRef.current.add(pinned ?? resolvedId ?? "");
+                setDiverged(null);
+              }}
               title="dismiss this notice (v1 — branch viewer not yet wired)"
               className="rounded border border-amber-500/20 px-1.5 py-0.5 text-[11px] text-amber-300/70 transition-colors hover:bg-amber-500/20"
             >
