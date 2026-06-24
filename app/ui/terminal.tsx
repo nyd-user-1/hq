@@ -1696,9 +1696,25 @@ export default function Terminal({
             </span>
             {it.role === "user" ? "you" : "claude"}
             {it.at && (
-              <span className="ml-2 normal-case tracking-normal text-zinc-600">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (it.uuid && metaSessionId)
+                    navigator.clipboard.writeText(
+                      `hq:turn ${metaSessionId}/${it.uuid}`
+                    );
+                }}
+                disabled={!it.uuid || !metaSessionId}
+                title={
+                  it.uuid
+                    ? "Copy a turn reference Claude can read from disk (hq:turn …)"
+                    : undefined
+                }
+                className="ml-2 normal-case tracking-normal text-zinc-600 transition-colors hover:text-zinc-300 disabled:hover:text-zinc-600"
+              >
                 {new Date(it.at).toLocaleTimeString()}
-              </span>
+              </button>
             )}
           </span>
           {meta.favorite && (
