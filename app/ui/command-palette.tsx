@@ -558,8 +558,9 @@ export default function CommandPalette() {
         aliveF = false;
       };
     }
-    // MENU with an empty query is the launcher (Actions/Navigate only, no feed).
-    if (!query && scope === "menu") {
+    // MENU is purely the command launcher (Actions/Navigate) — never search hits.
+    // Typing filters the commands client-side; corpus search lives in the chips.
+    if (scope === "menu") {
       setHits([]);
       setShown(PAGE);
       return;
@@ -706,11 +707,14 @@ export default function CommandPalette() {
   const filteredRows = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return fileRows;
-    return fileRows.filter((r) =>
-      (filesMeta[`${r.kind}:${r.ref}`]?.title || r.name || r.ref)
-        .toLowerCase()
-        .includes(query)
-    );
+    return fileRows.filter((r) => {
+      const name = (
+        filesMeta[`${r.kind}:${r.ref}`]?.title ||
+        r.name ||
+        r.ref
+      ).toLowerCase();
+      return name.includes(query) || r.file.toLowerCase().includes(query);
+    });
   }, [fileRows, q, filesMeta]);
 
   // Reset + focus on open.
@@ -1181,14 +1185,29 @@ export default function CommandPalette() {
                   }}
                   placeholder={
                     scope === "menu"
-                      ? "Type a command, or search everything…"
+                      ? "Filter commands…"
                       : scope === "all"
-                        ? "Filter files…"
+                        ? "Filter files by name or filename…"
                         : `Search ${scope}…`
                   }
                   spellCheck={false}
                   className="w-full bg-transparent font-mono text-[14px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
                 />
+                {q && (
+                  <button
+                    onClick={() => {
+                      setQ("");
+                      inputRef.current?.focus();
+                    }}
+                    aria-label="Clear search"
+                    title="Clear"
+                    className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
                 <kbd className="shrink-0 rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 font-mono text-[9px] text-zinc-500">
                   esc
                 </kbd>

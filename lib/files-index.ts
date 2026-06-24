@@ -99,6 +99,25 @@ export function filesIndex(): FileRow[] {
     });
   }
 
+  // MEMORY.md is excluded from the SEARCHABLE memory corpus (it's the index of
+  // all memories, not a note) — but it IS a real file, so surface it in the table.
+  try {
+    const p = memoryFilePath("MEMORY.md");
+    const st = fs.statSync(p);
+    rows.push({
+      kind: "memory",
+      ref: "MEMORY.md",
+      name: "MEMORY",
+      file: "MEMORY.md",
+      modified: st.mtimeMs,
+      created: st.birthtimeMs || -1,
+      size: st.size,
+      meta: "index",
+    });
+  } catch {
+    /* no MEMORY.md on this machine */
+  }
+
   rows.sort((a, b) => b.modified - a.modified);
   cache = { at: Date.now(), rows };
   return rows;
