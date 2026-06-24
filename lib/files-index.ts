@@ -50,7 +50,13 @@ function statBits(p: string | null, fallbackModified: number) {
   return { size, created, modified };
 }
 
+// Memoize like the 5s corpus cache — the first open pays the enumerate+stat cost
+// (~0.5s for hundreds of transcripts); repeats within the window are instant.
+let cache: { at: number; rows: FileRow[] } | null = null;
+const TTL_MS = 5000;
+
 export function filesIndex(): FileRow[] {
+  if (cache && Date.now() - cache.at < TTL_MS) return cache.rows;
   const rows: FileRow[] = [];
 
   // notes / memory / skills
@@ -94,5 +100,6 @@ export function filesIndex(): FileRow[] {
   }
 
   rows.sort((a, b) => b.modified - a.modified);
+  cache = { at: Date.now(), rows };
   return rows;
 }
