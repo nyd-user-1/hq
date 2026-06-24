@@ -662,7 +662,7 @@ export default function SidebarRecents() {
             className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
           >
             <StarIcon filled={menuSession.favorite} />
-            {menuSession.favorite ? "Unstar" : "Star"}
+            {menuSession.favorite ? "Unfavorite" : "Favorite"}
           </button>
           <button
             role="menuitem"

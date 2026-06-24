@@ -551,7 +551,7 @@ function RecentSessions({
                     onClick={(e) => openMenu(e, s.id)}
                     title="more actions"
                     aria-label="more actions"
-                    className="rounded p-1 text-zinc-500 transition-colors hover:text-zinc-200"
+                    className="rounded-md bg-zinc-800/50 p-1 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-zinc-100"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                       <circle cx="5" cy="12" r="1.6" />
@@ -613,7 +613,7 @@ function RecentSessions({
             }}
             className={menuItem}
           >
-            {starred.has(menuSession.id) ? "Unstar" : "Star"}
+            {starred.has(menuSession.id) ? "Unfavorite" : "Favorite"}
           </button>
           <div className="my-1 h-px bg-zinc-800" />
           <button
@@ -773,10 +773,6 @@ export default function Terminal({
   const [projects, setProjects] = useState<{ name: string; path: string }[]>([]); // launcher chips: history-derived {name, path}
   const [newProjectName, setNewProjectName] = useState(""); // "+ new project" input in the staging view
   const [newOpen, setNewOpen] = useState(false); // staging: the "+ new" chip expanded into its input
-  // staging PROJECTS grid: clamped to 2 rows, a chevron reveals the rest.
-  const [projExpanded, setProjExpanded] = useState(false);
-  const [projOverflow, setProjOverflow] = useState(false); // chips hidden beyond the 2-row clamp?
-  const projGridRef = useRef<HTMLDivElement>(null);
   // staging: the chosen launch target (an existing chip or a to-be-created project).
   // null = the ~/hq default. Clicking a chip SELECTS; the actual launch happens only
   // on send — so a stray click can never start a session (the footgun fix).
@@ -786,17 +782,6 @@ export default function Terminal({
   const [lineage, setLineage] = useState<Lineage>(null); // this session's /clear chain
   const [predecessorCtx, setPredecessorCtx] = useState(0); // continued session's ctx size (fresh pane)
   const [now, setNow] = useState(0); // ticks every 1s while working, for elapsed
-  // Does the clamped PROJECTS grid hide any chips (a row 3+)? Drives whether the
-  // "more" chevron shows — never offer to expand when there's nothing hidden.
-  useEffect(() => {
-    const el = projGridRef.current;
-    if (!staged || !el || projExpanded) return;
-    const check = () => setProjOverflow(el.scrollHeight - el.clientHeight > 4);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [staged, projects.length, projExpanded]);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Scrollback + bottom-follow. atBottomRef: is the view parked at the bottom (so
   // live turns only auto-scroll then, never yanking you while you read up top).
@@ -2629,17 +2614,15 @@ export default function Terminal({
         {staged && (
           // Top-aligned, full-width (matches the header rule above). Two ruled
           // sections — PROJECTS (pick a launch target) then SESSIONS (reopen one).
-          <div className="flex w-full flex-col gap-6 pb-8 pt-2 font-mono">
+          <div className="flex w-full flex-col gap-6 pb-8 pt-16 font-mono">
             {/* PROJECTS — click to SELECT a launch target (the session starts only on
                 send, never on a stray click). An even grid, clamped to 2 rows; the
                 chevron reveals the rest. */}
             <div className="flex flex-col gap-3">
-              <div
-                ref={projGridRef}
-                className={`grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 ${
-                  projExpanded ? "" : "max-h-[80px] overflow-hidden"
-                }`}
-              >
+              {/* All project chips in a 2-row band that scrolls HORIZONTALLY — no
+                  "more" expander, no clipped third row. grid-flow-col fills top-then-
+                  bottom, flowing rightward; the band scrolls x for the overflow. */}
+              <div className="scrollbar-none grid grid-flow-col grid-rows-2 auto-cols-[7.5rem] gap-2 overflow-x-auto pb-1">
                 {projects.map((p) => {
                   const sel = selectedTarget?.cwd === p.path;
                   return (
@@ -2660,31 +2643,8 @@ export default function Terminal({
                   );
                 })}
               </div>
-              {/* control row — the expand/collapse chevron (left) + "+ new" (right) */}
+              {/* control row — just "+ new" (the chip band scrolls; no expander) */}
               <div className="flex items-center gap-2">
-                {(projOverflow || projExpanded) && (
-                  <button
-                    type="button"
-                    onClick={() => setProjExpanded((v) => !v)}
-                    title={projExpanded ? "show fewer projects" : "show all projects"}
-                    className="flex h-9 items-center gap-1 rounded-md px-2 text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
-                  >
-                    {projExpanded ? "less" : "more"}
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`transition-transform ${projExpanded ? "rotate-180" : ""}`}
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                )}
                 {newOpen ? (
                   <input
                     autoFocus
