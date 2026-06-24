@@ -11,6 +11,8 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Boundary from "@/app/ui/boundary";
+import CmdkFilesTable from "@/app/ui/cmdk-files-table";
+import type { FileRow } from "@/lib/files-index";
 import Markdown from "@/app/ui/md";
 import { withPins } from "@/app/ui/keep-pins";
 import { NAV_TARGETS, type NavTarget } from "@/app/ui/panel-nav";
@@ -451,6 +453,7 @@ const PAGE = 25; // how many search results to reveal per lazy-load step
 // the search to one corpus. Chips are the common corpora; the alias map also
 // accepts the rarer ones as prefixes. "all" = no filter.
 const SCOPE_CHIPS: { scope: string; label: string }[] = [
+  { scope: "menu", label: "Menu" },
   { scope: "all", label: "All" },
   { scope: "files", label: "Files" },
   { scope: "sessions", label: "Sessions" },
@@ -486,14 +489,22 @@ export default function CommandPalette() {
 
   const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState("all"); // ⌘K corpus filter (chip or /prefix)
+  const [scope, setScope] = useState("menu"); // ⌘K view: menu (commands) · all (file table) · a corpus
   const [sel, setSel] = useState(0);
   const [hits, setHits] = useState<Hit[]>([]);
+  const [fileRows, setFileRows] = useState<FileRow[]>([]); // ALL view (Finder table)
+  const [filesMeta, setFilesMeta] = useState<
+    Record<string, { favorite?: boolean; title?: string }>
+  >({}); // favorites + renames overlay
   const [shown, setShown] = useState(PAGE); // lazy-load window over the Search results
   const [viewing, setViewing] = useState<Hit | null>(null); // drilled-in result
   const [body, setBody] = useState<ViewerBody | null>(null); // its fetched content
   const [editing, setEditing] = useState(false); // reader inline-edit mode (pencil)
   const [draft, setDraft] = useState(""); // the editable buffer (raw file content)
+  const [fav, setFav] = useState(false); // favorite state for the open item
+  const [customTitle, setCustomTitle] = useState<string | null>(null); // sidecar rename
+  const [renaming, setRenaming] = useState(false); // reader title inline-rename
+  const [renameDraft, setRenameDraft] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -511,19 +522,37 @@ export default function CommandPalette() {
   // lazy-loaded list; we reveal PAGE at a time client-side.
   useEffect(() => {
     const query = q.trim();
-    // Empty query: "all" is the launcher (no feed); a scope chip browses that
-    // whole corpus newest-first (the API returns recent() for an empty q+scope).
-    if (!query && scope === "all") {
+    // ALL = the Finder table — its own data source (file index). The query just
+    // filters rows client-side, so load it once per entry, not per keystroke.
+    if (scope === "all") {
+      setHits([]);
+      let aliveAll = true;
+      fetch("/api/files-all")
+        .then((r) => r.json())
+        .then((d) => {
+          if (aliveAll) setFileRows(Array.isArray(d?.rows) ? d.rows : []);
+        })
+        .catch(() => {
+          if (aliveAll) setFileRows([]);
+        });
+      return () => {
+        aliveAll = false;
+      };
+    }
+    // MENU with an empty query is the launcher (Actions/Navigate only, no feed).
+    if (!query && scope === "menu") {
       setHits([]);
       setShown(PAGE);
       return;
     }
+    // MENU+query searches everything; a corpus chip searches/browses that corpus.
+    const serverScope = scope === "menu" ? "all" : scope;
     let alive = true;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/command-search?q=${encodeURIComponent(query)}&scope=${scope}&limit=200`,
+          `/api/command-search?q=${encodeURIComponent(query)}&scope=${serverScope}&limit=200`,
           { signal: ctrl.signal }
         );
         const data = await res.json();
@@ -633,7 +662,7 @@ export default function CommandPalette() {
     const grouped: { section: Section; items: Command[] }[] = [];
     // A scope chip turns ⌘K into a corpus browser — suppress the launcher
     // (Actions/Navigate) so the chosen corpus fills the list. "all" keeps them.
-    if (scope === "all") {
+    if (scope === "menu") {
       const scored = commands
         .map((c) => ({ c, s: rank(c, query) }))
         .filter((x) => x.s > 0)
@@ -654,15 +683,31 @@ export default function CommandPalette() {
 
   const selIdx = Math.min(sel, Math.max(0, flat.length - 1));
 
+  // ALL-view rows, filtered by the query client-side (Finder-style live filter).
+  const filteredRows = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return fileRows;
+    return fileRows.filter((r) =>
+      (filesMeta[`${r.kind}:${r.ref}`]?.title || r.name || r.ref)
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [fileRows, q, filesMeta]);
+
   // Reset + focus on open.
   useEffect(() => {
     if (!open) return;
     setQ("");
-    setScope("all");
+    setScope("menu");
     setSel(0);
     setHits([]);
     setShown(PAGE);
     setViewing(null);
+    // Overlay store for the ALL table + result list (favorites + renames).
+    fetch("/api/file-meta")
+      .then((r) => r.json())
+      .then((d) => setFilesMeta(d?.files ?? {}))
+      .catch(() => {});
     setEditing(false);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
@@ -693,8 +738,10 @@ export default function CommandPalette() {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        if (editing) {
-          setEditing(false); // first Esc leaves edit mode, not the reader
+        if (renaming) {
+          setRenaming(false); // first Esc cancels the rename
+        } else if (editing) {
+          setEditing(false); // then leaves edit mode, not the reader
         } else {
           setViewing(null);
           requestAnimationFrame(() => inputRef.current?.focus());
@@ -703,7 +750,7 @@ export default function CommandPalette() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, viewing, editing]);
+  }, [open, viewing, editing, renaming]);
 
   const backToResults = useCallback(() => {
     setViewing(null);
@@ -735,6 +782,51 @@ export default function CommandPalette() {
       lines: draft ? draft.split("\n").length : 0,
     };
   }, [draft]);
+
+  // Favorite state for the open item — HQ-native, sidecar-stored (files-meta.ts),
+  // keyed by kind:ref so it works for EVERY cmdk category, not just notes.
+  useEffect(() => {
+    if (!viewing) return;
+    let cancelled = false;
+    setRenaming(false);
+    fetch("/api/file-meta")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const m = d?.files?.[`${viewing.kind}:${viewing.ref}`];
+        setFav(!!m?.favorite);
+        setCustomTitle(m?.title ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [viewing]);
+
+  const toggleFav = useCallback(() => {
+    if (!viewing) return;
+    const next = !fav;
+    setFav(next); // optimistic
+    fetch("/api/file-meta", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: viewing.kind, ref: viewing.ref, favorite: next }),
+    }).catch(() => setFav(!next));
+  }, [viewing, fav]);
+
+  // Rename = a sidecar custom title (files-meta), exactly like a session rename
+  // in the sidebar — never touches the file on disk. Notes only, for now.
+  const saveRename = useCallback(() => {
+    if (!viewing) return;
+    const t = renameDraft.trim();
+    setCustomTitle(t || null); // optimistic
+    setRenaming(false);
+    fetch("/api/file-meta", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: viewing.kind, ref: viewing.ref, title: t }),
+    }).catch(() => {});
+  }, [viewing, renameDraft]);
 
   // Pencil → fetch the RAW file (frontmatter and all) and open it in the Text
   // editor in edit mode. The editor floats over the palette; on save it fires
@@ -858,11 +950,64 @@ export default function CommandPalette() {
                 >
                   ← back
                 </button>
-                <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-zinc-200">
-                  {viewing.title || viewing.ref}
-                </span>
+                {/* Favorite — sits right after ← back, before the title, for ANY
+                    item category (files-meta.ts is keyed by kind:ref). */}
+                <button
+                  onClick={toggleFav}
+                  aria-label={fav ? "Unfavorite" : "Favorite"}
+                  title={fav ? "Unfavorite" : "Favorite"}
+                  className={`flex shrink-0 items-center rounded p-0.5 transition-colors ${
+                    fav
+                      ? "text-amber-400 hover:text-amber-300"
+                      : "text-zinc-600 hover:text-zinc-300"
+                  }`}
+                >
+                  {/* lucide star */}
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill={fav ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />
+                  </svg>
+                </button>
+                {renaming ? (
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveRename();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setRenaming(false);
+                      }
+                    }}
+                    onBlur={saveRename}
+                    className="min-w-0 max-w-[44ch] flex-1 rounded bg-zinc-900/60 px-1.5 py-0.5 font-mono text-[13px] text-zinc-100 ring-1 ring-zinc-700/70 focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => {
+                      setRenameDraft(customTitle || viewing.title || viewing.ref);
+                      setRenaming(true);
+                    }}
+                    title="Click to rename"
+                    className="min-w-0 max-w-[44ch] cursor-text truncate text-left font-mono text-[13px] text-zinc-200 hover:text-zinc-100"
+                  >
+                    {customTitle || viewing.title || viewing.ref}
+                  </button>
+                )}
                 <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${kindTag(viewing.kind)}`}
+                  className={`ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${kindTag(viewing.kind)}`}
                 >
                   {viewing.kind}
                 </span>
@@ -1008,17 +1153,19 @@ export default function CommandPalette() {
                   }}
                   onKeyDown={(e) => {
                     // Backspace on an empty query clears an active scope chip.
-                    if (e.key === "Backspace" && !q && scope !== "all") {
+                    if (e.key === "Backspace" && !q && scope !== "menu") {
                       e.preventDefault();
-                      setScope("all");
+                      setScope("menu");
                       return;
                     }
                     onKeyDown(e);
                   }}
                   placeholder={
-                    scope === "all"
+                    scope === "menu"
                       ? "Type a command, or search everything…"
-                      : `Search ${scope}…`
+                      : scope === "all"
+                        ? "Filter files…"
+                        : `Search ${scope}…`
                   }
                   spellCheck={false}
                   className="w-full bg-transparent font-mono text-[14px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
@@ -1051,7 +1198,25 @@ export default function CommandPalette() {
                 ))}
               </div>
 
-              {/* results */}
+              {/* results — ALL renders the Finder table; everything else is the
+                  command/search list. */}
+              {scope === "all" ? (
+                <CmdkFilesTable
+                  rows={filteredRows}
+                  meta={filesMeta}
+                  onOpen={(row) =>
+                    setViewing({
+                      kind: row.kind,
+                      ref: row.ref,
+                      title:
+                        filesMeta[`${row.kind}:${row.ref}`]?.title || row.name,
+                      snippet: "",
+                      at: row.modified,
+                      meta: row.meta,
+                    })
+                  }
+                />
+              ) : (
               <div
                 ref={listRef}
                 onScroll={onListScroll}
@@ -1149,13 +1314,16 @@ export default function CommandPalette() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* footer */}
               <div className="flex items-center justify-between border-t border-dashed border-zinc-800 pt-2.5 font-mono text-[10px] text-zinc-600">
                 <span>
-                  {total > 0
-                    ? `${total} result${total === 1 ? "" : "s"}`
-                    : `${flat.length} result${flat.length === 1 ? "" : "s"}`}
+                  {scope === "all"
+                    ? `${filteredRows.length} file${filteredRows.length === 1 ? "" : "s"}`
+                    : total > 0
+                      ? `${total} result${total === 1 ? "" : "s"}`
+                      : `${flat.length} result${flat.length === 1 ? "" : "s"}`}
                 </span>
                 <span>↑↓ navigate · ↵ open · esc close</span>
               </div>
