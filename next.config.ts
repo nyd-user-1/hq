@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
   // at build time, so the running server needs zero network. Build needs the
   // network once; the launched app does not.
   output: "standalone",
+  // The repo can hold nested git worktrees under .claude/ (parallel agent lanes)
+  // plus a tsbuildinfo — none of that belongs in the shipped bundle. Keep next's
+  // output tracer from copying them into .next/standalone (build:offline also
+  // strips them as a belt-and-suspenders guarantee).
+  outputFileTracingExcludes: {
+    "*": ["**/.claude/**", "**/*.tsbuildinfo"],
+  },
 };
 
 export default nextConfig;

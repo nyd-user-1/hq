@@ -109,9 +109,9 @@ export type RecentSession = {
   related: string[]; // cross-link tags (sidecar); [] when none
 };
 
-// THE PROJECT RULE: Brendan launches most sessions from ~, so cwd is useless for
-// the project — but he opens (or early-on references) the project by path:
-// "we're working in brendanstanton/code/hq", "/code/tariffs", "~/code/sports".
+// THE PROJECT RULE: most sessions are launched from ~, so cwd is useless for
+// the project — but the user opens (or early-on references) the project by path:
+// "we're working in jane/code/hq", "/code/tariffs", "~/code/sports".
 // This pulls the first such code/<slug> out of the USER text. cleanText strips
 // <system-reminder> blocks first, so the injected memory index's many code/
 // paths don't false-match. Reference the project as code/<slug> early and
@@ -126,7 +126,7 @@ function codeSlug(p: string): string | null {
 }
 
 // Last-resort project from the transcript's projects-dir name (cwd "/"→"-"),
-// e.g. "-Users-brendanstanton-code-44b" → "44b"; a plain home-dir session has
+// e.g. "-Users-jane-code-44b" → "44b"; a plain home-dir session has
 // no project signal on disk to recover, so it falls into "Unassigned" — a
 // visible backlog of sessions that should be re-homed (set a project override).
 function dirProject(file: string): string {

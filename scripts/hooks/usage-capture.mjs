@@ -18,7 +18,7 @@
 // ENABLE: add to ~/.claude/settings.json (the first probe is a paid call):
 //   "hooks": { "SessionStart": [ { "hooks": [
 //     { "type": "command",
-//       "command": "node /Users/brendanstanton/code/hq/scripts/hooks/usage-capture.mjs" } ] } ] }
+//       "command": "node /path/to/hq/scripts/hooks/usage-capture.mjs" } ] } ] }
 //
 // DEBUG: every probe dumps its raw stream to ~/.claude/hq/usage-probe-debug.jsonl
 // so the parser can be checked/tuned against what the CLI actually emits.

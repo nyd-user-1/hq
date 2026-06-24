@@ -45,7 +45,7 @@ if ! up; then
   echo "Starting offline HQ on $BASE (no internet needed) ..."
   # Standalone server resolves ./public and ./.next/static relative to itself,
   # so we launch it from inside the bundle dir.
-  ( cd "$STANDALONE" && PORT="$HQ_PORT" HOSTNAME=127.0.0.1 \
+  ( cd "$STANDALONE" && HQ_DIR="$HQ_DIR" PORT="$HQ_PORT" HOSTNAME=127.0.0.1 \
       nohup node server.js >/tmp/hq-offline.log 2>&1 & ) >/dev/null 2>&1
   ready=0
   for _ in $(seq 1 40); do

@@ -24,8 +24,16 @@ while [ -L "$SOURCE" ]; do
 done
 SELF_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 HQ_DIR="${HQ_DIR:-$(cd "$SELF_DIR/.." && pwd)}"
+export HQ_DIR                       # the app reads it to locate scripts/hooks
 HQ_PORT="${HQ_PORT:-3002}"
 BASE="http://localhost:${HQ_PORT}"
+
+# Packaged install (`npm i -g` / `npx`): a prebuilt standalone bundle ships in
+# the tarball — prefer it (no dev toolchain, no install, instant start). A dev
+# clone has no standalone, so we fall through to `npm run dev` below.
+if [ -f "$HQ_DIR/.next/standalone/server.js" ]; then
+  exec "$SELF_DIR/hq-offline" "$@"
+fi
 
 # Pin to the launching session when we have its id (we always do under Claude).
 sid="${CLAUDE_CODE_SESSION_ID:-}"

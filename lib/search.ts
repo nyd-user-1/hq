@@ -91,7 +91,7 @@ function readDir(dir: string, accept: (n: string) => boolean): FileDoc[] {
 }
 // Every per-project memory dir under ~/.claude/projects/*/memory. Claude writes
 // memory under the slug of the CWD it was launched from, so a note can live under
-// the home-dir slug OR a project-cwd slug (e.g. -Users-brendanstanton-Code-hq) —
+// the home-dir slug OR a project-cwd slug (e.g. -Users-jane-Code-hq) —
 // HQ used to read only the home-dir slug, so project memory (MEMORY.md, handoffs,
 // hq-product-description.md…) was invisible to search. Scan them all.
 function memoryDirs(): string[] {

@@ -21,7 +21,7 @@
 //           "hooks": [
 //             {
 //               "type": "command",
-//               "command": "node /Users/brendanstanton/code/hq/scripts/hooks/session-events.mjs"
+//               "command": "node /path/to/hq/scripts/hooks/session-events.mjs"
 //             }
 //           ]
 //         }

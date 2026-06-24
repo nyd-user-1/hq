@@ -1,23 +1,33 @@
 {
   "name": "@nysgpt/hq",
   "version": "0.1.0",
-  "private": true,
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "bin": {
     "hq": "bin/hq",
     "hq-offline": "bin/hq-offline"
   },
+  "files": [
+    "bin/",
+    "scripts/hooks/",
+    ".next/standalone/",
+    "README.md",
+    "AGENTS.md"
+  ],
   "scripts": {
     "dev": "next dev -p 3002 -H 127.0.0.1",
     "build": "next build",
     "build:check": "HQ_BUILD_DIR=.next-build next build",
-    "build:offline": "next build && rm -rf .next/standalone/.next/static .next/standalone/public && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public",
+    "build:offline": "next build && rm -rf .next/standalone/.next/static .next/standalone/public .next/standalone/.claude .next/standalone/tsconfig.tsbuildinfo && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public",
     "start": "next start",
     "lint": "eslint",
     "app:rebuild": "bash scripts/rebuild-app.sh",
-    "test:permission": "node --experimental-strip-types --test lib/permission-policy.test.mts"
+    "test:permission": "node --experimental-strip-types --test lib/permission-policy.test.mts",
+    "prepublishOnly": "env -u NODE_ENV npm run build:offline"
   },
   "dependencies": {
     "next": "16.2.9",

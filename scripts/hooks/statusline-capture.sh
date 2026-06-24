@@ -11,11 +11,13 @@
 # probe (scripts/hooks/usage-capture.mjs), which then self-skips while this keeps
 # the snapshot warm. It still renders a normal status line, so you lose nothing.
 #
-# ENABLE: point your statusLine at it in ~/.claude/settings.json:
+# ENABLE: point your statusLine at it in ~/.claude/settings.json (use the
+# absolute path to wherever HQ is installed; the CMD panel prints the exact one
+# for your machine):
 #   "statusLine": { "type": "command",
-#     "command": "sh /Users/brendanstanton/code/hq/scripts/hooks/statusline-capture.sh" }
-# (Brendan's existing ~/.claude/statusline-command.sh has the same tee inlined,
-#  so it already feeds HQ — this is the canonical/reference + fresh-install copy.)
+#     "command": "sh /path/to/hq/scripts/hooks/statusline-capture.sh" }
+# If you already have a statusLine command, inline this tee into it instead of
+# replacing it — both can feed HQ.
 
 input=$(cat)
 

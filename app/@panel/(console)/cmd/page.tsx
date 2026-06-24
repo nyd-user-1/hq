@@ -3,6 +3,12 @@ import CopyText from "@/app/ui/copy-text";
 
 export const dynamic = "force-dynamic";
 
+// Where HQ is installed on THIS machine — exported by bin/hq + bin/hq-offline,
+// falling back to the server's cwd (a dev clone runs from the repo root). Used
+// to print a copy-paste hook command with the right absolute path for whoever
+// is running HQ, instead of a path baked in at author time.
+const HQ_ROOT = process.env.HQ_DIR || process.cwd();
+
 // CMD = the CLI utility slash commands (the rest of the /help palette). Unlike
 // skills, these control the live interactive session or open a TUI — clear,
 // compact, model, theme, login, etc. — so they can't run via `claude -p` (a
@@ -110,8 +116,7 @@ const EVENT_HOOKS_SNIPPET = JSON.stringify(
           hooks: [
             {
               type: "command",
-              command:
-                "node /Users/brendanstanton/code/hq/scripts/hooks/session-events.mjs",
+              command: `node ${HQ_ROOT}/scripts/hooks/session-events.mjs`,
             },
           ],
         },
