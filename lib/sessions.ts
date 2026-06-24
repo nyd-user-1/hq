@@ -305,7 +305,7 @@ function headInfo(file: string): {
 
 // Every transcript across all project dirs touched in the last 7 days, newest
 // first — the shared scan behind both session readers below.
-function recentFiles(): { file: string; mtime: number }[] {
+function recentFiles(maxAgeMs = 7 * 24 * 60 * 60 * 1000): { file: string; mtime: number }[] {
   const now = Date.now();
   let dirs: fs.Dirent[];
   try {
@@ -328,7 +328,7 @@ function recentFiles(): { file: string; mtime: number }[] {
       const full = path.join(dirPath, f);
       try {
         const st = fs.statSync(full);
-        if (st.size > 0 && now - st.mtimeMs <= 7 * 24 * 60 * 60 * 1000)
+        if (st.size > 0 && now - st.mtimeMs <= maxAgeMs)
           files.push({ file: full, mtime: st.mtimeMs });
       } catch {
         // vanished mid-scan
@@ -446,6 +446,48 @@ export function getRecentSessions(limit = 24): RecentSession[] {
 
 export function getSdkSessions(limit = 40): RecentSession[] {
   return sessionsOfKind("sdk", limit);
+}
+
+// The new-session picker's row: the sidebar's full menu metadata (RecentSession —
+// favorite/hidden/archived/rename/related/branch) PLUS the table's columns
+// (snippet/contextTokens/surface, from the tail). Neither getRecentSessions (head
+// only) nor getSessions (no metadata) has both — this is the union.
+export type TableSession = RecentSession & {
+  snippet: string;
+  contextTokens: number;
+  surface: "hq" | "cc";
+};
+
+// EVERY interactive transcript on disk — no 7-day window, no cap — enriched for the
+// picker table (/api/sessions/all). Heavier than getRecentSessions (a head AND tail
+// read per file), so it's fetched on the picker's own cadence (open / focus / a
+// debounced change push), NEVER on the 1s turns poll.
+export function getAllSessionsFull(): TableSession[] {
+  const meta = getSessionsMeta();
+  const driven = hqDrivenIds();
+  const out: TableSession[] = [];
+  const seen = new Set<string>();
+  for (const { file, mtime } of recentFiles(Infinity)) {
+    const m = sessionMeta(file, mtime, meta);
+    // interactive only — drop stray sdk-cli runs HQ didn't drive (mirrors the sidebar)
+    if (m.entrypoint === "sdk-cli" && !driven.has(m.id)) continue;
+    let snippet = "";
+    let contextTokens = 0;
+    let surface: "hq" | "cc" = "cc";
+    try {
+      ({ snippet, contextTokens, surface } = tailInfo(file));
+    } catch {
+      /* unreadable tail — keep the head-derived row */
+    }
+    out.push({ ...m, snippet: snippet.slice(0, 120), contextTokens, surface });
+    seen.add(m.id);
+  }
+  // live channel sessions with no transcript yet (pinnable from turn one)
+  for (const c of channelSessions(meta)) {
+    if (!seen.has(c.id)) out.push({ ...c, snippet: "", contextTokens: 0, surface: "hq" });
+  }
+  out.sort((a, b) => b.lastActive - a.lastActive);
+  return out;
 }
 
 // The ~/code project folders — offered in the "+" new-session view so a session

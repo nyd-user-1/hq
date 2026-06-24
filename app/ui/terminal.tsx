@@ -125,6 +125,15 @@ type ResumeOptions = {
     active: boolean; // cache-warm → calm green dot
     live: boolean; // connected channel → pulsing green dot
     surface: "hq" | "cc"; // where the last activity happened (Last Surface column)
+    // Full-table-only metadata (present when fetched from /api/sessions/all; the
+    // lean fresh-resume rows omit them). Powers the table's full sidebar-style menu.
+    favorite?: boolean;
+    hidden?: boolean;
+    archived?: boolean;
+    related?: string[];
+    customTitle?: string;
+    aiTitle?: string;
+    branch?: string;
   }[];
 } | null;
 
@@ -298,9 +307,14 @@ function CopyChip({ label, text }: { label: string; text: string }) {
 function RecentSessions({
   sessions,
   now,
+  allMode = false,
 }: {
   sessions: NonNullable<ResumeOptions>["sessions"];
   now: number;
+  // allMode: the "+" picker fetches EVERY transcript from /api/sessions/all (on
+  // open/focus/change-push, not the 1s poll) instead of the lean prop list. The
+  // fresh-resume pane leaves it false and shows the 3 passed-in rows.
+  allMode?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
@@ -317,6 +331,45 @@ function RecentSessions({
   const [starred, setStarred] = useState<Set<string>>(new Set()); // optimistic star
   const [copied, setCopied] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  // allMode: every transcript, fetched from /api/sessions/all. Refetched on focus
+  // and on a debounced transcript-change push (the sidebar's fs.watch SSE) — never
+  // on the 1s poll. Seeds the favorite/hidden sets so existing state shows like the
+  // sidebar. A meta write (favorite/hide) doesn't touch transcripts, so it won't
+  // trigger a refetch that clobbers the optimistic set.
+  const [allRows, setAllRows] = useState<NonNullable<ResumeOptions>["sessions"]>([]);
+  useEffect(() => {
+    if (!allMode) return;
+    let alive = true;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const load = async () => {
+      try {
+        const d = await (await fetch("/api/sessions/all")).json();
+        if (!alive || !d?.sessions) return;
+        setAllRows(d.sessions);
+        setStarred(new Set(d.sessions.filter((s: { favorite?: boolean }) => s.favorite).map((s: { id: string }) => s.id)));
+        setHidden(new Set(d.sessions.filter((s: { hidden?: boolean }) => s.hidden).map((s: { id: string }) => s.id)));
+      } catch {
+        /* transient (dev recompile) — focus / next push reconciles */
+      }
+    };
+    const debounced = () => { if (t) clearTimeout(t); t = setTimeout(load, 1200); };
+    load();
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource("/api/sessions/stream");
+      es.addEventListener("sessions", debounced);
+    } catch {
+      /* no SSE — the focus listener is the fallback */
+    }
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      alive = false;
+      if (t) clearTimeout(t);
+      es?.close();
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [allMode]);
 
   // Close the ⋯ menu on any outside click, Escape, or scroll (the menu stops its
   // own propagation; items close it explicitly). Mirrors sidebar-recents.
@@ -382,20 +435,24 @@ function RecentSessions({
     setMenuPos(null);
   };
 
-  if (sessions.length === 0) return null;
+  // The picker (allMode) draws from the fetched full list; the fresh pane from the
+  // passed-in rows. allMode renders even while the fetch is in flight (empty → a
+  // brief "loading" rather than null).
+  const source = allMode ? allRows : sessions;
+  if (!allMode && sessions.length === 0) return null;
 
   const openHref = (id: string) =>
     pairParam ? `${pathname}?session=${id}&pair=${pairParam}` : `${pathname}?session=${id}`;
 
   const q = filter.trim().toLowerCase();
-  const projectNames = [...new Set(sessions.map((s) => s.project))].sort();
-  const rows = sessions
+  const projectNames = [...new Set(source.map((s) => s.project))].sort();
+  const rows = source
     .filter((s) => !hidden.has(s.id))
     .filter((s) => !projectFilter || s.project === projectFilter)
     .filter((s) => !q || `${s.id} ${s.project} ${s.snippet ?? ""}`.toLowerCase().includes(q))
     .slice()
     .sort((a, b) => b.lastActive - a.lastActive);
-  const menuSession = menuFor ? sessions.find((s) => s.id === menuFor) : null;
+  const menuSession = menuFor ? source.find((s) => s.id === menuFor) : null;
   const menuItem =
     "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
 
@@ -2686,8 +2743,9 @@ export default function Terminal({
               </div>
             </div>
 
-            {/* SESSIONS — its own ruled section (header + border live in the component) */}
-            {resume && <RecentSessions sessions={resume.sessions} now={now} />}
+            {/* SESSIONS — its own ruled section (header + border live in the component).
+                allMode = the picker shows EVERY transcript (fetched from /api/sessions/all). */}
+            <RecentSessions allMode sessions={resume?.sessions ?? []} now={now} />
           </div>
         )}
         {!staged && !previewInstall && loading && items.length === 0 && (
