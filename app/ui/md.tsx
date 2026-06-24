@@ -58,9 +58,11 @@ function inline(text: string): React.ReactNode[] {
 export default function Markdown({ text }: { text: string }) {
   const blocks: React.ReactNode[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
+  let para: string[] = []; // consecutive prose lines → ONE reflowing paragraph
+  let code: string[] | null = null; // inside a ``` fence (lines kept verbatim)
   let key = 0;
 
-  const flush = () => {
+  const flushList = () => {
     if (!list) return;
     const items = list.items;
     blocks.push(
@@ -81,7 +83,50 @@ export default function Markdown({ text }: { text: string }) {
     list = null;
   };
 
+  // A blank line / heading / list / fence ENDS a paragraph; the prose lines that
+  // accumulated are joined with spaces and rendered as one <p> so the paragraph
+  // REFLOWS to fill the container width (markdown's soft-wrap rule), instead of
+  // one stranded short <p> per hard-wrapped source line.
+  const flushPara = () => {
+    if (para.length === 0) return;
+    blocks.push(<p key={key++}>{inline(para.join(" "))}</p>);
+    para = [];
+  };
+
+  const flushCode = () => {
+    if (code === null) return;
+    blocks.push(
+      <pre
+        key={key++}
+        className="overflow-x-auto whitespace-pre rounded-md bg-zinc-900/60 p-2.5 font-mono text-[12px] leading-relaxed text-zinc-300"
+      >
+        {code.join("\n")}
+      </pre>
+    );
+    code = null;
+  };
+
+  const flush = () => {
+    flushList();
+    flushPara();
+  };
+
   for (const line of text.split("\n")) {
+    // Fenced code: ``` toggles a verbatim block — its lines are NEVER joined.
+    if (line.trim().startsWith("```")) {
+      if (code === null) {
+        flush();
+        code = [];
+      } else {
+        flushCode();
+      }
+      continue;
+    }
+    if (code !== null) {
+      code.push(line);
+      continue;
+    }
+
     const h = line.match(/^(#{1,4})\s+(.*)$/);
     const ul = line.match(/^\s*[-*]\s+(.*)$/);
     const ol = line.match(/^\s*\d+\.\s+(.*)$/);
@@ -93,27 +138,26 @@ export default function Markdown({ text }: { text: string }) {
         </p>
       );
     } else if (ul) {
-      if (list?.ordered) flush();
+      flushPara();
+      if (list?.ordered) flushList();
       if (!list) list = { ordered: false, items: [] };
       list.items.push(ul[1]);
     } else if (ol) {
-      if (list && !list.ordered) flush();
+      flushPara();
+      if (list && !list.ordered) flushList();
       if (!list) list = { ordered: true, items: [] };
       list.items.push(ol[1]);
     } else if (line.trim() === "") {
       flush();
     } else {
-      flush();
-      blocks.push(
-        <p key={key++} className="whitespace-pre-wrap">
-          {inline(line)}
-        </p>
-      );
+      flushList();
+      para.push(line);
     }
   }
+  flushCode();
   flush();
 
   // break-words (overflow-wrap, inherited) so long unbreakable tokens — UUIDs,
-  // paths, flags — wrap instead of running off a narrow reader (e.g. ⌘K).
+  // paths, flags — wrap; joined paragraphs reflow to fill the available width.
   return <div className="space-y-2 break-words">{blocks}</div>;
 }

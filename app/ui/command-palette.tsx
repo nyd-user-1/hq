@@ -726,6 +726,16 @@ export default function CommandPalette() {
       h.kind === "note" ||
       (h.kind === "file" && h.ref.endsWith(".md")));
 
+  // Live counts for the inline editor footer (mirrors the text-editor modal).
+  const editStats = useMemo(() => {
+    const trimmed = draft.trim();
+    return {
+      chars: draft.length,
+      words: trimmed ? trimmed.split(/\s+/).length : 0,
+      lines: draft ? draft.split("\n").length : 0,
+    };
+  }, [draft]);
+
   // Pencil → fetch the RAW file (frontmatter and all) and open it in the Text
   // editor in edit mode. The editor floats over the palette; on save it fires
   // hq:file-edited, which re-fetches the body here.
@@ -835,7 +845,7 @@ export default function CommandPalette() {
     >
       <div
         style={{ animation: "cmdk-pop-in 170ms cubic-bezier(0.16, 1, 0.3, 1)" }}
-        className="relative flex max-h-[72vh] w-[720px] max-w-[94vw] flex-col rounded-xl bg-zinc-950 shadow-2xl ring-1 ring-zinc-800/60"
+        className={`relative flex ${editing ? "h-[78vh]" : "max-h-[72vh]"} w-[720px] max-w-[94vw] flex-col rounded-xl bg-zinc-950 shadow-2xl ring-1 ring-zinc-800/60`}
       >
         <Boundary label="command-palette.tsx">
           {viewing ? (
@@ -857,93 +867,115 @@ export default function CommandPalette() {
                   {viewing.kind}
                 </span>
               </div>
-              <div className="relative min-h-0 min-w-0 flex-1">
-                {/* Action cluster floats top-right of the body, pinned as it
-                    scrolls. Edit mode → Save / Cancel; otherwise Edit · Copy ·
-                    Open (lucide icons so they pair). */}
-                <div className="absolute right-2 top-1 z-10 flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/90 px-1.5 py-1">
-                  {editing ? (
-                    <>
-                      <button
-                        onClick={saveEdit}
-                        disabled={savingEdit}
-                        className="px-0.5 font-mono text-[11px] text-emerald-400 transition-colors hover:text-emerald-300 disabled:text-zinc-600"
-                      >
-                        {savingEdit ? "saving…" : "save"}
-                      </button>
-                      <span className="h-3.5 w-px bg-zinc-800" />
-                      <button
-                        onClick={() => setEditing(false)}
-                        className="px-0.5 font-mono text-[11px] text-zinc-500 transition-colors hover:text-zinc-300"
-                      >
-                        cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {canEdit(viewing) && (
-                        <>
-                          <button
-                            onClick={startEdit}
-                            aria-label="Edit file"
-                            title="Edit file"
-                            className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
-                          >
-                            {/* lucide pencil */}
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-                              <path d="m15 5 4 4" />
-                            </svg>
-                          </button>
-                          <span className="h-3.5 w-px bg-zinc-800" />
-                        </>
-                      )}
-                      <ViewerCopyButton text={viewerText(body)} />
-                      <span className="h-3.5 w-px bg-zinc-800" />
-                      <button
-                        onClick={() => openInPanel(viewing)}
-                        aria-label="Open in panel"
-                        title="Open in panel"
-                        className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
-                      >
-                        {/* lucide square-arrow-out-up-right */}
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+              <div className="group relative flex min-h-0 min-w-0 flex-1 flex-col">
+                {/* Action cluster — VIEW mode only. Floats top-right and reveals
+                    on hover so it never competes with the body text for space.
+                    Edit mode uses the footer's Save instead. */}
+                {!editing && (
+                  <div className="absolute right-2 top-1 z-10 flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-950/90 px-1.5 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    {canEdit(viewing) && (
+                      <>
+                        <button
+                          onClick={startEdit}
+                          aria-label="Edit file"
+                          title="Edit file"
+                          className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
                         >
-                          <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
-                          <path d="m21 3-9 9" />
-                          <path d="M15 3h6v6" />
-                        </svg>
-                      </button>
-                    </>
-                  )}
-                </div>
+                          {/* lucide pencil */}
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+                            <path d="m15 5 4 4" />
+                          </svg>
+                        </button>
+                        <span className="h-3.5 w-px bg-zinc-800" />
+                      </>
+                    )}
+                    <ViewerCopyButton text={viewerText(body)} />
+                    <span className="h-3.5 w-px bg-zinc-800" />
+                    <button
+                      onClick={() => openInPanel(viewing)}
+                      aria-label="Open in panel"
+                      title="Open in panel"
+                      className="flex shrink-0 items-center rounded p-0.5 text-zinc-500 transition-colors hover:text-zinc-200"
+                    >
+                      {/* lucide square-arrow-out-up-right */}
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+                        <path d="m21 3-9 9" />
+                        <path d="M15 3h6v6" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
                 {editing ? (
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    spellCheck={false}
-                    autoFocus
-                    className="scrollbar-none h-full w-full resize-none rounded-md bg-zinc-900/50 p-3 font-mono text-[12px] leading-relaxed text-zinc-100 ring-1 ring-zinc-800/60 focus:outline-none focus:ring-zinc-700/70"
-                  />
+                  // Inline editor — same chrome as the full text-editor modal: a
+                  // hint line up top, a tall textarea that fills the box, and a
+                  // stats / keys / save-file footer underneath.
+                  <>
+                    <div className="-mt-1 mb-2 font-mono text-[11px] leading-relaxed">
+                      <div className="text-zinc-300">Editing</div>
+                      <div className="text-zinc-600">
+                        ↵ writes it straight back to the file (frontmatter and all).
+                      </div>
+                    </div>
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          saveEdit();
+                        }
+                      }}
+                      spellCheck={false}
+                      autoFocus
+                      className="scrollbar-none min-h-0 w-full flex-1 resize-none rounded-md bg-zinc-900/50 p-3 font-mono text-[12px] leading-relaxed text-zinc-100 ring-1 ring-zinc-800/60 focus:outline-none focus:ring-zinc-700/70"
+                    />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-zinc-800 pt-3">
+                      <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                        {savingEdit ? (
+                          <span className="text-emerald-400">saving…</span>
+                        ) : (
+                          <span>
+                            {editStats.words} words · {editStats.chars} chars ·{" "}
+                            {editStats.lines} lines
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="hidden font-mono text-[10px] text-zinc-600 sm:inline">
+                          ↵ save · ⇧↵ newline · esc close
+                        </span>
+                        <button
+                          onClick={saveEdit}
+                          disabled={savingEdit}
+                          className="rounded-md bg-orange-500/90 px-3.5 py-1.5 font-mono text-[11px] font-medium text-zinc-950 transition-colors hover:bg-orange-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                        >
+                          {savingEdit ? "saving…" : "save file"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 ) : (
-                  <div className="scrollbar-none h-full min-w-0 overflow-x-hidden overflow-y-auto pr-1">
+                  <div className="scrollbar-none min-h-0 flex-1 min-w-0 overflow-x-hidden overflow-y-auto pr-1">
                     <ViewerBodyView body={body} />
                   </div>
                 )}
