@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { turnsFor } from "@/lib/transcript";
+import { turnsFor, timelineFor } from "@/lib/transcript";
 import { retainedTranscriptText } from "@/lib/archive";
 import { getMemoryFile, getScriptFile } from "@/lib/search";
 import { getNoteFile } from "@/lib/notes";
@@ -27,6 +27,18 @@ type Body =
 
 function build(kind: string, ref: string): Body {
   switch (kind) {
+    // A single favorited turn — ref is "<session>/<uuid>" (the hq:turn address).
+    case "turn": {
+      const slash = ref.indexOf("/");
+      const session = ref.slice(0, slash);
+      const uuid = ref.slice(slash + 1);
+      const items = timelineFor(session, 1000).items as Array<{
+        uuid?: string;
+        text?: string;
+      }>;
+      const t = items.find((i) => i.uuid === uuid);
+      return { format: "markdown", content: t?.text || "_turn not found_" };
+    }
     case "transcript":
     case "session":
     case "sdk": {

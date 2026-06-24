@@ -455,6 +455,7 @@ const PAGE = 25; // how many search results to reveal per lazy-load step
 const SCOPE_CHIPS: { scope: string; label: string }[] = [
   { scope: "menu", label: "Menu" },
   { scope: "all", label: "All" },
+  { scope: "favorites", label: "Favorites" },
   { scope: "files", label: "Files" },
   { scope: "sessions", label: "Sessions" },
   { scope: "memory", label: "Memory" },
@@ -537,6 +538,24 @@ export default function CommandPalette() {
         });
       return () => {
         aliveAll = false;
+      };
+    }
+    // FAVORITES = everything starred across all three stores; rendered as hits.
+    if (scope === "favorites") {
+      let aliveF = true;
+      fetch("/api/favorites")
+        .then((r) => r.json())
+        .then((d) => {
+          if (aliveF) {
+            setHits(Array.isArray(d?.hits) ? d.hits : []);
+            setShown(PAGE);
+          }
+        })
+        .catch(() => {
+          if (aliveF) setHits([]);
+        });
+      return () => {
+        aliveF = false;
       };
     }
     // MENU with an empty query is the launcher (Actions/Navigate only, no feed).
