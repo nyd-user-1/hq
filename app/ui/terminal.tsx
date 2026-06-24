@@ -551,7 +551,7 @@ function RecentSessions({
                     onClick={(e) => openMenu(e, s.id)}
                     title="more actions"
                     aria-label="more actions"
-                    className="rounded-md bg-zinc-800/50 p-1 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-zinc-100"
+                    className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-zinc-100"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                       <circle cx="5" cy="12" r="1.6" />
