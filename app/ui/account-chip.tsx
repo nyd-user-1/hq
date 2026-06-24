@@ -80,6 +80,14 @@ const IconChevronRight = () => (
     <path d="m9 18 6-6-6-6" />
   </svg>
 );
+// lucide FlaskConical — marks the EXPERIMENTAL channel-in path (see lib/channel-mode.ts).
+const IconFlask = () => (
+  <svg {...SVG}>
+    <path d="M10 2v7.31a2 2 0 0 1-.26.98L4.5 20a1 1 0 0 0 .87 1.5h13.26a1 1 0 0 0 .87-1.5l-5.24-9.71a2 2 0 0 1-.26-.98V2" />
+    <path d="M8.5 2h7" />
+    <path d="M7 16h10" />
+  </svg>
+);
 
 function MenuRow({
   icon,
@@ -110,7 +118,39 @@ function MenuRow({
 
 export default function AccountChip() {
   const [open, setOpen] = useState(false);
+  // The EXPERIMENTAL channel-in toggle (lib/channel-mode.ts). Default OFF = the
+  // proven warm-REPL "MVP" path. This menu is the ONLY way to turn it on, so it
+  // can never engage by accident. Synced from /api/channel-mode when the menu opens.
+  const [channelOn, setChannelOn] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Pull the live toggle state each time the menu opens (cheap; reflects edits made
+  // elsewhere, e.g. a stale-state recovery, so the pill never lies).
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    fetch("/api/channel-mode")
+      .then((r) => r.json())
+      .then((d) => { if (alive) setChannelOn(!!d?.enabled); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [open]);
+
+  const toggleChannel = async () => {
+    const next = !channelOn;
+    setChannelOn(next); // optimistic; the menu stays open so the flip is visible
+    try {
+      const r = await fetch("/api/channel-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const d = await r.json();
+      setChannelOn(!!d?.enabled);
+    } catch {
+      setChannelOn(!next); // revert on failure
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -141,6 +181,29 @@ export default function AccountChip() {
             brendan@nysgpt.com
           </div>
           <MenuRow icon={<IconSettings />} label="Settings" hint="⇧⌘," onClick={close} />
+          {/* The experimental channel-in toggle. A single stateful row (not two
+              On/Off items) so the pill always reflects reality. Stays open on click
+              so the flip is visible. Amber = ON (experimental); zinc = OFF (MVP). */}
+          <button
+            role="menuitemcheckbox"
+            aria-checked={channelOn}
+            onClick={toggleChannel}
+            className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <span className={`shrink-0 ${channelOn ? "text-amber-400" : "text-zinc-400"}`}>
+              <IconFlask />
+            </span>
+            <span className="min-w-0 flex-1 truncate">
+              Channel <span className="text-zinc-600">· experimental</span>
+            </span>
+            <span
+              className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                channelOn ? "bg-amber-500/15 text-amber-300" : "bg-zinc-800 text-zinc-500"
+              }`}
+            >
+              {channelOn ? "On" : "Off"}
+            </span>
+          </button>
           <MenuRow icon={<IconGlobe />} label="Language" chevron onClick={close} />
           <MenuRow icon={<IconHelp />} label="Get help" onClick={close} />
           <div className="my-1 h-px bg-zinc-800" />

@@ -11,6 +11,7 @@ import { lineageFor, sessionBornAt } from "@/lib/lineage";
 import { getSessionsMeta } from "@/lib/sessions-meta";
 import { handoffsFor } from "@/lib/handoffs"; // HQ↔terminal control-transfer markers (NOT vault's latestHandoff above)
 import { channelFor } from "@/lib/channel"; // channel-in: is a live push-channel open for this session?
+import { isChannelEnabled } from "@/lib/channel-mode"; // the explicit experimental-path toggle (default OFF = MVP)
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,14 @@ export async function GET(req: Request) {
   // `resolved` — the post-self-pin transcript id the client renders + compares — so
   // discovery filename, channelFor() lookup, and the client's send target all align.
   // channelFor is a cheap single-file fs read; fine on this 1s poll.
-  const channelConnected = !!(resolved && channelFor(resolved));
+  //
+  // GATED on the explicit channel-mode toggle (default OFF). When OFF, this is ALWAYS
+  // false — even if a stale discovery file exists — so the send box can never silently
+  // route through the channel path. OFF = the proven warm-REPL MVP, guaranteed.
+  // `channelMode` (the global toggle) is surfaced separately so the header can show
+  // the experimental-mode flask regardless of whether THIS session is channel-aware.
+  const channelMode = isChannelEnabled();
+  const channelConnected = channelMode && !!(resolved && channelFor(resolved));
   // Only meaningful when NOT working: did the last turn end on a hard interrupt?
   // Drives the terminal's red "interrupted — awaiting new direction" border.
   const interrupted = !status && lastTurnInterrupted(resolved);
@@ -108,6 +116,7 @@ export async function GET(req: Request) {
     project,
     status,
     channelConnected, // channel-in: push-drivable (fork-free) even while working
+    channelMode, // experimental channel toggle is ON globally (drives the header flask)
     interrupted,
     diverged: rival.diverged,
     rivalLeafUuid: rival.rivalLeafUuid,

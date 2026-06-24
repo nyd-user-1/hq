@@ -715,6 +715,11 @@ export default function Terminal({
   // When true the session is fork-free (push, not --resume), so it is NEVER `locked`
   // even mid-turn — and doSend routes through POST /api/channel instead of the warm REPL.
   const [channelConnected, setChannelConnected] = useState(false);
+  // The GLOBAL experimental channel toggle (account menu → lib/channel-mode.ts).
+  // Separate from per-session channelConnected: drives the header flask so you can
+  // never be in channel mode without a visible marker, even on a session that isn't
+  // itself channel-aware yet. Default OFF = the warm-REPL MVP, no flask.
+  const [channelMode, setChannelMode] = useState(false);
   // warn-before-fork: a non-channel-aware, not-yet-live session resume-FORKS on the
   // first send (a 2nd process on one transcript → the divergence net fires). `locked`
   // only blocks the WORKING case; an IDLE plain session would fork silently. So the
@@ -1104,6 +1109,7 @@ export default function Terminal({
       // this fresh DURING an in-flight send (exactly when `locked` is read), and a
       // channel push to a busy session keeps it true across the working-tick.
       setChannelConnected(d.channelConnected ?? false);
+      setChannelMode(d.channelMode ?? false);
       setInterrupted(d.interrupted ?? false);
       // LATCH the divergence net: raise on a rival, but NEVER clear on !diverged
       // here — HQ's next write advances knownLeaf past the rival, so a server
@@ -2336,6 +2342,23 @@ export default function Terminal({
           </button>
         ) : (
           <span className="font-mono text-[11px] text-zinc-600">—</span>
+        )}
+        {/* EXPERIMENTAL channel-in marker. Shown ONLY when the global channel toggle
+            is ON (account menu). Its presence = "you are NOT in the plain warm-REPL
+            MVP": channel-aware sessions get driven via the live push channel. Absent
+            = pure MVP. Amber to read as "caution, experimental". */}
+        {channelMode && (
+          <span
+            title="Channel mode ON (experimental) — channel-aware sessions are driven via the live push channel, not the warm REPL. Turn it off in the account menu for the standard MVP path."
+            className="flex shrink-0 items-center text-amber-400"
+            aria-label="experimental channel mode on"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 2v7.31a2 2 0 0 1-.26.98L4.5 20a1 1 0 0 0 .87 1.5h13.26a1 1 0 0 0 .87-1.5l-5.24-9.71a2 2 0 0 1-.26-.98V2" />
+              <path d="M8.5 2h7" />
+              <path d="M7 16h10" />
+            </svg>
+          </span>
         )}
         {/* Panels menu — the layout-grid icon opens Activity/Metrics/Console/
             Compose/Planner/Text. Lives here in the header (per-session search now

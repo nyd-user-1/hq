@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { pushToSession, sendVerdict, channelEvents, listChannels } from "@/lib/channel";
+import { isChannelEnabled } from "@/lib/channel-mode"; // experimental-path gate (default OFF)
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -53,6 +54,13 @@ export async function POST(req: NextRequest) {
 
   // Push a message into the session (P2/P3): { content, source?, images? }
   if (typeof body.content === "string") {
+    // Hard gate: when the experimental channel toggle is OFF, refuse pushes outright.
+    // The client already won't reach here (channelConnected is forced false in the
+    // turns route), but this makes "OFF means MVP" defense-in-depth — no path drives
+    // a session through the channel unless the operator explicitly opted in.
+    if (!isChannelEnabled()) {
+      return new NextResponse("channel mode is off", { status: 409 });
+    }
     const source = typeof body.source === "string" ? body.source : undefined;
     const paths = await writeChannelImages(body.images);
     const content = paths.length
