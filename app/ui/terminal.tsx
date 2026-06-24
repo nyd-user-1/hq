@@ -2657,12 +2657,6 @@ export default function Terminal({
 
             {/* SESSIONS — its own ruled section (header + border live in the component) */}
             {resume && <RecentSessions sessions={resume.sessions} now={now} />}
-
-            {/* escape hatch — a quiet footer below both sections */}
-            <div className="flex items-center gap-2 text-[11px] text-zinc-600">
-              <span>or start it in your own terminal</span>
-              <CopyChip label="cd && claude ↗" text="claude" />
-            </div>
           </div>
         )}
         {!staged && !previewInstall && loading && items.length === 0 && (
