@@ -20,6 +20,7 @@ import {
   type PermissionDecision,
 } from "@/lib/repl";
 import { recordHandoff } from "@/lib/handoffs";
+import { isLiveTerminal } from "@/lib/sessions";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -92,9 +93,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, status: replStatus(session) });
   }
   if (action === "send") {
+    // Capture fork-ness BEFORE we resume + write — once hq sends, the last surface
+    // flips to "hq" and the signal is gone. forking = a live terminal was the writer.
+    const forking = isLiveTerminal(session);
     ensureRepl(session, { model: body.model }); // idempotent — starts if needed
     const ok = sendTurn(session, { text: body.text ?? "", images: body.images ?? [] });
-    if (ok) recordHandoff(session, "to-hq"); // HQ took the wheel (idempotent — only the first send writes)
+    // HQ took the wheel (owner-idempotent — only the first send writes). "fork-hq"
+    // when it branched a live terminal; plain "to-hq" for a cold resume / birth.
+    if (ok) recordHandoff(session, forking ? "fork-hq" : "to-hq");
     return NextResponse.json({ ok });
   }
   if (action === "stop") {

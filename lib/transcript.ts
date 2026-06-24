@@ -224,7 +224,7 @@ export type TimelineItem =
     }
   | { kind: "command"; command: string; arg: string; at: string } // local command marker (/clear, /model, …)
   | { kind: "status"; text: string; at: string } // synthetic harness event (a background agent came to rest) — a quiet marker, NOT a user turn
-  | { kind: "handoff"; direction: "to-hq" | "to-terminal"; at: string } // HQ took/released the wheel (sidecar-sourced, merged in the turns route — transcript.ts never produces this)
+  | { kind: "handoff"; direction: "to-hq" | "fork-hq" | "to-terminal"; at: string } // HQ took/released the wheel; "fork-hq" = took over a live terminal (sidecar-sourced, merged in the turns route — transcript.ts never produces this)
   | {
       kind: "tool";
       id: string;

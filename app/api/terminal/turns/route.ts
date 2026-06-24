@@ -5,7 +5,7 @@ import {
   lastTurnInterrupted,
   detectRivalBranch,
 } from "@/lib/transcript";
-import { getSessions, getRecentSessions, listLaunchProjects } from "@/lib/sessions";
+import { getSessions, getRecentSessions, listLaunchProjects, sessionSurface, isLiveTerminal } from "@/lib/sessions";
 import { latestHandoff } from "@/lib/vault";
 import { lineageFor, sessionBornAt } from "@/lib/lineage";
 import { getSessionsMeta } from "@/lib/sessions-meta";
@@ -71,6 +71,11 @@ export async function GET(req: Request) {
   // the experimental-mode flask regardless of whether THIS session is channel-aware.
   const channelMode = isChannelEnabled();
   const channelConnected = channelMode && !!(resolved && channelFor(resolved));
+  // Fork affordance: where did THIS session's last activity happen, and would the
+  // next send fork a LIVE Claude Code terminal? `liveTerminal` gates the (neutral)
+  // confirm in the send box; a cold resume just proceeds + drops a plain divider.
+  const surface = resolved ? sessionSurface(resolved) : "cc";
+  const liveTerminal = !!resolved && isLiveTerminal(resolved);
   // Only meaningful when NOT working: did the last turn end on a hard interrupt?
   // Drives the terminal's red "interrupted — awaiting new direction" border.
   const interrupted = !status && lastTurnInterrupted(resolved);
@@ -101,12 +106,15 @@ export async function GET(req: Request) {
       sessions: recent
         .filter((s) => staged || s.id !== resolved)
         .slice(0, staged ? 40 : 3)
-        .map(({ id, project, lastActive, snippet, contextTokens }) => ({
+        .map(({ id, project, lastActive, snippet, contextTokens, active, live, surface }) => ({
           id,
           project,
           lastActive,
           snippet,
           contextTokens,
+          active, // cache-warm → calm green dot
+          live, // connected channel → pulsing green dot
+          surface, // "hq" | "cc" — where the last activity happened (Last Surface column)
         })),
     };
   }
@@ -117,6 +125,8 @@ export async function GET(req: Request) {
     status,
     channelConnected, // channel-in: push-drivable (fork-free) even while working
     channelMode, // experimental channel toggle is ON globally (drives the header flask)
+    surface, // "hq" | "cc" — last activity surface for the resolved session
+    liveTerminal, // resuming would fork a live CC terminal → show the neutral confirm
     interrupted,
     diverged: rival.diverged,
     rivalLeafUuid: rival.rivalLeafUuid,

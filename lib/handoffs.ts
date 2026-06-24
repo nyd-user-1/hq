@@ -20,11 +20,22 @@ import { writeFileAtomicSync } from "./atomic";
 const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
 const STORE = path.join(STORE_DIR, "handoffs.json");
 
+// "to-hq" = hq took the wheel of a session that wasn't a live terminal (a cold
+// resume or a birth — continuity simply moves into hq). "fork-hq" = hq took the
+// wheel of a session a Claude Code terminal was LIVE on, so this branches off it.
+// "to-terminal" = the wheel went back to the TUI. The first two are the same
+// "owner = hq" edge for idempotency (see recordHandoff).
+export type HandoffDirection = "to-hq" | "fork-hq" | "to-terminal";
+
 export type Handoff = {
   sessionId: string;
-  direction: "to-hq" | "to-terminal";
+  direction: HandoffDirection;
   at: string; // ISO (new Date().toISOString()) — sorts/merges against TimelineItem.at
 };
+
+// The wheel owner an edge lands on — "to-hq"/"fork-hq" both mean hq has it.
+const owner = (d: HandoffDirection): "hq" | "terminal" =>
+  d === "to-terminal" ? "terminal" : "hq";
 
 type Store = { version: number; entries: Handoff[] };
 
@@ -67,14 +78,17 @@ export function latestHandoff(sessionId: string): Handoff | null {
 // to bound file growth.
 export function recordHandoff(
   sessionId: string,
-  direction: "to-hq" | "to-terminal",
+  direction: HandoffDirection,
 ): void {
   if (!sessionId || sessionId.startsWith("new:")) return;
   try {
     fs.mkdirSync(STORE_DIR, { recursive: true });
     const store = read();
     const last = latestHandoff(sessionId);
-    if (last && last.direction === direction) return; // already on this edge — no-op
+    // Idempotent on the OWNER edge, not the exact direction: once hq has the wheel
+    // ("fork-hq" on the forking send), the ordinary "to-hq" on every later send is a
+    // no-op — so the fork divider isn't immediately followed by a plain one.
+    if (last && owner(last.direction) === owner(direction)) return;
     store.entries = [
       ...store.entries,
       { sessionId, direction, at: new Date().toISOString() },

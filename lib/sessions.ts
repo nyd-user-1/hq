@@ -6,6 +6,7 @@ import { baseCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
 import { projectsRoot } from "./config";
 import { listChannels } from "./channel";
+import { sessionFilePath } from "./transcript";
 
 // Fleet view: every Claude Code session on this machine, from the same
 // transcripts the token meter parses. Burn comes from the meter's file
@@ -22,6 +23,8 @@ export type SessionInfo = {
   project: string;
   lastActive: number;
   active: boolean;
+  live: boolean; // a live channel is connected RIGHT NOW (pulsing dot) — distinct from `active`
+  surface: "hq" | "cc"; // where the LAST activity happened: hq (driven via `claude -p`/channel) vs CC (Claude Code terminal). SEPARATE from live/active.
   messages: number;
   weightedTokens: number;
   contextTokens: number; // current context size (last assistant entry's usage)
@@ -41,6 +44,7 @@ function tailInfo(file: string): {
   cwd: string | null;
   snippet: string;
   contextTokens: number;
+  surface: "hq" | "cc";
 } {
   const size = fs.statSync(file).size;
   const start = Math.max(0, size - TAIL);
@@ -54,6 +58,7 @@ function tailInfo(file: string): {
   let cwd: string | null = null;
   let snippet = "";
   let contextTokens = 0;
+  let lastEntrypoint: string | null = null; // last writer's surface signal
   for (const line of lines) {
     if (!line) continue;
     let e;
@@ -63,6 +68,10 @@ function tailInfo(file: string): {
       continue;
     }
     if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
+    // entrypoint rides most entries; keep the LAST one seen = the most recent
+    // writer's surface. "sdk-cli" = hq (drives via `claude -p`/channel); "cli" = a
+    // Claude Code terminal. (Stray non-hq sdk-cli runs are filtered from the lists.)
+    if (typeof e.entrypoint === "string") lastEntrypoint = e.entrypoint;
     if (e.type !== "user" && e.type !== "assistant") continue;
     const u = e.type === "assistant" ? e.message?.usage : undefined;
     if (u)
@@ -84,7 +93,54 @@ function tailInfo(file: string): {
     const cleaned = cleanText(text);
     if (cleaned) snippet = cleaned;
   }
-  return { cwd, snippet, contextTokens };
+  return { cwd, snippet, contextTokens, surface: lastEntrypoint === "sdk-cli" ? "hq" : "cc" };
+}
+
+// Where did the LAST activity in this transcript happen — "hq" (driven via
+// `claude -p` / channel → entrypoint "sdk-cli") or "cc" (a Claude Code terminal →
+// "cli")? A by-id tail read for the routes. Defaults to "cc" (the traditional
+// surface) when unknown. SEPARATE signal from live/active.
+export function sessionSurface(id: string): "hq" | "cc" {
+  const file = sessionFilePath(id);
+  try {
+    const size = fs.statSync(file).size;
+    const start = Math.max(0, size - TAIL);
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(size - start);
+    fs.readSync(fd, buf, 0, buf.length, start);
+    fs.closeSync(fd);
+    const lines = buf.toString("utf8").split("\n");
+    if (start > 0) lines.shift();
+    let last: string | null = null;
+    for (const line of lines) {
+      if (!line) continue;
+      try {
+        const e = JSON.parse(line);
+        if (typeof e.entrypoint === "string") last = e.entrypoint;
+      } catch {
+        /* skip unparseable */
+      }
+    }
+    return last === "sdk-cli" ? "hq" : "cc";
+  } catch {
+    return "cc";
+  }
+}
+
+// Would resuming this session from hq FORK a LIVE Claude Code terminal? True when
+// the transcript was written within the cache window (5 min) AND its last surface
+// was a terminal ("cc") — i.e. a terminal is plausibly the live writer right now.
+// hq-driven sessions read false (last surface "hq" → continuing isn't a fork, just
+// picking the thread back up). Drives the fork affordance (the confirm + the
+// "forked from a live terminal" divider).
+export function isLiveTerminal(id: string): boolean {
+  const file = sessionFilePath(id);
+  try {
+    if (Date.now() - fs.statSync(file).mtimeMs >= ACTIVE_MS) return false;
+  } catch {
+    return false;
+  }
+  return sessionSurface(id) === "cc";
 }
 
 // A lean "recent sessions" row for the sidebar Recents list (Claude-style).
@@ -486,8 +542,14 @@ export function getSessions(limit = 12): SessionInfo[] {
   }
   files.sort((a, b) => b.mtime - a.mtime);
 
+  // Sessions with a live (pid-alive) channel discovery → the pulsing "live" dot,
+  // same signal the sidebar uses. SEPARATE from `active` (cache-warm).
+  const liveIds = new Set(
+    listChannels().filter((ch) => pidAlive(ch.pid)).map((ch) => ch.id),
+  );
+
   return files.slice(0, limit).map(({ file, mtime }) => {
-    const { cwd, snippet, contextTokens } = tailInfo(file);
+    const { cwd, snippet, contextTokens, surface } = tailInfo(file);
     const t = totals.get(file);
     const id = path.basename(file, ".jsonl");
     const derived =
@@ -501,6 +563,8 @@ export function getSessions(limit = 12): SessionInfo[] {
       project: meta[id]?.project || derived,
       lastActive: mtime,
       active: now - mtime < ACTIVE_MS,
+      live: liveIds.has(id),
+      surface,
       messages: t?.messages ?? 0,
       weightedTokens: t ? weighted(t) : 0,
       contextTokens,

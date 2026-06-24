@@ -122,6 +122,9 @@ type ResumeOptions = {
     lastActive: number;
     snippet: string;
     contextTokens: number;
+    active: boolean; // cache-warm → calm green dot
+    live: boolean; // connected channel → pulsing green dot
+    surface: "hq" | "cc"; // where the last activity happened (Last Surface column)
   }[];
 } | null;
 
@@ -461,20 +464,23 @@ function RecentSessions({
       <div className="scrollbar-none max-h-80 overflow-y-auto rounded-lg border border-zinc-800">
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
-          <span className="w-16 shrink-0 text-center">Action</span>
-          <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pr-3">
-            <span className="w-20 shrink-0">Session</span>
-            <span className="w-24 shrink-0">Project</span>
+          <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
+            <span className="w-24 shrink-0">Session</span>
             <span className="min-w-0 flex-1">Description</span>
-            <span className="w-24 shrink-0 text-right">Context</span>
+            <span className="w-20 shrink-0">Project</span>
+            <span className="w-16 shrink-0 text-right">Context</span>
+            <span className="w-12 shrink-0 text-right">Surface</span>
             <span className="w-24 shrink-0 text-right">Last activity</span>
           </div>
+          <span className="w-16 shrink-0 text-center">Action</span>
         </div>
         <div className="divide-y divide-zinc-800/70">
           {rows.length === 0 ? (
             <p className="px-3 py-3 text-[11px] text-zinc-600">no sessions match this filter</p>
           ) : (
-            rows.map((s) => (
+            rows.map((s) => {
+              const isLive = s.live || s.active; // green dot + green id, mirroring the sidebar
+              return (
               <div
                 key={s.id}
                 data-session-row
@@ -482,7 +488,64 @@ function RecentSessions({
                   menuFor === s.id ? "bg-zinc-800/40" : "hover:bg-zinc-800/40"
                 }`}
               >
-                {/* action — the ⋯ kebab → dropdown (sidebar Recents menu), always shown */}
+                <Link
+                  href={openHref(s.id)}
+                  scroll={false}
+                  title="open this session in the terminal"
+                  className="flex min-w-0 flex-1 items-baseline gap-3 py-2 pl-3"
+                >
+                  {/* session id — a LEADING live dot + green id when live/active (a CC
+                      terminal OR hq is on it), same vocabulary as the sidebar dot. */}
+                  <span className="flex w-24 shrink-0 items-center gap-1.5 truncate text-xs font-medium tabular-nums">
+                    <span
+                      className={`size-1.5 shrink-0 rounded-full ${
+                        s.live
+                          ? "animate-pulse bg-emerald-400 shadow-[0_0_6px_1px_rgba(52,211,153,0.7)]"
+                          : s.active
+                            ? "bg-green-500"
+                            : "bg-transparent"
+                      }`}
+                    />
+                    {starred.has(s.id) && <span className="text-amber-400">★</span>}
+                    <span className={`truncate ${isLive ? "text-green-400" : "text-zinc-100"}`}>
+                      {s.id.slice(0, 8)}
+                    </span>
+                  </span>
+                  {/* description */}
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+                    {s.snippet || "—"}
+                  </span>
+                  {/* project */}
+                  <span
+                    className={`w-20 shrink-0 truncate text-[11px] ${
+                      s.project === "Unassigned" ? "text-zinc-600" : "text-zinc-400"
+                    }`}
+                  >
+                    {s.project}
+                  </span>
+                  {/* ctx — amber when the 1M window is ~70%+ full */}
+                  <span
+                    className={`w-16 shrink-0 text-right text-[11px] tabular-nums ${
+                      s.contextTokens >= CONTEXT_LIMIT * 0.7 ? "text-amber-500/90" : "text-zinc-500"
+                    }`}
+                  >
+                    {s.contextTokens > 0 ? fmtTokens(s.contextTokens) : ""}
+                  </span>
+                  {/* last surface — hq vs CC (Claude Code terminal) */}
+                  <span
+                    className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${
+                      s.surface === "hq" ? "text-emerald-500/80" : "text-zinc-600"
+                    }`}
+                    title={s.surface === "hq" ? "last worked on in hq" : "last worked on in a Claude Code terminal"}
+                  >
+                    {s.surface === "hq" ? "hq" : "CC"}
+                  </span>
+                  {/* last activity */}
+                  <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">
+                    {fmtAgo(now - s.lastActive)}
+                  </span>
+                </Link>
+                {/* action — the ⋯ kebab → dropdown (sidebar Recents menu), now trailing */}
                 <div className="flex w-16 shrink-0 items-center justify-center">
                   <button
                     onClick={(e) => openMenu(e, s.id)}
@@ -497,44 +560,9 @@ function RecentSessions({
                     </svg>
                   </button>
                 </div>
-                <Link
-                  href={openHref(s.id)}
-                  scroll={false}
-                  title="open this session in the terminal"
-                  className="flex min-w-0 flex-1 items-baseline gap-3 py-2 pr-3"
-                >
-                  {/* session id — the session's name, the first-class identifier */}
-                  <span className="flex w-20 shrink-0 items-baseline gap-1 truncate text-xs font-medium tabular-nums text-zinc-100">
-                    {starred.has(s.id) && <span className="text-amber-400">★</span>}
-                    {s.id.slice(0, 8)}
-                  </span>
-                  {/* project */}
-                  <span
-                    className={`w-24 shrink-0 truncate text-[11px] ${
-                      s.project === "Unassigned" ? "text-zinc-600" : "text-zinc-400"
-                    }`}
-                  >
-                    {s.project}
-                  </span>
-                  {/* description */}
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
-                    {s.snippet || "—"}
-                  </span>
-                  {/* ctx — amber when the 1M window is ~70%+ full */}
-                  <span
-                    className={`w-24 shrink-0 text-right text-[11px] tabular-nums ${
-                      s.contextTokens >= CONTEXT_LIMIT * 0.7 ? "text-amber-500/90" : "text-zinc-500"
-                    }`}
-                  >
-                    {s.contextTokens > 0 ? fmtTokens(s.contextTokens) : ""}
-                  </span>
-                  {/* last activity */}
-                  <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">
-                    {fmtAgo(now - s.lastActive)}
-                  </span>
-                </Link>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -715,6 +743,9 @@ export default function Terminal({
   // When true the session is fork-free (push, not --resume), so it is NEVER `locked`
   // even mid-turn — and doSend routes through POST /api/channel instead of the warm REPL.
   const [channelConnected, setChannelConnected] = useState(false);
+  // Fork affordance: the resolved session's last surface ("hq"|"cc") and whether
+  // resuming it would FORK a live Claude Code terminal. From the turns poll.
+  const [liveTerminal, setLiveTerminal] = useState(false);
   // The GLOBAL experimental channel toggle (account menu → lib/channel-mode.ts).
   // Separate from per-session channelConnected: drives the header flask so you can
   // never be in channel mode without a visible marker, even on a session that isn't
@@ -1109,6 +1140,7 @@ export default function Terminal({
       // this fresh DURING an in-flight send (exactly when `locked` is read), and a
       // channel push to a busy session keeps it true across the working-tick.
       setChannelConnected(d.channelConnected ?? false);
+      setLiveTerminal(d.liveTerminal ?? false);
       setChannelMode(d.channelMode ?? false);
       setInterrupted(d.interrupted ?? false);
       // LATCH the divergence net: raise on a rival, but NEVER clear on !diverged
@@ -1983,11 +2015,11 @@ export default function Terminal({
     const prompt = draft.trim();
     const imgs = attachments; // snapshot — survives the clear below
     if (!target || sending || (!prompt && imgs.length === 0)) return;
-    // WARN-BEFORE-FORK: reaching here with `!live` means a brand-new warm REPL is
-    // about to --resume this session = a fork (staged/locked/channel cases already
-    // returned above). Gate that FIRST send behind an explicit confirm, once per
-    // session. The draft is left untouched so confirm just re-sends it.
-    if (!live && !forkAckRef.current.has(target)) {
+    // FORK AFFORDANCE: reaching here with `!live` means hq is about to --resume this
+    // session. Only a resume that would branch a LIVE Claude Code terminal
+    // (`liveTerminal`) gets a confirm beat — a cold resume just proceeds (continuity
+    // simply moves into hq; the "resumed in hq" divider marks it). Once per session.
+    if (!live && liveTerminal && !forkAckRef.current.has(target)) {
       setForkWarn(target);
       return;
     }
@@ -2704,33 +2736,29 @@ export default function Terminal({
         {notConnected && <OnboardingConversation />}
         {!previewInstall && items.map((it, i) =>
           it.kind === "handoff" ? (
-            // HQ↔terminal control-transfer divider — cloned from the /clear
-            // command divider below. Emerald when HQ takes the wheel (matches the
-            // live pill + overlay), zinc when the TUI takes it back, so the eye
-            // reads "green = HQ has it".
-            <div
-              key={i}
-              className={`flex items-center gap-2 font-mono text-[11px] ${
-                it.direction === "to-hq" ? "text-emerald-400" : "text-zinc-500"
-              }`}
-            >
-              <span
-                className={`h-px w-6 shrink-0 ${
-                  it.direction === "to-hq" ? "bg-emerald-500/40" : "bg-zinc-800"
-                }`}
-              />
-              <span className="shrink-0">
-                {it.direction === "to-hq"
-                  ? "▸ HQ is now driving this session"
-                  : "◂ resumed in terminal"}
-                {it.at && ` · ${new Date(it.at).toLocaleTimeString()}`}
-              </span>
-              <span
-                className={`h-px min-w-6 flex-1 ${
-                  it.direction === "to-hq" ? "bg-emerald-500/40" : "bg-zinc-800"
-                }`}
-              />
-            </div>
+            // HQ↔terminal control-transfer divider — cloned from the /clear command
+            // divider below. Emerald "resumed in hq" = hq took the wheel (cold resume
+            // / birth); amber "⑂ forked from a live terminal" = it branched a session a
+            // terminal was live on; zinc when the TUI takes it back. Green/amber = hq
+            // has it, with amber flagging the branch point.
+            (() => {
+              const tone =
+                it.direction === "fork-hq"
+                  ? { text: "text-amber-400", rule: "bg-amber-500/40", label: "⑂ forked from a live terminal" }
+                  : it.direction === "to-hq"
+                    ? { text: "text-emerald-400", rule: "bg-emerald-500/40", label: "▸ resumed in hq" }
+                    : { text: "text-zinc-500", rule: "bg-zinc-800", label: "◂ resumed in terminal" };
+              return (
+                <div key={i} className={`flex items-center gap-2 font-mono text-[11px] ${tone.text}`}>
+                  <span className={`h-px w-6 shrink-0 ${tone.rule}`} />
+                  <span className="shrink-0">
+                    {tone.label}
+                    {it.at && ` · ${new Date(it.at).toLocaleTimeString()}`}
+                  </span>
+                  <span className={`h-px min-w-6 flex-1 ${tone.rule}`} />
+                </div>
+              );
+            })()
           ) : it.kind === "command" ? (
             <div
               key={i}
@@ -2989,46 +3017,34 @@ export default function Terminal({
           </div>
         </div>
       )}
-      {/* Warn-before-fork — this session isn't channel-aware, so the next send
-          can't push into the live terminal; it resumes a COPY and answers here,
-          and the two surfaces diverge. Gate the first such send behind an
-          explicit, plain-language confirm (set in doSend; cleared by either
-          button). Amber like the divergence net — same family, but PREVENTION
-          (before the fork) rather than DETECTION (after). */}
+      {/* Fork affordance (LIVE-terminal case only; cold resumes skip this and just
+          proceed). Neutral, compact-style — not an alarm: a single beat to confirm
+          hq takes the thread, since a Claude Code terminal is the live writer. On
+          confirm the send records a "fork-hq" divider. Zinc, no ⚠. */}
       {forkWarn && (
-        <div className="flex flex-col gap-1.5 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2.5 font-mono text-xs text-amber-200">
-          <p className="flex items-baseline gap-1.5 font-semibold text-amber-300">
-            <span aria-hidden>⚠</span>
-            <span>Sending will fork this session.</span>
+        <div className="flex flex-col gap-1.5 rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2.5 font-mono text-xs text-zinc-300">
+          <p className="font-semibold text-zinc-100">Continue this session in hq?</p>
+          <p className="leading-relaxed text-zinc-400">
+            This session looks active in a terminal. Continuing here makes hq the
+            writer and picks up where it left off — if you keep typing in the
+            terminal too, the two branch into separate threads from this point.
           </p>
-          <p className="pl-5 leading-relaxed text-amber-200/90">
-            This session wasn’t launched channel-aware, so hq can’t type into your
-            live terminal. Pressing send resumes a <em>copy</em> from disk and
-            answers <em>here</em> — your open terminal keeps its own thread, so the
-            two diverge (that’s the “you have a branch” warning).
-          </p>
-          <p className="pl-5 leading-relaxed text-amber-200/70">
-            Recommended: minimize or close the terminal for this session and keep
-            working in hq only, so there’s a single writer. (To avoid forking
-            entirely, relaunch it with <span className="text-amber-200">claude-hq</span> — a
-            channel-aware session pushes in live, no fork.)
-          </p>
-          <div className="flex flex-wrap gap-2 pl-5 pt-0.5">
+          <div className="flex flex-wrap gap-2 pt-0.5">
             <button
               type="button"
               onClick={confirmFork}
-              title="resume a copy here and continue in hq (forks the terminal's branch)"
-              className="rounded border border-amber-500/60 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-500/25"
+              title="continue this session in hq (branches from the terminal's thread)"
+              className="rounded border border-emerald-600/50 bg-emerald-600/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25"
             >
-              Fork &amp; continue in hq
+              Continue here
             </button>
             <button
               type="button"
               onClick={() => setForkWarn(null)}
-              title="cancel — leave your draft in the box and don’t send"
-              className="rounded border border-amber-500/20 px-2 py-0.5 text-[11px] text-amber-300/70 transition-colors hover:bg-amber-500/20"
+              title="not now — leave your draft in the box and don’t send"
+              className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800"
             >
-              Cancel
+              Not now
             </button>
           </div>
         </div>
