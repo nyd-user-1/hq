@@ -608,7 +608,10 @@ function RecentSessions({
           (an absolutely-positioned gradient), NOT a mask: mask-image on this
           rounded/bordered scroll box was unreliable in Safari and layered wrong. */}
       <div className="relative">
-      <div className="scrollbar-none max-h-[444px] overflow-y-auto rounded-lg border border-zinc-800">
+      {/* INLINE maxHeight (not a Tailwind `max-h-[444px]` arbitrary class) so the
+          height ships in the DOM and can never be stale/purged from the CSS chunk
+          — same "guaranteed to render" trick as the scrim/top-mask below. */}
+      <div className="scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: 444 }}>
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
