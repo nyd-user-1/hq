@@ -2816,7 +2816,7 @@ export default function Terminal({
         {staged && (
           // Top-aligned, full-width (matches the header rule above). Two ruled
           // sections — PROJECTS (pick a launch target) then SESSIONS (reopen one).
-          <div className="flex w-full flex-col gap-6 pb-8 pt-3 font-mono">
+          <div className="flex w-full flex-col gap-6 pb-8 pt-6 font-mono">
             {/* PROJECTS — click to SELECT a launch target (the session starts only on
                 send, never on a stray click). An even grid, clamped to 2 rows; the
                 chevron reveals the rest. */}
