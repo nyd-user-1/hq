@@ -3,12 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import {
-  NAV_HEADERS,
-  type NavHeader,
-  type NavLeaf,
-  type ToggleKey,
-} from "@/app/ui/panel-nav";
+import { NAV_HEADERS, type NavHeader, type ToggleKey } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 import { usePlanner } from "@/app/ui/planner-state";
 import { useApi } from "@/app/ui/api-state";
@@ -17,13 +12,11 @@ import { usePlugins } from "@/app/ui/plugins-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
-// The header nav bar — replaces the old single layout-grid PanelMenu. A
-// horizontal row of headers styled like the send-box model picker: bare mono
-// text buttons that EITHER drop a menu (Activity / Console / Metrics) OR open
-// their own panel directly (API / Plugins — independent client-state toggles).
-// Dropdowns open on hover and close on leave / select / outside click — the same
-// navbar feel as the old menu, just spread across the header. Source of truth is
-// NAV_HEADERS (panel-nav.ts).
+// The header nav bar — a horizontal row of dropdown headers (Activity · Console ·
+// Metrics) styled like the send-box model picker. Each dropdown lists leaves that
+// are EITHER pin-carrying route Links OR client-state toggle buttons (api / plugins
+// / planner / text). Dropdowns open on hover, close on leave / select / outside
+// click. A `cols` header lays its leaves out in a grid. Source: NAV_HEADERS.
 export default function PanelNav() {
   // All four toggle contexts, resolved once and addressed by key — leaves name a
   // ToggleKey rather than importing hooks themselves.
@@ -35,13 +28,9 @@ export default function PanelNav() {
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">
-      {NAV_HEADERS.map((h) =>
-        "toggle" in h ? (
-          <ToggleHeader key={h.title} title={h.title} t={toggles[h.toggle]} />
-        ) : (
-          <Dropdown key={h.title} header={h} toggles={toggles} />
-        ),
-      )}
+      {NAV_HEADERS.map((h) => (
+        <Dropdown key={h.title} header={h} toggles={toggles} />
+      ))}
     </nav>
   );
 }
@@ -52,27 +41,11 @@ const TRIGGER =
 const IDLE = "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200";
 const ACTIVE = "bg-zinc-800 text-zinc-100";
 
-// A direct-open header (API / Plugins) — no dropdown, just toggles its panel.
-function ToggleHeader({ title, t }: { title: string; t: Toggle }) {
-  return (
-    <button
-      type="button"
-      onClick={t.toggle}
-      title={`open the ${title} panel`}
-      className={`${TRIGGER} ${t.open ? ACTIVE : IDLE}`}
-    >
-      {title}
-    </button>
-  );
-}
-
-// A dropdown header (Activity / Console / Metrics) — drops a menu of leaves, each
-// a pin-carrying Link (route) or a button (client-state toggle).
 function Dropdown({
   header,
   toggles,
 }: {
-  header: Extract<NavHeader, { items: NavLeaf[] }>;
+  header: NavHeader;
   toggles: Record<ToggleKey, Toggle>;
 }) {
   const params = useSearchParams();
@@ -95,6 +68,7 @@ function Dropdown({
   const active = header.items.some((it) =>
     "href" in it ? it.href === pathname : toggles[it.toggle].open,
   );
+  const cols = header.cols ?? 1;
   return (
     <details
       ref={ref}
@@ -112,7 +86,11 @@ function Dropdown({
       {/* pt-1.5 is a TRANSPARENT hover-bridge (a descendant of <details>) so the
           pointer can cross the gap from trigger to menu without firing mouseleave. */}
       <div className="absolute left-0 top-full z-30 pt-1.5">
-        <div className="flex w-44 flex-col whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-950 py-1 shadow-xl">
+        <div
+          className={`whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-950 py-1 shadow-xl ${
+            cols === 2 ? "grid w-80 grid-cols-2 gap-x-1 px-1" : "flex w-44 flex-col"
+          }`}
+        >
           {header.items.map((it) =>
             "href" in it ? (
               <Link
@@ -120,7 +98,7 @@ function Dropdown({
                 href={withPins(it.href, params.toString())}
                 scroll={false}
                 onClick={close}
-                className={`px-3 py-1.5 font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
+                className={`rounded px-3 py-1.5 font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
                   it.href === pathname ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
@@ -134,7 +112,7 @@ function Dropdown({
                   toggles[it.toggle].toggle();
                   close();
                 }}
-                className={`px-3 py-1.5 text-left font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
+                className={`rounded px-3 py-1.5 text-left font-mono text-[11px] transition-colors hover:bg-zinc-900 ${
                   toggles[it.toggle].open ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >

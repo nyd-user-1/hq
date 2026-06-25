@@ -56,22 +56,20 @@ export const NAV_TARGETS: NavTarget[] = [
 ];
 
 // ── The header nav bar (panel-nav-bar.tsx) ─────────────────────────────────
-// Replaces the old single layout-grid "panels" dropdown with a horizontal nav of
-// FIVE headers, styled like the send-box model selector. THREE are dropdowns
-// (Activity / Console / Metrics) listing their destinations; TWO open their own
-// panel directly with no dropdown (API / Plugins — independent client-state
-// toggles that can sit open alongside a route panel, like the model picker's
-// siblings). This is the nav bar's source of truth for STRUCTURE + ORDER; the
-// actual routing/open-tests still run off PANEL_ROUTES (route leaves) and the
-// client-state contexts (toggle leaves). A leaf is EITHER a route (href → a
-// pin-carrying Link) OR a client-state toggle (one of the independent panels).
+// The horizontal nav: THREE dropdown headers (Activity · Console · Metrics),
+// styled like the send-box model selector. Every destination is a leaf —
+// EITHER a route (href → a pin-carrying Link) OR a client-state toggle (one of
+// the independent panels: api/planner/text/plugins, which open alongside a route
+// panel). API + Plugins used to be standalone headers; they're folded in as
+// toggle leaves now (API under Metrics, Plugins under Console). `cols` lays a
+// crowded dropdown out in a grid (Console 2×3, Metrics 2×4). Source of truth for
+// STRUCTURE + ORDER; routing/open-tests still run off PANEL_ROUTES + the
+// client-state contexts.
 export type ToggleKey = "api" | "planner" | "text" | "plugins";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey };
-export type NavHeader =
-  | { title: string; toggle: ToggleKey } // direct-open header, no dropdown
-  | { title: string; items: NavLeaf[] }; // a header that drops a menu of leaves
+export type NavHeader = { title: string; items: NavLeaf[]; cols?: number };
 
 export const NAV_HEADERS: NavHeader[] = [
   {
@@ -84,20 +82,21 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Compose", href: "/compose" },
     ],
   },
-  { title: "API", toggle: "api" },
   {
     title: "Console",
+    cols: 2, // 6 items → 2×3
     items: [
       { title: "Text", toggle: "text" },
       { title: "Tree", href: "/tree" },
       { title: "Skills", href: "/skills" },
       { title: "CMD", href: "/cmd" },
       { title: "Routines", href: "/routines" },
-      { title: "Firehose", href: "/firehose" },
+      { title: "Plugins", toggle: "plugins" },
     ],
   },
   {
     title: "Metrics",
+    cols: 2, // 8 items → 2×4
     items: [
       { title: "Usage", href: "/metrics" },
       { title: "Calls", href: "/calls" },
@@ -105,7 +104,8 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Savings", href: "/savings" },
       { title: "Memory Audit", href: "/audit" },
       { title: "Planner", toggle: "planner" },
+      { title: "API", toggle: "api" },
+      { title: "Firehose", href: "/firehose" },
     ],
   },
-  { title: "Plugins", toggle: "plugins" },
 ];

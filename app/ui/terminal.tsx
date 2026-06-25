@@ -1808,9 +1808,14 @@ export default function Terminal({
   useEffect(() => {
     if (paramKey !== "session") return; // Compose targets Terminal 1 for now
     const onCompose = (e: Event) => {
-      const text = (e as CustomEvent).detail?.text;
+      const detail = (e as CustomEvent).detail;
+      const text = detail?.text;
       if (typeof text === "string" && text)
-        setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text));
+        setDraft((d) =>
+          detail?.replace ? text : d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text,
+        );
+      // install/run prefills want the box focused so the user just hits enter.
+      if (detail?.focus) taRef.current?.focus();
     };
     window.addEventListener("hq:compose", onCompose);
     return () => window.removeEventListener("hq:compose", onCompose);
