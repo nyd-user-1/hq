@@ -604,17 +604,11 @@ function RecentSessions({
         </div>
       </div>
 
-      {/* the table */}
-      <div
-        className="scrollbar-none max-h-[55vh] overflow-y-auto rounded-lg border border-zinc-800"
-        // Bottom-edge fade — rows dissolve as they scroll down toward the send box
-        // (the live chat's streaming-fade vocabulary, here on the picker's lower
-        // edge). The sticky header stays opaque; only the bottom ~44px fades.
-        style={{
-          WebkitMaskImage: "linear-gradient(to top, transparent, #000 64px)",
-          maskImage: "linear-gradient(to top, transparent, #000 64px)",
-        }}
-      >
+      {/* the table — relative so the bottom scrim below can overlay it. A scrim
+          (an absolutely-positioned gradient), NOT a mask: mask-image on this
+          rounded/bordered scroll box was unreliable in Safari and layered wrong. */}
+      <div className="relative">
+      <div className="scrollbar-none max-h-[55vh] overflow-y-auto rounded-lg border border-zinc-800">
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
@@ -755,6 +749,10 @@ function RecentSessions({
             })
           )}
         </div>
+      </div>
+        {/* bottom scrim — rows dissolve into the page bg (zinc-950) as they scroll
+            toward the send box. pointer-events-none so it never blocks a row click. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 rounded-b-lg bg-gradient-to-t from-zinc-950 to-transparent" />
       </div>
 
       {/* row count — bottom-right under the table (scroll-only, no pagination) */}
