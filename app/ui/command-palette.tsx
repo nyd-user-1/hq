@@ -11,8 +11,6 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Boundary from "@/app/ui/boundary";
-import CmdkFilesTable from "@/app/ui/cmdk-files-table";
-import type { FileRow } from "@/lib/files-index";
 import Markdown from "@/app/ui/md";
 import { withPins } from "@/app/ui/keep-pins";
 import { NAV_TARGETS, type NavTarget } from "@/app/ui/panel-nav";
@@ -454,7 +452,8 @@ const PAGE = 25; // how many search results to reveal per lazy-load step
 // accepts the rarer ones as prefixes. "all" = no filter.
 // "menu"  = the command launcher (Actions/Navigate), commands only.
 // "all"   = the catch-all full-text search across EVERY corpus (the primary search).
-// "files" = the macOS-Finder table over every file Claude wrote to disk.
+// "files" = a light path/name + .md search (the full BROWSER is the center-column
+//           Files view; ⌘K stays a launcher).
 // the rest narrow to one corpus.
 const SCOPE_CHIPS: { scope: string; label: string }[] = [
   { scope: "menu", label: "Menu" },
@@ -506,14 +505,10 @@ export default function CommandPalette() {
 
   const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState("menu"); // ⌘K view: menu (commands) · all (search) · files (Finder table) · a corpus
+  const [scope, setScope] = useState("menu"); // ⌘K view: menu (commands) · all (search) · a corpus
   const [defaultScope, setDefaultScopeState] = useState<DefaultScope>("menu"); // which view opens (persisted)
   const [sel, setSel] = useState(0);
   const [hits, setHits] = useState<Hit[]>([]);
-  const [fileRows, setFileRows] = useState<FileRow[]>([]); // ALL view (Finder table)
-  const [filesMeta, setFilesMeta] = useState<
-    Record<string, { favorite?: boolean; title?: string }>
-  >({}); // favorites + renames overlay
   const [shown, setShown] = useState(PAGE); // lazy-load window over the Search results
   const [viewing, setViewing] = useState<Hit | null>(null); // drilled-in result
   const [body, setBody] = useState<ViewerBody | null>(null); // its fetched content
@@ -559,32 +554,12 @@ export default function CommandPalette() {
   }, [scope]);
 
   // ── Data loading: each source keyed to EXACTLY what it depends on ───────────
-  // The invariant that keeps regressing if you collapse these: scope-data (the
-  // Finder table, Favorites) depends ONLY on `scope` — it's filtered client-side,
-  // so `q` MUST NOT be a dependency, or it refetches + replaces hundreds of rows
-  // on every keystroke (the server's 5s cache hides the cost server-side, so the
-  // lag shows up only as client jank — easy to miss). ONLY the server search
-  // (All + corpus chips) depends on `q`. Three separate effects so a future edit
-  // can't silently re-couple them.
-
-  // FILES — the Finder table. Loaded once on entering the scope (or reopening);
-  // `q` filters the rows client-side (filteredRows), NEVER refetches.
-  useEffect(() => {
-    if (!open || scope !== "files") return;
-    let alive = true;
-    setHits([]);
-    fetch("/api/files-all")
-      .then((r) => r.json())
-      .then((d) => {
-        if (alive) setFileRows(Array.isArray(d?.rows) ? d.rows : []);
-      })
-      .catch(() => {
-        if (alive) setFileRows([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [open, scope]);
+  // The invariant that keeps regressing if you collapse these: scope-data
+  // (Favorites) depends ONLY on `scope`, so `q` MUST NOT be a dependency, or it
+  // refetches on every keystroke. ONLY the server search (All + corpus chips,
+  // incl. the light "Files" path/name search) depends on `q`. (The full Files
+  // BROWSER is no longer here — it's the center-column Files view; ⌘K stays a fast
+  // launcher.) Separate effects so a future edit can't silently re-couple them.
 
   // FAVORITES — everything starred across the stores. Also scope-data (no `q`).
   useEffect(() => {
@@ -611,7 +586,7 @@ export default function CommandPalette() {
   // FAVORITES are scope-data (their own effects above), so this MUST skip them —
   // otherwise it re-runs their loads on every keystroke.
   useEffect(() => {
-    if (scope === "files" || scope === "favorites") return;
+    if (scope === "favorites") return;
     const query = q.trim();
     if (scope === "menu") {
       setHits([]);
@@ -754,20 +729,6 @@ export default function CommandPalette() {
 
   const selIdx = Math.min(sel, Math.max(0, flat.length - 1));
 
-  // ALL-view rows, filtered by the query client-side (Finder-style live filter).
-  const filteredRows = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return fileRows;
-    return fileRows.filter((r) => {
-      const name = (
-        filesMeta[`${r.kind}:${r.ref}`]?.title ||
-        r.name ||
-        r.ref
-      ).toLowerCase();
-      return name.includes(query) || r.file.toLowerCase().includes(query);
-    });
-  }, [fileRows, q, filesMeta]);
-
   // Reset + focus on open.
   useEffect(() => {
     if (!open) return;
@@ -779,11 +740,6 @@ export default function CommandPalette() {
     setHits([]);
     setShown(PAGE);
     setViewing(null);
-    // Overlay store for the ALL table + result list (favorites + renames).
-    fetch("/api/file-meta")
-      .then((r) => r.json())
-      .then((d) => setFilesMeta(d?.files ?? {}))
-      .catch(() => {});
     setEditing(false);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
@@ -1261,11 +1217,9 @@ export default function CommandPalette() {
                   placeholder={
                     scope === "menu"
                       ? "Filter commands…"
-                      : scope === "files"
-                        ? "Filter files by name or path…"
-                        : scope === "all"
-                          ? "Search everything…"
-                          : `Search ${scope}…`
+                      : scope === "all"
+                        ? "Search everything…"
+                        : `Search ${scope}…`
                   }
                   spellCheck={false}
                   className="w-full bg-transparent font-mono text-[14px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
@@ -1313,25 +1267,9 @@ export default function CommandPalette() {
                 ))}
               </div>
 
-              {/* results — FILES renders the Finder table; everything else is the
-                  command/search list (ALL = the cross-corpus search). */}
-              {scope === "files" ? (
-                <CmdkFilesTable
-                  rows={filteredRows}
-                  meta={filesMeta}
-                  onOpen={(row) =>
-                    setViewing({
-                      kind: row.kind,
-                      ref: row.ref,
-                      title:
-                        filesMeta[`${row.kind}:${row.ref}`]?.title || row.name,
-                      snippet: "",
-                      at: row.modified,
-                      meta: row.meta,
-                    })
-                  }
-                />
-              ) : (
+              {/* results — the command/search list (ALL = cross-corpus search;
+                  a corpus chip = that corpus. The full Files BROWSER is the
+                  center-column Files view now, not a tab here). */}
               <div
                 ref={listRef}
                 onScroll={onListScroll}
@@ -1429,16 +1367,13 @@ export default function CommandPalette() {
                   </div>
                 )}
               </div>
-              )}
 
               {/* footer */}
               <div className="flex items-center justify-between border-t border-dashed border-zinc-800 pt-2.5 font-mono text-[10px] text-zinc-600">
                 <span>
-                  {scope === "files"
-                    ? `${filteredRows.length} file${filteredRows.length === 1 ? "" : "s"}`
-                    : total > 0
-                      ? `${total} result${total === 1 ? "" : "s"}`
-                      : `${flat.length} result${flat.length === 1 ? "" : "s"}`}
+                  {total > 0
+                    ? `${total} result${total === 1 ? "" : "s"}`
+                    : `${flat.length} result${flat.length === 1 ? "" : "s"}`}
                 </span>
                 <div className="flex items-center gap-3">
                   {/* Default-view toggle — which scope ⌘K opens to (persisted). */}

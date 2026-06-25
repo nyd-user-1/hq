@@ -9,6 +9,7 @@ import Terminal from "@/app/ui/terminal";
 import SearchTrigger from "@/app/ui/search-trigger";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import PairColumn from "@/app/ui/pair-column";
+import FilesOverlay from "@/app/ui/files-overlay";
 import { PlannerProvider } from "@/app/ui/planner-state";
 import PlannerPanel from "@/app/ui/planner-panel";
 import { ApiProvider } from "@/app/ui/api-state";
@@ -55,8 +56,10 @@ export default async function Shell({
           </SidebarColumn>
 
           {/* The protected column: a min-width floor so opening the sidebar
-              squeezes the PANEL (which can shrink), not the terminal. */}
-          <div className="flex min-w-[380px] flex-1 flex-col gap-4">
+              squeezes the PANEL (which can shrink), not the terminal. `relative`
+              so the Files browser (FilesOverlay) can cover it without touching the
+              always-mounted terminal underneath. */}
+          <div className="relative flex min-w-[380px] flex-1 flex-col gap-4">
             {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
                 remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
             <PairColumn initialFocus={focusDefault}>
@@ -75,6 +78,11 @@ export default async function Shell({
               </Boundary>
             </PairColumn>
             {children}
+            {/* Files browser — covers the center when ?center=files; the terminal
+                stays mounted + live behind it. Suspense for useSearchParams. */}
+            <Suspense fallback={null}>
+              <FilesOverlay />
+            </Suspense>
           </div>
 
           {/* min-w-0 (not shrink-0) so the panel yields when the row is tight —

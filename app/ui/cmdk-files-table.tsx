@@ -86,6 +86,8 @@ function load<T>(key: string, ok: (v: unknown) => v is T, fallback: T): T {
 }
 
 const rowKey = (r: FileRow) => `${r.kind}:${r.ref}`;
+const PAGE = 60; // rows rendered up front; more reveal on scroll (windowed so the
+// corpus size never costs DOM — the whole point of moving Files out of the modal)
 // dropdown item styling — matches the session table's ⋯ menu 1:1
 const MENU_ITEM =
   "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
@@ -112,11 +114,14 @@ export default function CmdkFilesTable({
     { x: number; y: number; kind: "cols" } | { x: number; y: number; kind: "row"; row: FileRow } | null
   >(null);
   const [localMeta, setLocalMeta] = useState<FilesMeta>(meta);
+  const [shown, setShown] = useState(PAGE); // lazy-load window over the sorted rows
 
   useEffect(() => {
     setHidden(new Set(load(HIDDEN_KEY, (v): v is ColKey[] => Array.isArray(v), DEFAULT_HIDDEN)));
   }, []);
   useEffect(() => setLocalMeta(meta), [meta]);
+  // a new filter/sort starts the window back at the top
+  useEffect(() => setShown(PAGE), [rows, sort]);
 
   // close the popover on any outside interaction
   useEffect(() => {
@@ -211,7 +216,14 @@ export default function CmdkFilesTable({
 
   return (
     <div className="scrollbar-none -mr-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden pr-2">
-      <div className="scrollbar-none min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+      <div
+        className="scrollbar-none min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (shown < sorted.length && el.scrollHeight - el.scrollTop - el.clientHeight < 240)
+            setShown((s) => Math.min(s + PAGE, sorted.length));
+        }}
+      >
         <table className="w-full table-fixed border-collapse font-mono text-[11px]">
           <colgroup>
             {visible.map((k) => <col key={k} style={COLS[k].width ? { width: COLS[k].width! } : undefined} />)}
@@ -246,7 +258,7 @@ export default function CmdkFilesTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => {
+            {sorted.slice(0, shown).map((r) => {
               const isOpen = openRowKey === rowKey(r);
               return (
                 <tr
