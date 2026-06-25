@@ -559,7 +559,7 @@ function RecentSessions({
     <div className="flex flex-col gap-3">
       {/* header — SearchField (left, narrowed) IN LINE with the "Filter" (by
           project) dropdown on the right; the Shipped feed / Components control pair. */}
-      <div className="flex items-end gap-2 border-b border-zinc-800/60 pb-2">
+      <div className="flex items-end gap-2 pb-0.5">
         <div className="w-72 max-w-[60%] shrink-0">
           <SearchField
             value={filter}
@@ -611,8 +611,8 @@ function RecentSessions({
         // (the live chat's streaming-fade vocabulary, here on the picker's lower
         // edge). The sticky header stays opaque; only the bottom ~44px fades.
         style={{
-          WebkitMaskImage: "linear-gradient(to bottom, #000 calc(100% - 44px), transparent)",
-          maskImage: "linear-gradient(to bottom, #000 calc(100% - 44px), transparent)",
+          WebkitMaskImage: "linear-gradient(to top, transparent, #000 64px)",
+          maskImage: "linear-gradient(to top, transparent, #000 64px)",
         }}
       >
         {/* fixed (sticky) column header — same column widths as the rows below */}
