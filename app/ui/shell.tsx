@@ -15,6 +15,8 @@ import { ApiProvider } from "@/app/ui/api-state";
 import ApiPanel from "@/app/ui/api-panel";
 import { PluginsProvider } from "@/app/ui/plugins-state";
 import PluginsPanel from "@/app/ui/plugins-panel";
+import { PreviewProvider } from "@/app/ui/preview-state";
+import PreviewPanel from "@/app/ui/preview-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
@@ -48,6 +50,7 @@ export default async function Shell({
       <PlannerProvider>
       <ApiProvider>
       <PluginsProvider>
+      <PreviewProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -95,6 +98,9 @@ export default async function Shell({
           {/* The independent Plugins library panel's own portal root — a peer that
               can sit open alongside the route panel, the planner, and the API. */}
           <div id="plugins-panel-root" className="flex h-full min-w-0" />
+          {/* The independent Preview panel's own portal root — the in-app live
+              view of a project's dev server, open alongside everything else. */}
+          <div id="preview-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -105,8 +111,10 @@ export default async function Shell({
       <PlannerPanel />
       <ApiPanel />
       <PluginsPanel />
+      <PreviewPanel />
       <TextEditor />
       </TextEditorProvider>
+      </PreviewProvider>
       </PluginsProvider>
       </ApiProvider>
       </PlannerProvider>
