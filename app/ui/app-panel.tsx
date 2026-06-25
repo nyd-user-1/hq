@@ -12,11 +12,15 @@ export default function AppPanel({
   open,
   onClose,
   rootId = "app-panel-root",
+  widthClass,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   rootId?: string; // portal target; defaults to the route panel's root
+  // override the COLLAPSED width (expanded is always 42vw). Lets a specific panel
+  // sit narrower than the default third — e.g. the Plugins library at ~1/3.
+  widthClass?: string;
   children: React.ReactNode;
 }) {
   const [root, setRoot] = useState<Element | null>(null);
@@ -38,7 +42,7 @@ export default function AppPanel({
   // 58vw − chrome > 42vw for any real viewport).
   const w = expanded
     ? "sm:w-[42vw]"
-    : "sm:w-[min(360px,40vw)] xl:w-[min(420px,40vw)]";
+    : (widthClass ?? "sm:w-[min(360px,40vw)] xl:w-[min(420px,40vw)]");
 
   return createPortal(
     <div

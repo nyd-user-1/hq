@@ -34,7 +34,7 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "ButtonChipIcon", file: "app/ui/button-chip-icon.tsx", kind: "presentational", status: "approved", desc: "Square icon chip-button — sidebar toggle, search, panel expand/close all use it." },
   { name: "ButtonChipAction", file: "app/ui/button-chip-action.tsx", kind: "presentational", status: "approved", desc: "“+ label” action chip with an accent — the send box's + attach / + todo." },
   { name: "SearchField", file: "app/ui/search-field.tsx", kind: "presentational", status: "approved", desc: "Generic controlled search box (value/onChange) — the Components filter uses it." },
-  { name: "PanelMenu", file: "app/ui/panel-menu.tsx", kind: "presentational", status: "approved", desc: "BoundaryChip variant (▼) opening Activity/Metrics/Console/Compose; dashed menu + info-circle chip." },
+  { name: "PanelNav", file: "app/ui/panel-nav-bar.tsx", kind: "presentational", status: "approved", desc: "Horizontal header nav (Activity ▾ · API · Console ▾ · Metrics ▾ · Plugins) styled like the send-box model picker; dropdown headers + direct-open toggle headers. Source of truth: NAV_HEADERS." },
   { name: "CommitLink", file: "app/ui/commit-link.tsx", kind: "presentational", status: "approved", desc: "Chat-reply sha chip → opens the diff in Shipped, carrying the terminal pins (withPins)." },
   { name: "Markdown", file: "app/ui/md.tsx", kind: "presentational", status: "approved", desc: "Lightweight markdown renderer; emits CopyCode for inline code." },
   { name: "CopyText", file: "app/ui/copy-text.tsx", kind: "presentational", status: "approved", desc: "Click-to-copy text wrapper — overlaps CopyCode; candidate to fold into the copy-chip family." },

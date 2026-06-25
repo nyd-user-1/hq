@@ -54,3 +54,58 @@ export const NAV_TARGETS: NavTarget[] = [
   // global search now; the magnifier chip still opens the full /search page.)
   { title: "Compose", href: "/compose", group: "", keywords: "tray assemble send refs" },
 ];
+
+// ── The header nav bar (panel-nav-bar.tsx) ─────────────────────────────────
+// Replaces the old single layout-grid "panels" dropdown with a horizontal nav of
+// FIVE headers, styled like the send-box model selector. THREE are dropdowns
+// (Activity / Console / Metrics) listing their destinations; TWO open their own
+// panel directly with no dropdown (API / Plugins — independent client-state
+// toggles that can sit open alongside a route panel, like the model picker's
+// siblings). This is the nav bar's source of truth for STRUCTURE + ORDER; the
+// actual routing/open-tests still run off PANEL_ROUTES (route leaves) and the
+// client-state contexts (toggle leaves). A leaf is EITHER a route (href → a
+// pin-carrying Link) OR a client-state toggle (one of the independent panels).
+export type ToggleKey = "api" | "planner" | "text" | "plugins";
+export type NavLeaf =
+  | { title: string; href: string }
+  | { title: string; toggle: ToggleKey };
+export type NavHeader =
+  | { title: string; toggle: ToggleKey } // direct-open header, no dropdown
+  | { title: string; items: NavLeaf[] }; // a header that drops a menu of leaves
+
+export const NAV_HEADERS: NavHeader[] = [
+  {
+    title: "Activity",
+    items: [
+      { title: "Projects", href: "/projects" },
+      { title: "To Do", href: "/todo" },
+      { title: "Components", href: "/components" },
+      { title: "Shipped", href: "/shipped" },
+      { title: "Compose", href: "/compose" },
+    ],
+  },
+  { title: "API", toggle: "api" },
+  {
+    title: "Console",
+    items: [
+      { title: "Text", toggle: "text" },
+      { title: "Tree", href: "/tree" },
+      { title: "Skills", href: "/skills" },
+      { title: "CMD", href: "/cmd" },
+      { title: "Routines", href: "/routines" },
+      { title: "Firehose", href: "/firehose" },
+    ],
+  },
+  {
+    title: "Metrics",
+    items: [
+      { title: "Usage", href: "/metrics" },
+      { title: "Calls", href: "/calls" },
+      { title: "Guardrails", href: "/guardrails" },
+      { title: "Savings", href: "/savings" },
+      { title: "Memory Audit", href: "/audit" },
+      { title: "Planner", toggle: "planner" },
+    ],
+  },
+  { title: "Plugins", toggle: "plugins" },
+];
