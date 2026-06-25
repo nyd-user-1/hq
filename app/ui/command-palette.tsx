@@ -546,6 +546,18 @@ export default function CommandPalette() {
     }
   }, []);
 
+  // ←/→ step through the scope chips (Menu · All · Files · …) from the keyboard,
+  // wrapping at the ends. Bound at the input's text edges so it never fights the
+  // caret mid-query. Resets the result selection to the top of the new corpus.
+  const cycleScope = useCallback((dir: 1 | -1) => {
+    const order = SCOPE_CHIPS.map((c) => c.scope);
+    const i = order.indexOf(scope);
+    const next = order[(i + dir + order.length) % order.length];
+    setScope(next);
+    setSel(0);
+    inputRef.current?.focus();
+  }, [scope]);
+
   // Debounced universal search as you type → /api/command-search (corpus-balanced,
   // so Docs + every corpus surface, not just the newest few). A big limit feeds the
   // lazy-loaded list; we reveal PAGE at a time client-side.
@@ -1206,6 +1218,28 @@ export default function CommandPalette() {
                     setSel(0);
                   }}
                   onKeyDown={(e) => {
+                    // ←/→ step through the scope chips, but only at the caret
+                    // edges so they still move the cursor mid-query: → at the end,
+                    // ← at the start (an empty query satisfies both).
+                    const el = e.currentTarget;
+                    if (
+                      e.key === "ArrowRight" &&
+                      el.selectionStart === q.length &&
+                      el.selectionEnd === q.length
+                    ) {
+                      e.preventDefault();
+                      cycleScope(1);
+                      return;
+                    }
+                    if (
+                      e.key === "ArrowLeft" &&
+                      el.selectionStart === 0 &&
+                      el.selectionEnd === 0
+                    ) {
+                      e.preventDefault();
+                      cycleScope(-1);
+                      return;
+                    }
                     // Backspace on an empty query clears an active scope chip.
                     if (e.key === "Backspace" && !q && scope !== "menu") {
                       e.preventDefault();
@@ -1415,7 +1449,7 @@ export default function CommandPalette() {
                       </button>
                     ))}
                   </span>
-                  <span className="hidden sm:inline">↑↓ navigate · ↵ open · esc close</span>
+                  <span className="hidden sm:inline">↑↓ navigate · ←→ scope · ↵ open · esc close</span>
                 </div>
               </div>
             </div>
