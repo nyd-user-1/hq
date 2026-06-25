@@ -604,14 +604,12 @@ function RecentSessions({
         </div>
       </div>
 
-      {/* the table — relative so the bottom scrim below can overlay it. A scrim
-          (an absolutely-positioned gradient), NOT a mask: mask-image on this
-          rounded/bordered scroll box was unreliable in Safari and layered wrong. */}
-      <div className="relative">
-      {/* INLINE maxHeight (not a Tailwind `max-h-[444px]` arbitrary class) so the
-          height ships in the DOM and can never be stale/purged from the CSS chunk
-          — same "guaranteed to render" trick as the scrim/top-mask below. */}
-      <div className="scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: 444 }}>
+      {/* The session list — a plain bordered scroll box. NO edge fade/scrim (the
+          gradient read as the table "running under" the send box). Capped at 444px,
+          but it SHRINKS on shorter windows so it always clears the send box with a
+          gap instead of sliding behind it — min(444, viewport − everything-else).
+          INLINE so the cap ships in the DOM (can't be purged from the CSS chunk). */}
+      <div className="scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: "min(444px, calc(100dvh - 490px))" }}>
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
@@ -752,15 +750,6 @@ function RecentSessions({
             })
           )}
         </div>
-      </div>
-        {/* bottom scrim — rows dissolve into the page bg (zinc-950) as they scroll
-            toward the send box. INLINE gradient (no Tailwind class dependency) +
-            z-20 so it definitely renders and paints above the rows. pointer-events-
-            none so it never blocks a row click. */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-16 rounded-b-lg"
-          style={{ background: "linear-gradient(to top, #09090b 0%, rgba(9,9,11,0) 100%)" }}
-        />
       </div>
 
       {/* row count — bottom-right under the table (scroll-only, no pagination) */}
