@@ -11,7 +11,7 @@ import TodoMenu from "@/app/ui/todo-menu";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import SendBoxSearch from "@/app/ui/send-box-search";
 import Tooltip from "@/app/ui/tooltip";
-import PanelMenu from "@/app/ui/panel-menu";
+import PanelNav from "@/app/ui/panel-nav-bar";
 import { useRepl } from "@/app/ui/use-repl";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
@@ -556,7 +556,7 @@ function RecentSessions({
     "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={`flex flex-col gap-3 ${allMode ? "mt-6" : ""}`}>
       {/* header — SearchField (left, narrowed) IN LINE with the "Filter" (by
           project) dropdown on the right; the Shipped feed / Components control pair. */}
       <div className="flex items-end gap-2 pb-0.5">
@@ -608,8 +608,10 @@ function RecentSessions({
           gradient read as the table "running under" the send box). Capped at 444px,
           but it SHRINKS on shorter windows so it always clears the send box with a
           gap instead of sliding behind it — min(444, viewport − everything-else).
-          INLINE so the cap ships in the DOM (can't be purged from the CSS chunk). */}
-      <div className="scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: "min(444px, calc(100dvh - 490px))" }}>
+          INLINE so the cap ships in the DOM (can't be purged from the CSS chunk).
+          The −526 (vs −490) absorbs the mt-6/mt-3 spacing added above, so the gap
+          above the send box is preserved on short windows. */}
+      <div className="mt-3 scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: "min(444px, calc(100dvh - 526px))" }}>
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
@@ -2643,10 +2645,10 @@ export default function Terminal({
             </svg>
           </span>
         )}
-        {/* Panels menu — the layout-grid icon opens Activity/Metrics/Console/
-            Compose/Planner/Text. Lives here in the header (per-session search now
-            lives only in the send box). */}
-        <PanelMenu />
+        {/* Panel nav — a horizontal row of headers (Activity ▾ · API · Console ▾ ·
+            Metrics ▾ · Plugins) replacing the old layout-grid dropdown. Lives here
+            in the header (per-session search now lives only in the send box). */}
+        <PanelNav />
         {/* The /clear chain: this session's tied line of continuations.
             Click a row to show that session in the terminal. */}
         {lineage?.chain && (
