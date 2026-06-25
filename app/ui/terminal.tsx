@@ -565,7 +565,16 @@ function RecentSessions({
       </div>
 
       {/* the table */}
-      <div className="scrollbar-none max-h-[55vh] overflow-y-auto rounded-lg border border-zinc-800">
+      <div
+        className="scrollbar-none max-h-[55vh] overflow-y-auto rounded-lg border border-zinc-800"
+        // Bottom-edge fade — rows dissolve as they scroll down toward the send box
+        // (the live chat's streaming-fade vocabulary, here on the picker's lower
+        // edge). The sticky header stays opaque; only the bottom ~44px fades.
+        style={{
+          WebkitMaskImage: "linear-gradient(to bottom, #000 calc(100% - 44px), transparent)",
+          maskImage: "linear-gradient(to bottom, #000 calc(100% - 44px), transparent)",
+        }}
+      >
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
