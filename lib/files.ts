@@ -31,6 +31,7 @@ export type FileRecord = {
   ext: string; // extension without the dot, e.g. "tsx" ("" if none)
   bytes: number;
   mtime: number; // ms
+  birthtime: number; // ms, -1 if unavailable — the Finder table's Created column
 };
 
 let cache: { at: number; files: FileRecord[] } | null = null;
@@ -62,6 +63,7 @@ function walk(dir: string, out: FileRecord[]) {
         ext: path.extname(e.name).replace(/^\./, ""),
         bytes: st.size,
         mtime: st.mtimeMs,
+        birthtime: st.birthtimeMs || -1,
       });
     }
   }
@@ -95,6 +97,7 @@ function rootFiles(out: FileRecord[]) {
       ext: path.extname(e.name).replace(/^\./, ""),
       bytes: st.size,
       mtime: st.mtimeMs,
+      birthtime: st.birthtimeMs || -1,
     });
   }
 }

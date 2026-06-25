@@ -4,10 +4,14 @@ import { metadataCorpus, memoryFilePath } from "./search";
 import { getArchiveSessions } from "./archive";
 import { NOTES_DIR } from "./notes";
 import { sessionFilePath } from "./transcript";
+import { getFiles } from "./files";
 
-// Finder-style listing of the FILE-BACKED items HQ tracks — notes, memory,
-// skills, and EVERY transcript (all-time, not just recent) — with real fs.stat
-// metadata (modified / created / size). The ALL view's data source. Non-file
+// Finder-style listing of EVERY file Claude wrote to disk — HQ's macOS-Finder:
+// notes, memory (incl. MEMORY.md), skills, every transcript (all-time), AND the
+// repo source files under ~/code/hq (app/lib/scripts + root files like CLAUDE.md
+// / AGENTS.md) — each with real fs.stat metadata (modified / created / size).
+// The "Files" view's data source. We READ what's already on disk under ~/.claude
+// and the repo — no copies, no bloat, just a full picture of the output. Non-file
 // corpora (todos / commits / projects / components) live in their own scope
 // chips: they have no file size/created. macOS-only columns (Date Added / Last
 // Opened / Tags) are omitted — Spotlight/xattr metadata, not in fs.stat.
@@ -99,24 +103,24 @@ export function filesIndex(): FileRow[] {
     });
   }
 
-  // MEMORY.md is excluded from the SEARCHABLE memory corpus (it's the index of
-  // all memories, not a note) — but it IS a real file, so surface it in the table.
-  try {
-    const p = memoryFilePath("MEMORY.md");
-    const st = fs.statSync(p);
+  // Repo source files — everything Claude wrote under ~/code/hq (app/lib/scripts +
+  // root files like CLAUDE.md / AGENTS.md / next.config.ts). getFiles() already
+  // stat'd each (size / mtime / birthtime), so this is a cheap map, not a re-walk.
+  // This is what makes "Files" a true Finder over ALL output, not just ~/.claude.
+  for (const f of getFiles()) {
     rows.push({
-      kind: "memory",
-      ref: "MEMORY.md",
-      name: "MEMORY",
-      file: "MEMORY.md",
-      modified: st.mtimeMs,
-      created: st.birthtimeMs || -1,
-      size: st.size,
-      meta: "index",
+      kind: "file",
+      ref: f.rel,
+      name: f.name,
+      file: f.rel,
+      modified: f.mtime,
+      created: f.birthtime,
+      size: f.bytes,
+      meta: f.ext ? "." + f.ext : "",
     });
-  } catch {
-    /* no MEMORY.md on this machine */
   }
+  // (MEMORY.md needs no special-case anymore — it flows through metadataCorpus
+  // now that it's part of the searchable memory corpus.)
 
   rows.sort((a, b) => b.modified - a.modified);
   cache = { at: Date.now(), rows };
