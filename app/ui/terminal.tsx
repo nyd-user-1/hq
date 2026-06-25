@@ -1823,14 +1823,6 @@ export default function Terminal({
     return () => window.removeEventListener("hq:compose", onCompose);
   }, [paramKey]);
 
-  // Mirror the draft out so panels (e.g. the plugin install switch) can reflect
-  // whether their prefilled command is still in the box — and flip off if the
-  // user clears or edits it.
-  useEffect(() => {
-    if (paramKey !== "session") return;
-    window.dispatchEvent(new CustomEvent("hq:draft", { detail: { text: draft } }));
-  }, [draft, paramKey]);
-
   // Capture the current draft as a to-do on the HQ list, then clear the box.
   async function todoDraft() {
     const t = draft.trim();
