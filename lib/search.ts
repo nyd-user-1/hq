@@ -20,13 +20,23 @@ import { listDocs, docsText, DOCS_DIR } from "./docs";
 
 // Universal search over everything HQ can see. Two flavors of corpus:
 //  • CONTENT — full text of the thing (transcripts via the persisted index;
-//    memory / notes / scripts read live).
+//    memory / notes / scripts read live; repo .md instruction files — CLAUDE.md,
+//    AGENTS.md, README — read live too).
 //  • METADATA — the thing's identity, not its body (sessions/sdk by title +
 //    project + branch; files by path; components by name + desc; commits by
 //    message; todos by text + body; projects by name; skills by name + desc).
 // "transcripts" (conversation body) and "sessions" (session identity) are
 // deliberately separate scopes — a different search, honestly labelled.
 // Substring/token match with a context snippet, ranked newest-first.
+//
+// THE CONTRACT — surface everything Claude wrote to disk. If a file exists under
+// ~/.claude/** or the repo, it is FINDABLE in "all" search. No corpus reader may
+// silently drop a file BY TYPE (MEMORY.md, CLAUDE.md, the component registry, …
+// were all exclusions we've removed). The only permitted limits are RECENCY caps
+// (e.g. commits to the last 200/30d, sessions to 1000) — perf bounds on the
+// *browse*, never a content filter on *search* — and each is commented as such.
+// Adding a corpus = add it to SCOPES + the "all" fan-out, not gate it behind its
+// own chip.
 
 const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
 const MEMORY_DIR = path.join(
@@ -60,6 +70,24 @@ function memoRead<T>(key: string, fn: () => T): T {
   return val;
 }
 const cachedFiles = () => memoRead("files", () => getFiles());
+// Repo markdown bodies (CLAUDE.md, AGENTS.md, README, any *.md in the source
+// roots) keyed by repo-rel path — the instruction/index files Claude writes to
+// the repo, made FULL-TEXT searchable (not just findable by filename). Bounded to
+// .md (a handful of files) and cached 5s like the other live reads, so scoreNorm
+// runs over cached bytes. The deliberate exception to "files corpus = path only".
+const repoMarkdown = () =>
+  memoRead("repoMarkdown", () => {
+    const out = new Map<string, string>();
+    for (const f of cachedFiles()) {
+      if (f.ext !== "md") continue;
+      try {
+        out.set(f.rel, fs.readFileSync(f.path, "utf8"));
+      } catch {
+        // vanished mid-scan
+      }
+    }
+    return out;
+  });
 const cachedSkillsList = () => memoRead("skills", () => getSkills());
 const cachedRecent = () => memoRead("recent1000", () => getRecentSessions(1000));
 const cachedSdk = () => memoRead("sdk200", () => getSdkSessions(200));
@@ -134,7 +162,11 @@ const memoryDocs = () =>
   memoRead("memoryDocs", () => {
     const byName = new Map<string, FileDoc>();
     for (const dir of memoryDirs())
-      for (const f of readDir(dir, (n) => n.endsWith(".md") && n !== "MEMORY.md")) {
+      // MEMORY.md (the index of all notes) is a real file Claude maintains on
+      // disk, so it IS searchable — the surface-everything contract. It used to
+      // be filtered out here as "not a note"; now a query for an index line finds
+      // it like any other memory.
+      for (const f of readDir(dir, (n) => n.endsWith(".md"))) {
         const prev = byName.get(f.name);
         if (!prev || f.mtime > prev.mtime) byName.set(f.name, f); // same note in two slugs → keep newest
       }
@@ -373,23 +405,32 @@ function searchSessionRows(
   return hits;
 }
 
-// Files — match a file by its repo-relative PATH (name + dirs + ext). v1 is
-// name/path search; full content grep is the deferred v2. normalize() splits
-// "planner-panel.tsx" → "planner panel tsx", so "planner", "tsx", or the phrase
-// "planner panel" all hit.
+// Files — match a file by its repo-relative PATH (name + dirs + ext). normalize()
+// splits "planner-panel.tsx" → "planner panel tsx", so "planner", "tsx", or the
+// phrase "planner panel" all hit. Repo .md instruction files (CLAUDE.md/AGENTS.md/
+// README) ALSO match on CONTENT — searching "localhost trust boundary" surfaces
+// AGENTS.md, not just its filename. Full content grep for source files is still
+// the deferred v2; the .md exception keeps it cheap (a handful of files).
 function searchFilesCorpus(toks: string[]): SearchHit[] {
+  const md = repoMarkdown();
   const hits: SearchHit[] = [];
   for (const f of cachedFiles()) {
-    const mt = sc(f.rel, toks);
-    if (mt.score === 0) continue;
+    const pathMt = sc(f.rel, toks);
+    const body = md.get(f.rel);
+    const bodyMt = body ? scoreNorm(normalize(body), toks) : { score: 0, phrase: false };
+    // Best of path vs. content; a content hit yields a body snippet, a path hit
+    // shows the path (so a filename match still reads as "where it lives").
+    const contentWins = bodyMt.score > pathMt.score;
+    const best = contentWins ? bodyMt : pathMt;
+    if (best.score === 0) continue;
     hits.push({
       kind: "file",
       ref: f.rel,
       title: f.name,
-      snippet: f.rel,
+      snippet: contentWins && body ? snippetAround(body, toks[0]) : f.rel,
       at: f.mtime,
-      score: mt.score,
-      phrase: mt.phrase,
+      score: best.score,
+      phrase: best.phrase,
       path: f.rel,
       meta: f.ext ? "." + f.ext : "",
     });
@@ -421,6 +462,9 @@ function searchComponentsCorpus(toks: string[]): SearchHit[] {
 
 // Commits — `git log` across ~/code is the one expensive read here (~1-2s), so
 // memoize it: a 10s in-process TTL covers a burst of searches without re-shelling.
+// The 200-commit / 30-day window is a PERF bound on the git shell-out (the
+// permitted kind of cap per the contract), not a content filter — raise it if
+// "find that commit from two months ago" becomes a real gap.
 let shippedCache: { at: number; ships: Ship[] } | null = null;
 function cachedShipped(): Ship[] {
   const now = Date.now();
@@ -628,7 +672,7 @@ export function recent(
     let names: string[] = [];
     try { names = fs.readdirSync(MEMORY_DIR); } catch { names = []; }
     for (const name of names) {
-      if (!name.endsWith(".md") || name === "MEMORY.md") continue;
+      if (!name.endsWith(".md")) continue; // MEMORY.md included — it's a real file (surface-everything)
       const full = path.join(MEMORY_DIR, name);
       try {
         out.push({
