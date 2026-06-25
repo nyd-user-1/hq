@@ -19,6 +19,23 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "*": ["**/.claude/**", "**/*.tsbuildinfo"],
   },
+  // DEV-ONLY anti-staleness. The recurring "old CSS until I fight the dev server"
+  // bug is Safari's: `next dev` serves chunks under STABLE urls (e.g.
+  // `[root-of-the-server]__….css`), and a normal ⌘R revalidates the document but
+  // re-uses those subresources from cache without rechecking (only ⌘⇧R bypasses
+  // it). Force `no-store` on everything in dev so the browser can't cache a chunk
+  // OR bfcache the page → a plain reload always shows the latest build, no hard-
+  // refresh / Disable-Caches needed. Prod is untouched (chunks stay content-hashed
+  // + immutable): this returns nothing when building for production.
+  async headers() {
+    if (process.env.NODE_ENV === "production") return [];
+    return [
+      {
+        source: "/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
