@@ -14,6 +14,7 @@ import { usePlanner } from "@/app/ui/planner-state";
 import { useApi } from "@/app/ui/api-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 import { usePlugins } from "@/app/ui/plugins-state";
+import { useChangelog } from "@/app/ui/changelog-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -32,6 +33,7 @@ export default function PanelNav() {
     api: useApi(),
     text: useTextEditor(),
     plugins: usePlugins(),
+    changelog: useChangelog(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">

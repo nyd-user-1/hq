@@ -65,7 +65,7 @@ export const NAV_TARGETS: NavTarget[] = [
 // actual routing/open-tests still run off PANEL_ROUTES (route leaves) and the
 // client-state contexts (toggle leaves). A leaf is EITHER a route (href → a
 // pin-carrying Link) OR a client-state toggle (one of the independent panels).
-export type ToggleKey = "api" | "planner" | "text" | "plugins";
+export type ToggleKey = "api" | "planner" | "text" | "plugins" | "changelog";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey };
@@ -81,6 +81,7 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "To Do", href: "/todo" },
       { title: "Components", href: "/components" },
       { title: "Shipped", href: "/shipped" },
+      { title: "Changelog", toggle: "changelog" },
       { title: "Compose", href: "/compose" },
     ],
   },

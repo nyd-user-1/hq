@@ -16,6 +16,8 @@ import { ApiProvider } from "@/app/ui/api-state";
 import ApiPanel from "@/app/ui/api-panel";
 import { PluginsProvider } from "@/app/ui/plugins-state";
 import PluginsPanel from "@/app/ui/plugins-panel";
+import { ChangelogProvider } from "@/app/ui/changelog-state";
+import ChangelogPanel from "@/app/ui/changelog-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
@@ -49,6 +51,7 @@ export default async function Shell({
       <PlannerProvider>
       <ApiProvider>
       <PluginsProvider>
+      <ChangelogProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -100,6 +103,9 @@ export default async function Shell({
           {/* The independent Plugins library panel's own portal root — a peer that
               can sit open alongside the route panel, the planner, and the API. */}
           <div id="plugins-panel-root" className="flex h-full min-w-0" />
+          {/* The independent Changelog panel's own portal root — a peer that can
+              sit open alongside the route panel, the planner, the API, and the plugins. */}
+          <div id="changelog-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -110,8 +116,10 @@ export default async function Shell({
       <PlannerPanel />
       <ApiPanel />
       <PluginsPanel />
+      <ChangelogPanel />
       <TextEditor />
       </TextEditorProvider>
+      </ChangelogProvider>
       </PluginsProvider>
       </ApiProvider>
       </PlannerProvider>
