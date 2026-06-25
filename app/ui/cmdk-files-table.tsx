@@ -21,6 +21,37 @@ function fmtDate(ms: number): string {
   );
 }
 
+// Menu-row icons — same 1.5px lucide set as the session table's ⋯ menu, so the two
+// read identically.
+const ISVG = {
+  className: "size-3.5 shrink-0",
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+const IconOpen = () => (
+  <svg {...ISVG}><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+);
+const IconStar = ({ filled }: { filled: boolean }) => (
+  <svg {...ISVG} fill={filled ? "currentColor" : "none"}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+const IconCopy = () => (
+  <svg {...ISVG}><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
+);
+// the kebab itself — three filled dots, identical to the session table's
+const IconDots = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <circle cx="5" cy="12" r="1.6" />
+    <circle cx="12" cy="12" r="1.6" />
+    <circle cx="19" cy="12" r="1.6" />
+  </svg>
+);
+
 type ColKey = "name" | "file" | "size" | "kind" | "modified" | "created";
 type SortDir = "asc" | "desc";
 
@@ -38,7 +69,7 @@ const COLS: Record<ColKey, { label: string; align?: "right"; type: "text" | "num
 };
 const COL_ORDER: ColKey[] = ["name", "file", "size", "kind", "modified", "created"];
 const KEYS = COL_ORDER;
-const ACTION_W = 56;
+const ACTION_W = 64;
 const HIDDEN_KEY = "hq-cmdk-files-hidden";
 // `file` is hidden by default — its path largely duplicates Name, and dropping it
 // gives Name room to breathe. Toggle any column from the header right-click menu.
@@ -54,12 +85,17 @@ function load<T>(key: string, ok: (v: unknown) => v is T, fallback: T): T {
   return fallback;
 }
 
+const rowKey = (r: FileRow) => `${r.kind}:${r.ref}`;
+// dropdown item styling — matches the session table's ⋯ menu 1:1
+const MENU_ITEM =
+  "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
+
 // The FILES view — a clean, fixed-layout Finder table. Metadata columns are sized
 // to their content; Name (and File, when shown) flex to fill the rest, so there's
-// no wasted space and no horizontal scroll. Click a header to sort; RIGHT-CLICK a
-// header for the column show/hide picker (macOS Finder style — no toolbar). Each
-// row carries a ⋯ Action menu (Open / Favorite / Copy filename), same as a
-// right-click on the row.
+// no wasted space and no horizontal scroll. Rows have NO divider lines — just a
+// hover wash, like the session table. Click a header to sort; RIGHT-CLICK a header
+// for the column show/hide picker. Each row has an always-visible ⋯ Action menu
+// (Open / Favorite / Copy filename), same as a right-click on the row.
 export default function CmdkFilesTable({
   rows,
   meta,
@@ -95,6 +131,7 @@ export default function CmdkFilesTable({
 
   const visible = COL_ORDER.filter((k) => !hidden.has(k));
   const nameOf = (r: FileRow) => localMeta[`${r.kind}:${r.ref}`]?.title || r.name || r.ref;
+  const openRowKey = menu?.kind === "row" ? rowKey(menu.row) : null;
 
   const sorted = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -131,7 +168,7 @@ export default function CmdkFilesTable({
     });
   }
   function toggleFav(r: FileRow) {
-    const key = `${r.kind}:${r.ref}`;
+    const key = rowKey(r);
     const next = !localMeta[key]?.favorite;
     setLocalMeta((p) => ({ ...p, [key]: { ...p[key], favorite: next } }));
     fetch("/api/file-meta", {
@@ -145,6 +182,12 @@ export default function CmdkFilesTable({
     const text = r.kind === "turn" ? `hq:turn ${r.ref}` : r.file || r.ref;
     navigator.clipboard.writeText(text);
     setMenu(null);
+  }
+  // open the row menu anchored to the ⋯ button (right edges aligned, drops below)
+  function openRowMenu(e: React.MouseEvent, r: FileRow) {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenu({ x: Math.max(8, rect.right - 176), y: rect.bottom + 4, kind: "row", row: r });
   }
 
   function renderCell(r: FileRow, key: ColKey) {
@@ -175,7 +218,7 @@ export default function CmdkFilesTable({
             <col style={{ width: ACTION_W }} />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-zinc-950">
-            <tr>
+            <tr className="border-b border-zinc-800/80">
               {visible.map((k) => {
                 const c = COLS[k];
                 const active = sort.key === k;
@@ -185,7 +228,7 @@ export default function CmdkFilesTable({
                     onClick={() => clickSort(k)}
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, kind: "cols" }); }}
                     title="Click to sort · right-click for columns"
-                    className={`group/h cursor-pointer select-none whitespace-nowrap border-b border-zinc-800 px-2.5 py-2 text-[10px] font-medium uppercase tracking-[0.08em] transition-colors ${c.align === "right" ? "text-right" : "text-left"} ${active ? "text-zinc-300" : "text-zinc-600 hover:text-zinc-400"}`}
+                    className={`group/h cursor-pointer select-none whitespace-nowrap px-2.5 py-2 text-[10px] font-medium uppercase tracking-[0.08em] transition-colors ${c.align === "right" ? "text-right" : "text-left"} ${active ? "text-zinc-300" : "text-zinc-600 hover:text-zinc-400"}`}
                   >
                     {c.label}
                     <span className={`ml-1 inline-block ${active ? "text-zinc-500" : "text-transparent group-hover/h:text-zinc-700"}`}>
@@ -196,41 +239,43 @@ export default function CmdkFilesTable({
               })}
               <th
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, kind: "cols" }); }}
-                className="select-none border-b border-zinc-800 px-2.5 py-2 text-right text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-600"
+                className="select-none px-2.5 py-2 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-600"
               >
                 Action
               </th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => (
-              <tr
-                key={`${r.kind}:${r.ref}`}
-                onClick={() => onOpen(r)}
-                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, kind: "row", row: r }); }}
-                className="group/row cursor-pointer border-b border-zinc-900/70 text-zinc-300 transition-colors hover:bg-zinc-900"
-              >
-                {visible.map((k) => (
-                  <td key={k} className={`px-2.5 py-2 align-middle ${COLS[k].align === "right" ? "text-right" : ""}`}>
-                    {renderCell(r, k)}
+            {sorted.map((r) => {
+              const isOpen = openRowKey === rowKey(r);
+              return (
+                <tr
+                  key={rowKey(r)}
+                  onClick={() => onOpen(r)}
+                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY, kind: "row", row: r }); }}
+                  className={`cursor-pointer text-zinc-300 transition-colors ${isOpen ? "bg-zinc-800/40" : "hover:bg-zinc-800/40"}`}
+                >
+                  {visible.map((k) => (
+                    <td key={k} className={`px-2.5 py-2 align-middle ${COLS[k].align === "right" ? "text-right" : ""}`}>
+                      {renderCell(r, k)}
+                    </td>
+                  ))}
+                  {/* ⋯ action — always visible, opens the same menu as a right-click */}
+                  <td className="py-1.5 align-middle">
+                    <div className="flex items-center justify-center">
+                      <button
+                        aria-label="More actions"
+                        title="More actions"
+                        onClick={(e) => openRowMenu(e, r)}
+                        className={`rounded-md p-1 transition-colors hover:bg-zinc-700/60 hover:text-zinc-100 ${isOpen ? "bg-zinc-700/60 text-zinc-100" : "text-zinc-500"}`}
+                      >
+                        <IconDots />
+                      </button>
+                    </div>
                   </td>
-                ))}
-                <td className="px-1.5 py-2 text-right align-middle">
-                  <button
-                    aria-label="Row actions"
-                    title="Actions"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setMenu({ x: Math.max(8, rect.right - 176), y: rect.bottom + 4, kind: "row", row: r });
-                    }}
-                    className="rounded px-1.5 py-0.5 leading-none text-zinc-600 opacity-0 transition-opacity hover:bg-zinc-800 hover:text-zinc-200 group-hover/row:opacity-100"
-                  >
-                    ⋯
-                  </button>
-                </td>
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -257,18 +302,24 @@ export default function CmdkFilesTable({
         </div>
       )}
 
-      {/* row actions — file-appropriate, same set as a right-click on the row */}
+      {/* row actions — icon dropdown, same look as the session table's ⋯ menu */}
       {menu?.kind === "row" && (
         <div
+          role="menu"
           onClick={(e) => e.stopPropagation()}
           style={{ left: menu.x, top: menu.y }}
-          className="fixed z-[100] w-44 rounded-md border border-zinc-800 bg-zinc-950 p-1 font-mono text-[11px] shadow-2xl"
+          className="fixed z-[100] flex w-44 flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 font-sans shadow-2xl"
         >
-          <button onClick={() => { onOpen(menu.row); setMenu(null); }} className="block w-full rounded px-2 py-1 text-left text-zinc-300 hover:bg-zinc-900">Open</button>
-          <button onClick={() => toggleFav(menu.row)} className="block w-full rounded px-2 py-1 text-left text-zinc-300 hover:bg-zinc-900">
-            {localMeta[`${menu.row.kind}:${menu.row.ref}`]?.favorite ? "Unfavorite" : "Favorite"}
+          <button role="menuitem" onClick={() => { onOpen(menu.row); setMenu(null); }} className={MENU_ITEM}>
+            <IconOpen />
+            Open
           </button>
-          <button onClick={() => copyRef(menu.row)} className="block w-full rounded px-2 py-1 text-left text-zinc-300 hover:bg-zinc-900">
+          <button role="menuitem" onClick={() => toggleFav(menu.row)} className={MENU_ITEM}>
+            <IconStar filled={!!localMeta[rowKey(menu.row)]?.favorite} />
+            {localMeta[rowKey(menu.row)]?.favorite ? "Unfavorite" : "Favorite"}
+          </button>
+          <button role="menuitem" onClick={() => copyRef(menu.row)} className={MENU_ITEM}>
+            <IconCopy />
             {menu.row.kind === "turn" ? "Copy hq:turn ref" : "Copy filename"}
           </button>
         </div>
