@@ -297,13 +297,50 @@ function CopyChip({ label, text }: { label: string; text: string }) {
   );
 }
 
+// Sidebar Recents menu icons, mirrored here so the table's ⋯ menu matches it 1:1.
+const MENU_SVG = {
+  className: "size-3.5",
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+const MStar = ({ filled }: { filled: boolean }) => (
+  <svg {...MENU_SVG} fill={filled ? "currentColor" : "none"}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+const MPencil = () => (
+  <svg {...MENU_SVG}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+);
+const MFolder = () => (
+  <svg {...MENU_SVG}><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></svg>
+);
+const MLink = () => (
+  <svg {...MENU_SVG}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+);
+const MSplit = () => (
+  <svg {...MENU_SVG}><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="12" y1="4" x2="12" y2="20" /></svg>
+);
+const MEyeOff = () => (
+  <svg {...MENU_SVG}><path d="M9.88 9.88a3 3 0 0 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
+);
+const MArchive = () => (
+  <svg {...MENU_SVG}><rect x="2" y="4" width="20" height="5" rx="1" /><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" /><line x1="10" y1="13" x2="14" y2="13" /></svg>
+);
+const MBranch = () => (
+  <svg className="size-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <line x1="6" x2="6" y1="3" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
+  </svg>
+);
+
 // Recent-session DATA TABLE, shared by the fresh pane and the "+" staging view.
-// A SearchField + a "Filter" (by project) dropdown — the shipped-feed/components
-// control pair — sit on a header rule; below, each session is a distinct
-// clickable row in one bordered box: session id (the session's NAME —
-// first-class) · project · description · ctx · timestamp · a ⋯ actions menu (the
-// sidebar Recents kebab, brought here: Open / Terminal 2 / Star / Hide / Copy id;
-// Star + Hide persist to the same ~/.claude/hq sidecar).
+// A SearchField + a "Columns" dropdown sit on a header rule; below, each session
+// is a clickable row, with a ⋯ actions menu identical to the sidebar Recents kebab
+// (Favorite / Rename / Set project / Related / Terminal 2 / Hide / Archive / copy
+// id), persisting to the same ~/.claude/hq/sessions-meta sidecar.
 function RecentSessions({
   sessions,
   now,
@@ -730,29 +767,22 @@ function RecentSessions({
           style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
           className="fixed z-50 flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
         >
-          <button
-            role="menuitem"
-            onClick={() => {
-              router.push(openHref(menuSession.id), { scroll: false });
-              closeMenu();
-            }}
-            className={menuItem}
-          >
-            Open
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              const h = sessionParam
-                ? `${pathname}?session=${sessionParam}&pair=${menuSession.id}`
-                : `${pathname}?pair=${menuSession.id}`;
-              router.push(h, { scroll: false });
-              closeMenu();
-            }}
-            className={menuItem}
-          >
-            Open in Terminal 2
-          </button>
+          {/* read-only context — project + branch (matches the sidebar Recents menu) */}
+          <div className="flex flex-col gap-0.5 px-2 pb-1.5 pt-1">
+            <span className="min-w-0 truncate text-xs text-zinc-300">
+              {menuSession.project || "Unassigned"}
+            </span>
+            {menuSession.branch && (
+              <span
+                className="flex items-center gap-1 font-mono text-[10px] text-zinc-500"
+                title={`branch: ${menuSession.branch}`}
+              >
+                <MBranch />
+                <span className="min-w-0 truncate">{menuSession.branch}</span>
+              </span>
+            )}
+          </div>
+          <div className="my-1 h-px bg-zinc-800" />
           <button
             role="menuitem"
             onClick={() => {
@@ -768,6 +798,7 @@ function RecentSessions({
             }}
             className={menuItem}
           >
+            <MStar filled={starred.has(menuSession.id)} />
             {starred.has(menuSession.id) ? "Unfavorite" : "Favorite"}
           </button>
           <button
@@ -775,6 +806,7 @@ function RecentSessions({
             onClick={() => { startEdit(menuSession, "title"); closeMenu(); }}
             className={menuItem}
           >
+            <MPencil />
             Rename
           </button>
           <button
@@ -783,6 +815,7 @@ function RecentSessions({
             title="re-home this session under a project (overrides the derived label)"
             className={menuItem}
           >
+            <MFolder />
             Set project
           </button>
           <button
@@ -791,9 +824,23 @@ function RecentSessions({
             title="tag other projects this session relates to (comma-separated)"
             className={menuItem}
           >
+            <MLink />
             Related…
           </button>
-          <div className="my-1 h-px bg-zinc-800" />
+          <button
+            role="menuitem"
+            onClick={() => {
+              const h = sessionParam
+                ? `${pathname}?session=${sessionParam}&pair=${menuSession.id}`
+                : `${pathname}?pair=${menuSession.id}`;
+              router.push(h, { scroll: false });
+              closeMenu();
+            }}
+            className={menuItem}
+          >
+            <MSplit />
+            Terminal 2
+          </button>
           <button
             role="menuitem"
             onClick={() => {
@@ -803,6 +850,7 @@ function RecentSessions({
             }}
             className={menuItem}
           >
+            <MEyeOff />
             Hide
           </button>
           <button
@@ -815,8 +863,10 @@ function RecentSessions({
             title="move to the Archived group (out of the picker; still searchable)"
             className={menuItem}
           >
+            <MArchive />
             Archive
           </button>
+          <div className="my-1 h-px bg-zinc-800" />
           <button
             role="menuitem"
             onClick={() => {
@@ -827,7 +877,9 @@ function RecentSessions({
             title={`click to copy ${menuSession.id}`}
             className={`${menuItem} font-mono text-[10px] text-zinc-500 hover:text-zinc-300`}
           >
-            {copied ? "copied ✓" : `copy id · ${menuSession.id.slice(0, 8)}…`}
+            <span className="min-w-0 truncate">
+              {copied ? "copied ✓" : `${menuSession.id.slice(0, 8)}…`}
+            </span>
           </button>
         </div>
       )}
