@@ -452,11 +452,15 @@ const PAGE = 25; // how many search results to reveal per lazy-load step
 // ⌘K scope filter (Option C): a chip row + a typed "/alias " prefix both narrow
 // the search to one corpus. Chips are the common corpora; the alias map also
 // accepts the rarer ones as prefixes. "all" = no filter.
+// "menu"  = the command launcher (Actions/Navigate), commands only.
+// "all"   = the catch-all full-text search across EVERY corpus (the primary search).
+// "files" = the macOS-Finder table over every file Claude wrote to disk.
+// the rest narrow to one corpus.
 const SCOPE_CHIPS: { scope: string; label: string }[] = [
   { scope: "menu", label: "Menu" },
   { scope: "all", label: "All" },
-  { scope: "favorites", label: "Favorites" },
   { scope: "files", label: "Files" },
+  { scope: "favorites", label: "Favorites" },
   { scope: "sessions", label: "Sessions" },
   { scope: "memory", label: "Memory" },
   { scope: "notes", label: "Notes" },
@@ -464,6 +468,18 @@ const SCOPE_CHIPS: { scope: string; label: string }[] = [
   { scope: "todos", label: "Todos" },
   { scope: "docs", label: "Docs" },
 ];
+
+// Which view ⌘K opens to — Menu (launcher) by default, or All (search). Persisted
+// via the footer toggle so a user who lives in search can make it their landing.
+type DefaultScope = "menu" | "all";
+const DEFAULT_SCOPE_KEY = "hq-cmdk-default";
+function readDefaultScope(): DefaultScope {
+  try {
+    return localStorage.getItem(DEFAULT_SCOPE_KEY) === "all" ? "all" : "menu";
+  } catch {
+    return "menu";
+  }
+}
 const SCOPE_ALIASES: Record<string, string> = {
   file: "files", files: "files",
   session: "sessions", sessions: "sessions",
@@ -490,7 +506,8 @@ export default function CommandPalette() {
 
   const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState("menu"); // ⌘K view: menu (commands) · all (file table) · a corpus
+  const [scope, setScope] = useState("menu"); // ⌘K view: menu (commands) · all (search) · files (Finder table) · a corpus
+  const [defaultScope, setDefaultScopeState] = useState<DefaultScope>("menu"); // which view opens (persisted)
   const [sel, setSel] = useState(0);
   const [hits, setHits] = useState<Hit[]>([]);
   const [fileRows, setFileRows] = useState<FileRow[]>([]); // ALL view (Finder table)
@@ -518,14 +535,25 @@ export default function CommandPalette() {
     [router]
   );
 
+  // Set + persist which view ⌘K opens to next time (the footer toggle). Doesn't
+  // change the current view — chips do that; this only steers the landing.
+  const setDefaultScope = useCallback((d: DefaultScope) => {
+    setDefaultScopeState(d);
+    try {
+      localStorage.setItem(DEFAULT_SCOPE_KEY, d);
+    } catch {
+      /* private mode — default just won't persist */
+    }
+  }, []);
+
   // Debounced universal search as you type → /api/command-search (corpus-balanced,
   // so Docs + every corpus surface, not just the newest few). A big limit feeds the
   // lazy-loaded list; we reveal PAGE at a time client-side.
   useEffect(() => {
     const query = q.trim();
-    // ALL = the Finder table — its own data source (file index). The query just
+    // FILES = the Finder table — its own data source (file index). The query just
     // filters rows client-side, so load it once per entry, not per keystroke.
-    if (scope === "all") {
+    if (scope === "files") {
       setHits([]);
       let aliveAll = true;
       fetch("/api/files-all")
@@ -565,8 +593,9 @@ export default function CommandPalette() {
       setShown(PAGE);
       return;
     }
-    // MENU+query searches everything; a corpus chip searches/browses that corpus.
-    const serverScope = scope === "menu" ? "all" : scope;
+    // "All" searches every corpus; a corpus chip searches/browses just that one.
+    // (MENU returned above; FILES is the client-filtered table above.)
+    const serverScope = scope;
     let alive = true;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
@@ -680,8 +709,8 @@ export default function CommandPalette() {
   const { groups, flat, total } = useMemo(() => {
     const query = q.trim().toLowerCase();
     const grouped: { section: Section; items: Command[] }[] = [];
-    // A scope chip turns ⌘K into a corpus browser — suppress the launcher
-    // (Actions/Navigate) so the chosen corpus fills the list. "all" keeps them.
+    // Only MENU shows the launcher (Actions/Navigate). "All" and every corpus
+    // chip are pure search/browse results — the launcher stays out of their way.
     if (scope === "menu") {
       const scored = commands
         .map((c) => ({ c, s: rank(c, query) }))
@@ -721,7 +750,9 @@ export default function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     setQ("");
-    setScope("menu");
+    const def = readDefaultScope();
+    setScope(def);
+    setDefaultScopeState(def);
     setSel(0);
     setHits([]);
     setShown(PAGE);
@@ -1186,9 +1217,11 @@ export default function CommandPalette() {
                   placeholder={
                     scope === "menu"
                       ? "Filter commands…"
-                      : scope === "all"
-                        ? "Filter files by name or filename…"
-                        : `Search ${scope}…`
+                      : scope === "files"
+                        ? "Filter files by name or path…"
+                        : scope === "all"
+                          ? "Search everything…"
+                          : `Search ${scope}…`
                   }
                   spellCheck={false}
                   className="w-full bg-transparent font-mono text-[14px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
@@ -1236,9 +1269,9 @@ export default function CommandPalette() {
                 ))}
               </div>
 
-              {/* results — ALL renders the Finder table; everything else is the
-                  command/search list. */}
-              {scope === "all" ? (
+              {/* results — FILES renders the Finder table; everything else is the
+                  command/search list (ALL = the cross-corpus search). */}
+              {scope === "files" ? (
                 <CmdkFilesTable
                   rows={filteredRows}
                   meta={filesMeta}
@@ -1357,13 +1390,33 @@ export default function CommandPalette() {
               {/* footer */}
               <div className="flex items-center justify-between border-t border-dashed border-zinc-800 pt-2.5 font-mono text-[10px] text-zinc-600">
                 <span>
-                  {scope === "all"
+                  {scope === "files"
                     ? `${filteredRows.length} file${filteredRows.length === 1 ? "" : "s"}`
                     : total > 0
                       ? `${total} result${total === 1 ? "" : "s"}`
                       : `${flat.length} result${flat.length === 1 ? "" : "s"}`}
                 </span>
-                <span>↑↓ navigate · ↵ open · esc close</span>
+                <div className="flex items-center gap-3">
+                  {/* Default-view toggle — which scope ⌘K opens to (persisted). */}
+                  <span className="flex items-center gap-1">
+                    <span className="text-zinc-700">default</span>
+                    {(["menu", "all"] as const).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setDefaultScope(d)}
+                        title={`Open ⌘K to ${d === "menu" ? "the command launcher" : "All search"} by default`}
+                        className={`rounded px-1 transition-colors ${
+                          defaultScope === d
+                            ? "text-blue-300"
+                            : "text-zinc-600 hover:text-zinc-400"
+                        }`}
+                      >
+                        {d === "menu" ? "Menu" : "All"}
+                      </button>
+                    ))}
+                  </span>
+                  <span className="hidden sm:inline">↑↓ navigate · ↵ open · esc close</span>
+                </div>
               </div>
             </div>
           )}

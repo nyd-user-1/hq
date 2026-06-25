@@ -87,11 +87,13 @@ export async function GET(req: Request) {
   const reqScope = searchParams.get("scope") ?? "all";
   const scoped = reqScope !== "all" && ORDER.includes(reqScope as SearchScope);
   const order = scoped ? [reqScope as SearchScope] : ORDER;
-  // Empty query: a scope chip browses that whole corpus newest-first (recent()
-  // honors the sort + per-corpus recency); unscoped "all" stays the launcher.
+  // Empty query: a browse, never blank. A scope chip browses that whole corpus
+  // newest-first; unscoped "all" shows a CROSS-CORPUS recents feed (recent("all")
+  // — transcripts/sessions/memory/notes/todos/commits by recency). The command
+  // launcher lives in MENU now, so an empty "All" is a recency browse, not a void.
   if (!q)
     return NextResponse.json({
-      hits: scoped ? recent(reqScope as SearchScope, "new", limit) : [],
+      hits: recent(reqScope as SearchScope, "new", limit),
       building: false,
     });
 
