@@ -329,7 +329,13 @@ function RecentSessions({
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set()); // optimistic hide
   const [starred, setStarred] = useState<Set<string>>(new Set()); // optimistic star
+  const [archived, setArchived] = useState<Set<string>>(new Set()); // optimistic archive
   const [copied, setCopied] = useState(false);
+  // Inline editor (rename / set-project / related), mirroring the sidebar — one
+  // input, three fields, replacing the row while open.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editField, setEditField] = useState<"title" | "project" | "related">("title");
+  const [editValue, setEditValue] = useState("");
   const filterRef = useRef<HTMLDivElement>(null);
   // allMode: every transcript, fetched from /api/sessions/all. Refetched on focus
   // and on a debounced transcript-change push (the sidebar's fs.watch SSE) — never
@@ -348,6 +354,7 @@ function RecentSessions({
         setAllRows(d.sessions);
         setStarred(new Set(d.sessions.filter((s: { favorite?: boolean }) => s.favorite).map((s: { id: string }) => s.id)));
         setHidden(new Set(d.sessions.filter((s: { hidden?: boolean }) => s.hidden).map((s: { id: string }) => s.id)));
+        setArchived(new Set(d.sessions.filter((s: { archived?: boolean }) => s.archived).map((s: { id: string }) => s.id)));
       } catch {
         /* transient (dev recompile) — focus / next push reconciles */
       }
@@ -412,6 +419,33 @@ function RecentSessions({
       body: JSON.stringify({ id, ...body }),
     }).catch(() => {});
   };
+  // Optimistic patch of the fetched rows (allMode) — a meta write doesn't trigger
+  // the transcript SSE, so this is what makes a rename / set-project show instantly.
+  const patchLocal = (id: string, patch: Partial<NonNullable<ResumeOptions>["sessions"][number]>) =>
+    setAllRows((xs) => xs.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const startEdit = (s: NonNullable<ResumeOptions>["sessions"][number], field: "title" | "project" | "related") => {
+    setEditField(field);
+    setEditValue(
+      field === "title" ? s.customTitle ?? "" : field === "project" ? s.project : (s.related ?? []).join(", "),
+    );
+    setEditing(s.id);
+  };
+  const commitEdit = (s: NonNullable<ResumeOptions>["sessions"][number]) => {
+    if (editField === "project") {
+      const project = editValue.trim();
+      if (project) patchLocal(s.id, { project });
+      postMeta(s.id, { project });
+    } else if (editField === "related") {
+      const related = [...new Set(editValue.split(",").map((x) => x.trim()).filter(Boolean))];
+      patchLocal(s.id, { related });
+      postMeta(s.id, { related });
+    } else {
+      const title = editValue.trim();
+      patchLocal(s.id, { customTitle: title });
+      postMeta(s.id, { title });
+    }
+    setEditing(null);
+  };
 
   const openMenu = (e: ReactMouseEvent, id: string) => {
     e.preventDefault();
@@ -448,6 +482,7 @@ function RecentSessions({
   const projectNames = [...new Set(source.map((s) => s.project))].sort();
   const rows = source
     .filter((s) => !hidden.has(s.id))
+    .filter((s) => !archived.has(s.id))
     .filter((s) => !projectFilter || s.project === projectFilter)
     .filter((s) => !q || `${s.id} ${s.project} ${s.snippet ?? ""}`.toLowerCase().includes(q))
     .slice()
@@ -537,6 +572,30 @@ function RecentSessions({
           ) : (
             rows.map((s) => {
               const isLive = s.live || s.active; // green dot + green id, mirroring the sidebar
+              if (editing === s.id) {
+                return (
+                  <div key={s.id} className="flex items-center px-3 py-1.5">
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEdit(s);
+                        if (e.key === "Escape") setEditing(null);
+                      }}
+                      onBlur={() => setEditing(null)}
+                      placeholder={
+                        editField === "project"
+                          ? "set project — ↵ save · esc cancel"
+                          : editField === "related"
+                            ? "related, comma-separated — ↵ save · esc cancel"
+                            : "name this session — ↵ save · esc cancel"
+                      }
+                      className="min-w-0 flex-1 rounded-md bg-zinc-800 px-2.5 py-1.5 font-mono text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+                    />
+                  </div>
+                );
+              }
               return (
               <div
                 key={s.id}
@@ -564,8 +623,11 @@ function RecentSessions({
                       }`}
                     />
                     {starred.has(s.id) && <span className="text-amber-400">★</span>}
-                    <span className={`truncate ${isLive ? "text-green-400" : "text-zinc-100"}`}>
-                      {s.id.slice(0, 8)}
+                    <span
+                      className={`truncate ${isLive ? "text-green-400" : "text-zinc-100"}`}
+                      title={s.customTitle ? `${s.customTitle} · ${s.id.slice(0, 8)}` : s.id}
+                    >
+                      {s.customTitle || s.id.slice(0, 8)}
                     </span>
                   </span>
                   {/* description */}
@@ -672,6 +734,29 @@ function RecentSessions({
           >
             {starred.has(menuSession.id) ? "Unfavorite" : "Favorite"}
           </button>
+          <button
+            role="menuitem"
+            onClick={() => { startEdit(menuSession, "title"); closeMenu(); }}
+            className={menuItem}
+          >
+            Rename
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => { startEdit(menuSession, "project"); closeMenu(); }}
+            title="re-home this session under a project (overrides the derived label)"
+            className={menuItem}
+          >
+            Set project
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => { startEdit(menuSession, "related"); closeMenu(); }}
+            title="tag other projects this session relates to (comma-separated)"
+            className={menuItem}
+          >
+            Related…
+          </button>
           <div className="my-1 h-px bg-zinc-800" />
           <button
             role="menuitem"
@@ -683,6 +768,18 @@ function RecentSessions({
             className={menuItem}
           >
             Hide
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setArchived((p) => new Set(p).add(menuSession.id));
+              postMeta(menuSession.id, { archived: true });
+              closeMenu();
+            }}
+            title="move to the Archived group (out of the picker; still searchable)"
+            className={menuItem}
+          >
+            Archive
           </button>
           <button
             role="menuitem"
