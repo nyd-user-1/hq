@@ -314,7 +314,7 @@ function PluginRow({ row, onChanged }: { row: Row; onChanged: () => void }) {
           </a>
         </div>
         {row.description && (
-          <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
+          <p className="mt-3 text-[11px] leading-snug text-zinc-500">
             {row.description.slice(0, 120)}
             {row.description.length > 120 ? "…" : ""}
           </p>
