@@ -6,15 +6,15 @@ import Boundary from "@/app/ui/boundary";
 import { usePlugins } from "@/app/ui/plugins-state";
 import type { Category, LibView } from "@/lib/plugins";
 
-// The Plugins panel — HQ's library of Claude Code agent add-ons you toggle/run
-// here instead of cloning repos. Two sections: PLUGINS (behaviors you toggle
-// on/off — ponytail, caveman, impeccable) and TOOLS (run/fetch — skillui,
-// awesome-design-md). Mirrors the API panel chrome; ~1/3 width.
+// The Plugins panel — HQ's library of Claude Code agent add-ons. Two sections:
+// PLUGINS (behaviors you toggle on/off — ponytail, caveman, impeccable) and TOOLS
+// (run/fetch — skillui, awesome-design-md). ~1/3 width.
 //
-// Install/run is a TOGGLE that prefills the command into the terminal send box
-// (the user hits enter) — `/plugin …` is interactive, so HQ can't run it headless.
-// The mode control (installed ponytail/caveman) writes the plugin's `defaultMode`
-// config; it lands on the NEXT session (the footer says so).
+// Install/run is a SWITCH that prefills the command into the terminal send box
+// (the user hits enter). Shell installers (npx/curl) run on enter via the agent's
+// Bash; ponytail's `/plugin` flow is interactive and must run in a real Claude
+// Code TUI (the switch says so). An installed mode-plugin's switch is its real
+// on/off (writes `defaultMode`, lands next session); the chips refine the level.
 
 const CATEGORY: { id: Category; label: string; desc: string }[] = [
   { id: "plugin", label: "Plugins", desc: "Hook into the agent and change its behavior — toggle on/off." },
@@ -85,8 +85,9 @@ export default function PluginsPanel() {
       widthClass="sm:w-[min(360px,40vw)]"
     >
       <Boundary label="plugins-panel.tsx">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">
+        {/* header (fixed) */}
+        <div className="flex shrink-0 items-center justify-between gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">
             agent library
           </span>
           <button
@@ -110,40 +111,77 @@ export default function PluginsPanel() {
         </div>
 
         {err && (
-          <p className="rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">
+          <p className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">
             {err}
           </p>
         )}
 
-        {CATEGORY.map((cat) => {
-          const group = items.filter((i) => i.category === cat.id);
-          if (!group.length) return null;
-          return (
-            <section key={cat.id} className="flex flex-col gap-2">
-              <div className="flex flex-col gap-0.5">
-                <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">
-                  {cat.label}
-                </span>
-                <p className="font-mono text-[10px] leading-snug text-zinc-600">{cat.desc}</p>
-              </div>
-              {group.map((v) => (
-                <LibCard key={v.id} v={v} busy={busy === v.id} onMode={(m) => setMode(v.id, m)} />
-              ))}
-            </section>
-          );
-        })}
+        {/* the cards SCROLL inside the boundary (between the fixed header + footer)
+            so the dashed border never gets overrun. */}
+        <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-2">
+          {CATEGORY.map((cat) => {
+            const group = items.filter((i) => i.category === cat.id);
+            if (!group.length) return null;
+            return (
+              <section key={cat.id} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">
+                    {cat.label}
+                  </span>
+                  <p className="font-mono text-[10px] leading-snug text-zinc-600">{cat.desc}</p>
+                </div>
+                {group.map((v) => (
+                  <LibCard key={v.id} v={v} busy={busy === v.id} onMode={(m) => setMode(v.id, m)} />
+                ))}
+              </section>
+            );
+          })}
+          {!items.length && !loading && (
+            <p className="font-mono text-[11px] text-zinc-600">no add-ons.</p>
+          )}
+        </div>
 
-        {!items.length && !loading && (
-          <p className="font-mono text-[11px] text-zinc-600">no add-ons.</p>
-        )}
-
+        {/* footer (fixed) */}
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
-          Toggling install/run drops the command in your send box — hit ↵ to fire it. Mode
-          changes apply to your <span className="text-zinc-400">next session</span> (plugins
-          load at session start).
+          Flip a switch to drop its command in your send box — hit ↵. Shell installs
+          (npx/curl) run there; ponytail&apos;s <span className="text-zinc-400">/plugin</span> flow
+          runs in an interactive Claude session. Mode changes apply next session.
         </footer>
       </Boundary>
     </AppPanel>
+  );
+}
+
+// A macOS-style switch.
+function Switch({
+  on,
+  onClick,
+  disabled,
+  title,
+}: {
+  on: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      className={`relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+        on ? "bg-emerald-500" : "bg-zinc-600"
+      }`}
+    >
+      <span
+        className={`inline-block size-3.5 rounded-full bg-white shadow-sm transition-transform ${
+          on ? "translate-x-[15px]" : "translate-x-0.5"
+        }`}
+      />
+    </button>
   );
 }
 
@@ -176,11 +214,15 @@ function LibCard({
   busy: boolean;
   onMode: (m: string) => void;
 }) {
+  const needsPrefill =
+    (v.affordance === "modes" && !v.installed) ||
+    (v.affordance === "install" && !v.installed) ||
+    v.affordance === "run";
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/30 p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2">
-          <span className="text-sm text-zinc-200">{v.name}</span>
+          <span className="text-sm text-zinc-100">{v.name}</span>
           <StatusChip v={v} />
         </span>
         <a
@@ -194,34 +236,42 @@ function LibCard({
         </a>
       </div>
 
-      <p className="text-[12px] leading-snug text-zinc-500">{v.blurb}</p>
+      <p className="text-[12px] leading-snug text-zinc-400">{v.blurb}</p>
 
-      {/* a behavior plugin that's installed → its mode segmented control */}
+      {/* installed behavior plugin → real on/off switch + level chips */}
       {v.affordance === "modes" && v.installed && (
-        <>
-          <div className="flex flex-wrap gap-1">
-            {v.modes?.map((m) => {
-              const active = v.mode === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onMode(m.id)}
-                  title={m.desc}
-                  className={`rounded px-2 py-1 font-mono text-[11px] transition-colors disabled:opacity-50 ${
-                    active
-                      ? m.id === "off"
-                        ? "bg-zinc-700 text-zinc-100"
-                        : "bg-blue-500/20 text-blue-200"
-                      : "bg-zinc-800/60 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
+        <div className="mt-1 flex flex-col gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <Switch
+              on={v.on}
+              disabled={busy}
+              onClick={() => onMode(v.on ? "off" : "full")}
+              title={v.on ? "turn off" : "turn on (full)"}
+            />
+            <span className="font-mono text-[11px] text-zinc-400">{v.on ? "on" : "off"}</span>
           </div>
+          {v.on && (
+            <div className="flex flex-wrap gap-1">
+              {v.modes
+                ?.filter((m) => m.id !== "off")
+                .map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onMode(m.id)}
+                    title={m.desc}
+                    className={`rounded px-2 py-1 font-mono text-[11px] transition-colors disabled:opacity-50 ${
+                      v.mode === m.id
+                        ? "bg-blue-500/20 text-blue-200"
+                        : "bg-zinc-800/60 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+            </div>
+          )}
           {v.envOverride && (
             <p className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 font-mono text-[10px] text-amber-300">
               ${v.envOverride.name}={v.envOverride.value} overrides this — unset it for the toggle
@@ -229,17 +279,18 @@ function LibCard({
             </p>
           )}
           {v.caveat && <p className="font-mono text-[10px] text-zinc-600">{v.caveat}</p>}
-        </>
+        </div>
       )}
 
       {/* needs installing (a not-installed plugin) or running (a tool) → the
-          prefill toggle */}
-      {((v.affordance === "modes" && !v.installed) ||
-        (v.affordance === "install" && !v.installed) ||
-        v.affordance === "run") &&
-        v.command && (
-          <ActionToggle command={v.command} label={v.affordance === "run" ? "Run" : "Install"} />
-        )}
+          prefill switch */}
+      {needsPrefill && v.command && (
+        <PrefillSwitch
+          command={v.command}
+          label={v.affordance === "run" ? "Run" : "Install"}
+          interactive={v.interactive}
+        />
+      )}
 
       {/* installed, project-scoped plugin (impeccable) → just the how-to caveat */}
       {v.affordance === "install" && v.installed && v.caveat && (
@@ -252,7 +303,7 @@ function LibCard({
           href={`https://github.com/${v.repo}`}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex w-fit items-center gap-1.5 rounded-md border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800/60 hover:text-zinc-100"
+          className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800/60 hover:text-zinc-100"
         >
           Browse packs
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -265,33 +316,35 @@ function LibCard({
   );
 }
 
-// The install/run toggle — flips to drop its command in the send box. Styled as a
-// switch; after firing it shows the "in send box" hint for a beat.
-function ActionToggle({ command, label }: { command: string; label: string }) {
-  const [sent, setSent] = useState(false);
+// The install/run switch — flip it to drop the command in the send box. It blips
+// on (emerald) and shows where the command went, then resets (it's an action, not
+// persisted state). Interactive /plugin installs say "claude terminal" instead.
+function PrefillSwitch({
+  command,
+  label,
+  interactive,
+}: {
+  command: string;
+  label: string;
+  interactive?: boolean;
+}) {
+  const [armed, setArmed] = useState(false);
   return (
-    <div className="flex flex-col gap-1.5">
-      <button
-        type="button"
-        title={command}
-        onClick={() => {
-          prefill(command);
-          setSent(true);
-          window.setTimeout(() => setSent(false), 2500);
-        }}
-        className={`inline-flex w-fit items-center gap-2 rounded-full border px-2.5 py-1 font-mono text-[11px] transition-colors ${
-          sent
-            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-            : "border-zinc-700 bg-zinc-800/40 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100"
-        }`}
-      >
-        <span
-          className={`size-2.5 rounded-full transition-colors ${
-            sent ? "bg-emerald-400" : "bg-zinc-600"
-          }`}
+    <div className="mt-3 flex flex-col gap-1.5">
+      <div className="flex items-center gap-2.5">
+        <Switch
+          on={armed}
+          title={`${label} — drops the command in your send box`}
+          onClick={() => {
+            prefill(command);
+            setArmed(true);
+            window.setTimeout(() => setArmed(false), 2500);
+          }}
         />
-        {sent ? "in send box · hit ↵" : label}
-      </button>
+        <span className="font-mono text-[11px] text-zinc-300">
+          {armed ? (interactive ? "→ paste in your claude terminal" : "→ in send box · hit ↵") : label}
+        </span>
+      </div>
       <code className="break-all font-mono text-[10px] text-zinc-600">{command}</code>
     </div>
   );

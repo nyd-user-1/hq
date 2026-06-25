@@ -42,6 +42,10 @@ export type LibDef = {
   category: Category;
   affordance: Affordance;
   command?: string; // the send-box prefill (install/run); browse uses the repo url
+  // install is an interactive /plugin flow — run it in a real Claude Code TUI, not
+  // hq's send box (the agent can't execute user slash commands). Shell installers
+  // (npx/curl) DO run on enter, via the agent's Bash.
+  interactive?: boolean;
   modes?: PluginMode[]; // affordance "modes" only — "off" is always first
   configDir?: string; // ~/.config/<configDir>/config.json (XDG_CONFIG_HOME first)
   envVar?: string; // the override that beats the file — surfaced as a warning
@@ -64,6 +68,7 @@ export const PLUGINS: LibDef[] = [
     affordance: "modes",
     command:
       "/plugin marketplace add DietrichGebert/ponytail && /plugin install ponytail@ponytail",
+    interactive: true, // /plugin-only for Claude Code — run in an interactive TUI
     modes: [
       { id: "off", label: "Off", desc: "no influence" },
       { id: "lite", label: "Lite", desc: "a gentle nudge" },
@@ -81,8 +86,8 @@ export const PLUGINS: LibDef[] = [
     blurb: "Compresses the agent's output ~65% — terse, telegraphic, still correct.",
     category: "plugin",
     affordance: "modes",
-    command:
-      "claude plugin marketplace add JuliusBrussee/caveman && claude plugin install caveman@caveman",
+    // the shell installer (not `/plugin`) — the agent runs this via Bash on enter.
+    command: "curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash",
     modes: [
       { id: "off", label: "Off", desc: "normal prose" },
       { id: "lite", label: "Lite", desc: "drops filler" },
@@ -181,6 +186,7 @@ export type LibView = {
   category: Category;
   affordance: Affordance;
   command?: string;
+  interactive?: boolean;
   modes?: PluginMode[];
   installed: boolean;
   // For "modes" plugins: the effective default a NEW session would use, but ONLY
@@ -203,6 +209,7 @@ export function viewOf(def: LibDef): LibView {
     category: def.category,
     affordance: def.affordance,
     command: def.command,
+    interactive: def.interactive,
     modes: def.modes,
     installed,
     mode: null,
