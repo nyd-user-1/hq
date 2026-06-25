@@ -608,7 +608,7 @@ function RecentSessions({
           (an absolutely-positioned gradient), NOT a mask: mask-image on this
           rounded/bordered scroll box was unreliable in Safari and layered wrong. */}
       <div className="relative">
-      <div className="scrollbar-none max-h-[55vh] overflow-y-auto rounded-lg border border-zinc-800">
+      <div className="scrollbar-none max-h-[444px] overflow-y-auto rounded-lg border border-zinc-800">
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
@@ -751,8 +751,13 @@ function RecentSessions({
         </div>
       </div>
         {/* bottom scrim — rows dissolve into the page bg (zinc-950) as they scroll
-            toward the send box. pointer-events-none so it never blocks a row click. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 rounded-b-lg bg-gradient-to-t from-zinc-950 to-transparent" />
+            toward the send box. INLINE gradient (no Tailwind class dependency) +
+            z-20 so it definitely renders and paints above the rows. pointer-events-
+            none so it never blocks a row click. */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-16 rounded-b-lg"
+          style={{ background: "linear-gradient(to top, #09090b 0%, rgba(9,9,11,0) 100%)" }}
+        />
       </div>
 
       {/* row count — bottom-right under the table (scroll-only, no pagination) */}
