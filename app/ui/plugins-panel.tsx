@@ -293,9 +293,9 @@ function PluginRow({ row, onChanged }: { row: Row; onChanged: () => void }) {
 
   const chipCls =
     row.chipKind === "official"
-      ? "text-zinc-500 hover:text-orange-400"
+      ? "text-orange-400/90 hover:text-orange-400 hover:ring-[0.5px] hover:ring-orange-400/70"
       : row.chipKind === "featured"
-        ? "text-blue-300/80 hover:text-blue-200"
+        ? "text-blue-300/80 hover:text-blue-200 hover:ring-[0.5px] hover:ring-blue-400/60"
         : "text-zinc-500 hover:text-zinc-300";
 
   return (
@@ -308,7 +308,7 @@ function PluginRow({ row, onChanged }: { row: Row; onChanged: () => void }) {
             target="_blank"
             rel="noreferrer"
             title={row.chipKind === "official" ? "Claude marketplace" : row.chipHref}
-            className={`shrink-0 rounded bg-zinc-800/60 px-1 py-px font-mono text-[8px] uppercase tracking-wider transition-colors ${chipCls}`}
+            className={`inline-flex shrink-0 items-center rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[8px] uppercase leading-none tracking-wider transition-colors ${chipCls}`}
           >
             {row.chipLabel}
           </a>
