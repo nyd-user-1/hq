@@ -2825,28 +2825,8 @@ export default function Terminal({
                   "more" expander, no clipped third row. grid-flow-col fills top-then-
                   bottom, flowing rightward; the band scrolls x for the overflow. */}
               <div className="scrollbar-none grid grid-flow-col grid-rows-2 auto-cols-[7.5rem] gap-2 overflow-x-auto pb-1">
-                {projects.map((p) => {
-                  const sel = selectedTarget?.cwd === p.path;
-                  return (
-                    <button
-                      key={p.path}
-                      type="button"
-                      disabled={!!starting}
-                      onClick={() => setSelectedTarget(sel ? null : { name: p.name, cwd: p.path })}
-                      title={`launch a session in ${p.path}`}
-                      className={`flex h-9 items-center rounded-md border px-2 transition-colors disabled:opacity-50 ${
-                        sel
-                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"
-                          : "border-zinc-800 text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-300"
-                      }`}
-                    >
-                      <span className="w-full truncate text-center text-[11px]">{p.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              {/* control row — just "+ new" (the chip band scrolls; no expander) */}
-              <div className="flex items-center gap-2">
+                {/* "+ new" — the FIRST cell (row 1, col 1), before the projects. Names a
+                    new project (folder created on send); expands into an input in place. */}
                 {newOpen ? (
                   <input
                     autoFocus
@@ -2872,7 +2852,7 @@ export default function Terminal({
                     }}
                     disabled={!!starting}
                     placeholder="project name… ↵"
-                    className="ml-auto h-9 w-44 rounded-md border border-dashed border-emerald-500/50 bg-transparent px-3 text-[11px] text-emerald-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
+                    className="h-9 w-full rounded-md border border-dashed border-emerald-500/50 bg-transparent px-2 text-[11px] text-emerald-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
                   />
                 ) : (
                   <button
@@ -2880,11 +2860,30 @@ export default function Terminal({
                     disabled={!!starting}
                     onClick={() => setNewOpen(true)}
                     title="name a new project (the folder is created when you send)"
-                    className="ml-auto flex h-9 items-center rounded-md border border-dashed border-zinc-700 px-3 text-[11px] text-zinc-500 transition-colors hover:border-emerald-500/50 hover:text-emerald-300 disabled:opacity-50"
+                    className="flex h-9 items-center justify-center rounded-md border border-dashed border-zinc-700 px-2 text-[11px] text-zinc-500 transition-colors hover:border-emerald-500/50 hover:text-emerald-300 disabled:opacity-50"
                   >
                     + new
                   </button>
                 )}
+                {projects.map((p) => {
+                  const sel = selectedTarget?.cwd === p.path;
+                  return (
+                    <button
+                      key={p.path}
+                      type="button"
+                      disabled={!!starting}
+                      onClick={() => setSelectedTarget(sel ? null : { name: p.name, cwd: p.path })}
+                      title={`launch a session in ${p.path}`}
+                      className={`flex h-9 items-center rounded-md border px-2 transition-colors disabled:opacity-50 ${
+                        sel
+                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"
+                          : "border-zinc-800 text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-300"
+                      }`}
+                    >
+                      <span className="w-full truncate text-center text-[11px]">{p.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
