@@ -312,6 +312,9 @@ const MStar = ({ filled }: { filled: boolean }) => (
     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
   </svg>
 );
+const MOpen = () => (
+  <svg {...MENU_SVG}><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+);
 const MPencil = () => (
   <svg {...MENU_SVG}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
 );
@@ -519,11 +522,11 @@ function RecentSessions({
       setMenuPos(null);
       return;
     }
-    // Anchor to the ⋯ BUTTON (left-aligned, just below it). The Action column is
-    // the first column now, so a row-right anchor would float the menu far away.
+    // Anchor to the ⋯ BUTTON: the menu's RIGHT edge aligns with the button's right
+    // edge (drops down-and-left from the dots), just below it. Clamp to the viewport.
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const w = 220;
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
     setMenuPos({ top: r.bottom + 4, left, width: w });
     setMenuFor(id);
   };
@@ -765,7 +768,7 @@ function RecentSessions({
           role="menu"
           onClick={(e) => e.stopPropagation()}
           style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
-          className="fixed z-50 flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+          className="fixed z-50 flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 font-sans shadow-xl"
         >
           {/* read-only context — project + branch (matches the sidebar Recents menu) */}
           <div className="flex flex-col gap-0.5 px-2 pb-1.5 pt-1">
@@ -783,6 +786,17 @@ function RecentSessions({
             )}
           </div>
           <div className="my-1 h-px bg-zinc-800" />
+          <button
+            role="menuitem"
+            onClick={() => {
+              router.push(openHref(menuSession.id), { scroll: false });
+              closeMenu();
+            }}
+            className={menuItem}
+          >
+            <MOpen />
+            Open
+          </button>
           <button
             role="menuitem"
             onClick={() => {
