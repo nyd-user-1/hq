@@ -46,6 +46,10 @@ export type LibDef = {
   // hq's send box (the agent can't execute user slash commands). Shell installers
   // (npx/curl) DO run on enter, via the agent's Bash.
   interactive?: boolean;
+  // one-click install: drive a real `claude` PTY (via tmux) through
+  // `/plugin marketplace add <marketplace>` + `/plugin install <ref>`. Present →
+  // the card shows a real Install button (vs injecting the command in the box).
+  tmuxInstall?: { marketplace: string; ref: string };
   modes?: PluginMode[]; // affordance "modes" only — "off" is always first
   configDir?: string; // ~/.config/<configDir>/config.json (XDG_CONFIG_HOME first)
   envVar?: string; // the override that beats the file — surfaced as a warning
@@ -69,6 +73,7 @@ export const PLUGINS: LibDef[] = [
     command:
       "/plugin marketplace add DietrichGebert/ponytail && /plugin install ponytail@ponytail",
     interactive: true, // /plugin-only for Claude Code — run in an interactive TUI
+    tmuxInstall: { marketplace: "DietrichGebert/ponytail", ref: "ponytail@ponytail" },
     modes: [
       { id: "off", label: "Off", desc: "no influence" },
       { id: "lite", label: "Lite", desc: "a gentle nudge" },
@@ -88,6 +93,7 @@ export const PLUGINS: LibDef[] = [
     affordance: "modes",
     // the shell installer (not `/plugin`) — the agent runs this via Bash on enter.
     command: "curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash",
+    tmuxInstall: { marketplace: "JuliusBrussee/caveman", ref: "caveman@caveman" },
     modes: [
       { id: "off", label: "Off", desc: "normal prose" },
       { id: "lite", label: "Lite", desc: "drops filler" },
@@ -187,6 +193,7 @@ export type LibView = {
   affordance: Affordance;
   command?: string;
   interactive?: boolean;
+  oneClick: boolean; // a real Install button (tmux-driven) vs injecting the command
   modes?: PluginMode[];
   installed: boolean;
   // For "modes" plugins: the effective default a NEW session would use, but ONLY
@@ -210,6 +217,7 @@ export function viewOf(def: LibDef): LibView {
     affordance: def.affordance,
     command: def.command,
     interactive: def.interactive,
+    oneClick: !!def.tmuxInstall,
     modes: def.modes,
     installed,
     mode: null,

@@ -131,7 +131,13 @@ export default function PluginsPanel() {
                   <p className="font-mono text-[10px] leading-snug text-zinc-600">{cat.desc}</p>
                 </div>
                 {group.map((v) => (
-                  <LibCard key={v.id} v={v} busy={busy === v.id} onMode={(m) => setMode(v.id, m)} />
+                  <LibCard
+                    key={v.id}
+                    v={v}
+                    busy={busy === v.id}
+                    onMode={(m) => setMode(v.id, m)}
+                    onInstalled={load}
+                  />
                 ))}
               </section>
             );
@@ -207,10 +213,12 @@ function LibCard({
   v,
   busy,
   onMode,
+  onInstalled,
 }: {
   v: LibView;
   busy: boolean;
   onMode: (m: string) => void;
+  onInstalled: () => Promise<void> | void;
 }) {
   const needsPrefill =
     (v.affordance === "modes" && !v.installed) ||
@@ -288,9 +296,14 @@ function LibCard({
 
       {/* needs installing (a not-installed plugin) or running (a tool) → the
           prefill switch */}
-      {needsPrefill && v.command && (
-        <InstallButton command={v.command} label={v.affordance === "run" ? "Run" : "Install"} />
-      )}
+      {needsPrefill &&
+        (v.oneClick ? (
+          <OneClickInstall id={v.id} fallbackCommand={v.command ?? ""} onInstalled={onInstalled} />
+        ) : (
+          v.command && (
+            <InjectButton command={v.command} label={v.affordance === "run" ? "Run" : "Install"} />
+          )
+        ))}
 
       {/* installed, project-scoped plugin (impeccable) → just the how-to caveat */}
       {v.affordance === "install" && v.installed && v.caveat && (
@@ -319,11 +332,10 @@ function LibCard({
 // The install/run switch — flip it to drop the command in the send box. It blips
 // on (emerald) and shows where the command went, then resets (it's an action, not
 // persisted state). Interactive /plugin installs say "claude terminal" instead.
-// Install/run is a one-shot BUTTON (right-aligned): press it to inject the command
-// into the send box. Shell installs (npx/curl) run when you hit enter; ponytail's
-// /plugin is interactive (run in a real claude terminal). Once a plugin is actually
-// installed, the card swaps to the on/off Switch (green ring = active).
-function InstallButton({ command, label }: { command: string; label: string }) {
+// Inject button (right-aligned): for shell installs (impeccable npx) + tool runs
+// (skillui) — press it to drop the command in the send box; you hit enter and the
+// agent runs it via Bash. (For /plugin plugins, OneClickInstall does the real thing.)
+function InjectButton({ command, label }: { command: string; label: string }) {
   const [sent, setSent] = useState(false);
   return (
     <button
@@ -338,5 +350,75 @@ function InstallButton({ command, label }: { command: string; label: string }) {
     >
       {sent ? "→ in send box" : label}
     </button>
+  );
+}
+
+// A real one-click install — POSTs to /api/plugins/install, which drives a tmux
+// claude PTY through the /plugin marketplace-add + install + confirm sequence
+// (~1 min). On success the parent reloads and the card swaps to the on/off Switch.
+// On failure it surfaces the error + an "or run it manually" prefill fallback.
+function OneClickInstall({
+  id,
+  fallbackCommand,
+  onInstalled,
+}: {
+  id: string;
+  fallbackCommand: string;
+  onInstalled: () => Promise<void> | void;
+}) {
+  const [state, setState] = useState<"idle" | "installing" | "failed">("idle");
+  const [err, setErr] = useState("");
+  const run = async () => {
+    setState("installing");
+    setErr("");
+    try {
+      const r = await fetch("/api/plugins/install", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        await onInstalled(); // reload → the card flips to the on/off switch
+      } else {
+        setState("failed");
+        setErr(d.error || "install failed");
+      }
+    } catch (e) {
+      setState("failed");
+      setErr(e instanceof Error ? e.message : "install failed");
+    }
+  };
+  return (
+    <div className="mt-1 flex flex-col items-end gap-1.5">
+      <button
+        type="button"
+        disabled={state === "installing"}
+        onClick={run}
+        className="inline-flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800/40 px-3 py-1 font-mono text-[11px] text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800 disabled:opacity-70"
+      >
+        {state === "installing" && (
+          <span className="size-2.5 animate-pulse rounded-full bg-emerald-400" />
+        )}
+        {state === "installing" ? "installing…" : state === "failed" ? "retry install" : "Install"}
+      </button>
+      {state === "installing" && (
+        <span className="font-mono text-[10px] text-zinc-600">driving a claude session · ~1 min</span>
+      )}
+      {state === "failed" && (
+        <div className="flex flex-col items-end gap-0.5 text-right">
+          <span className="font-mono text-[10px] text-amber-400/90">{err}</span>
+          {fallbackCommand && (
+            <button
+              type="button"
+              onClick={() => prefill(fallbackCommand)}
+              className="font-mono text-[10px] text-zinc-500 underline transition-colors hover:text-zinc-300"
+            >
+              or run it manually →
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
