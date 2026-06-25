@@ -2796,10 +2796,16 @@ export default function Terminal({
         // transparent so streaming text dissolves into the bg as it slides up
         // under the header (instead of a hard cut). Inline so it can't be purged
         // or overridden by Tailwind's own mask layer; webkit-prefixed for Chromium.
-        style={{
-          WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 64px)",
-          maskImage: "linear-gradient(to bottom, transparent, #000 64px)",
-        }}
+        // ONLY on a live session — the staged "+" picker has no streaming text, and
+        // the fade just washed out the top row of project chips.
+        style={
+          staged
+            ? undefined
+            : {
+                WebkitMaskImage: "linear-gradient(to bottom, transparent, #000 64px)",
+                maskImage: "linear-gradient(to bottom, transparent, #000 64px)",
+              }
+        }
       >
         {/* Centered column when `centered`; `display:contents` (a no-op) when not,
             so the full-width transcript is unchanged. */}
@@ -2810,7 +2816,7 @@ export default function Terminal({
         {staged && (
           // Top-aligned, full-width (matches the header rule above). Two ruled
           // sections — PROJECTS (pick a launch target) then SESSIONS (reopen one).
-          <div className="flex w-full flex-col gap-6 pb-8 pt-16 font-mono">
+          <div className="flex w-full flex-col gap-6 pb-8 pt-2 font-mono">
             {/* PROJECTS — click to SELECT a launch target (the session starts only on
                 send, never on a stray click). An even grid, clamped to 2 rows; the
                 chevron reveals the rest. */}
