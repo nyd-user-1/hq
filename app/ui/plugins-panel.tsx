@@ -403,7 +403,7 @@ function OneClickInstall({
         {state === "installing" ? "installing…" : state === "failed" ? "retry install" : "Install"}
       </button>
       {state === "installing" && (
-        <span className="font-mono text-[10px] text-zinc-600">driving a claude session · ~1 min</span>
+        <span className="font-mono text-[10px] text-zinc-600">claude plugin install · a few seconds</span>
       )}
       {state === "failed" && (
         <div className="flex flex-col items-end gap-0.5 text-right">

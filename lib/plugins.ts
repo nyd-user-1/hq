@@ -46,10 +46,10 @@ export type LibDef = {
   // hq's send box (the agent can't execute user slash commands). Shell installers
   // (npx/curl) DO run on enter, via the agent's Bash.
   interactive?: boolean;
-  // one-click install: drive a real `claude` PTY (via tmux) through
-  // `/plugin marketplace add <marketplace>` + `/plugin install <ref>`. Present →
-  // the card shows a real Install button (vs injecting the command in the box).
-  tmuxInstall?: { marketplace: string; ref: string };
+  // one-click install: `claude plugin marketplace add <marketplace>` + `claude
+  // plugin install <ref> --scope user` (non-interactive CLI). Present → the card
+  // shows a real Install button (vs injecting the command into the send box).
+  pluginInstall?: { marketplace: string; ref: string };
   modes?: PluginMode[]; // affordance "modes" only — "off" is always first
   configDir?: string; // ~/.config/<configDir>/config.json (XDG_CONFIG_HOME first)
   envVar?: string; // the override that beats the file — surfaced as a warning
@@ -73,7 +73,7 @@ export const PLUGINS: LibDef[] = [
     command:
       "/plugin marketplace add DietrichGebert/ponytail && /plugin install ponytail@ponytail",
     interactive: true, // /plugin-only for Claude Code — run in an interactive TUI
-    tmuxInstall: { marketplace: "DietrichGebert/ponytail", ref: "ponytail@ponytail" },
+    pluginInstall: { marketplace: "DietrichGebert/ponytail", ref: "ponytail@ponytail" },
     modes: [
       { id: "off", label: "Off", desc: "no influence" },
       { id: "lite", label: "Lite", desc: "a gentle nudge" },
@@ -93,7 +93,7 @@ export const PLUGINS: LibDef[] = [
     affordance: "modes",
     // the shell installer (not `/plugin`) — the agent runs this via Bash on enter.
     command: "curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash",
-    tmuxInstall: { marketplace: "JuliusBrussee/caveman", ref: "caveman@caveman" },
+    pluginInstall: { marketplace: "JuliusBrussee/caveman", ref: "caveman@caveman" },
     modes: [
       { id: "off", label: "Off", desc: "normal prose" },
       { id: "lite", label: "Lite", desc: "drops filler" },
@@ -149,9 +149,22 @@ function fileMode(def: LibDef): string | null {
   }
 }
 
-// Any sentinel hit → installed. No single universal marker across plugin-install
-// vs standalone-hooks vs skill installs, so we OR them.
+// Authoritative for /plugin plugins — ~/.claude/settings.json `enabledPlugins`
+// maps "<plugin>@<marketplace>": true (what `claude plugin list` reads). This is
+// exact: a marketplace-added-but-not-installed plugin is NOT enabled.
+function pluginEnabled(ref: string): boolean {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(CLAUDE_DIR, "settings.json"), "utf8"));
+    return s?.enabledPlugins?.[ref] === true;
+  } catch {
+    return false;
+  }
+}
+
+// /plugin plugins use the enabledPlugins record; others (impeccable) fall back to
+// file sentinels. Any sentinel hit → installed.
 function isInstalled(def: LibDef): boolean {
+  if (def.pluginInstall?.ref) return pluginEnabled(def.pluginInstall.ref);
   const d = def.detect;
   if (!d) return false;
   if (d.hookFile && fs.existsSync(path.join(CLAUDE_DIR, "hooks", d.hookFile))) return true;
@@ -217,7 +230,7 @@ export function viewOf(def: LibDef): LibView {
     affordance: def.affordance,
     command: def.command,
     interactive: def.interactive,
-    oneClick: !!def.tmuxInstall,
+    oneClick: !!def.pluginInstall,
     modes: def.modes,
     installed,
     mode: null,
