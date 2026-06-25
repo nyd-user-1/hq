@@ -5,6 +5,7 @@ import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
 import { usePlugins } from "@/app/ui/plugins-state";
 import type { Category, LibView } from "@/lib/plugins";
+import type { CatalogPlugin } from "@/lib/plugin-catalog";
 
 // The Plugins panel — HQ's library of Claude Code agent add-ons. Two sections:
 // PLUGINS (behaviors you toggle on/off — ponytail, caveman, impeccable) and TOOLS
@@ -21,6 +22,10 @@ const CATEGORY: { id: Category; label: string; desc: string }[] = [
   { id: "tool", label: "Tools", desc: "Run or fetch to add capability or design context." },
 ];
 
+// ponytail/caveman get rich curated cards (mode pickers) above, so they're hidden
+// from the generic catalog list to avoid showing them twice.
+const CURATED_REFS = new Set(["ponytail@ponytail", "caveman@caveman"]);
+
 // Drop a command into the terminal send box (Terminal 1), focused, so the user
 // just hits enter. Uses the existing hq:compose event the terminal listens for.
 function prefill(cmd: string) {
@@ -32,6 +37,8 @@ function prefill(cmd: string) {
 export default function PluginsPanel() {
   const { open, setOpen } = usePlugins();
   const [items, setItems] = useState<LibView[]>([]);
+  const [catalog, setCatalog] = useState<CatalogPlugin[]>([]);
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -40,10 +47,12 @@ export default function PluginsPanel() {
     setLoading(true);
     setErr("");
     try {
-      const r = await fetch("/api/plugins", { cache: "no-store" });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d?.error || "failed to load");
-      setItems(d.plugins ?? []);
+      const [a, b] = await Promise.all([
+        fetch("/api/plugins", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/plugins/catalog", { cache: "no-store" }).then((r) => r.json()),
+      ]);
+      setItems(a?.plugins ?? []);
+      setCatalog(b?.plugins ?? []);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "failed to load");
     } finally {
@@ -76,6 +85,18 @@ export default function PluginsPanel() {
       setBusy(null);
     }
   };
+
+  const query = q.trim().toLowerCase();
+  const results = query
+    ? catalog.filter(
+        (p) =>
+          !CURATED_REFS.has(p.ref) &&
+          (p.name.toLowerCase().includes(query) ||
+            p.description.toLowerCase().includes(query) ||
+            p.marketplace.toLowerCase().includes(query)),
+      )
+    : [];
+  const active = catalog.filter((p) => p.enabled && !CURATED_REFS.has(p.ref));
 
   return (
     <AppPanel
@@ -110,51 +131,148 @@ export default function PluginsPanel() {
           </button>
         </div>
 
+        {/* search (fixed) — the whole on-disk catalog */}
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={catalog.length ? `Search ${catalog.length} plugins…` : "Search plugins…"}
+          className="shrink-0 rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+        />
+
         {err && (
           <p className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">
             {err}
           </p>
         )}
 
-        {/* the cards SCROLL inside the boundary (between the fixed header + footer)
+        {/* the list SCROLLS inside the boundary (between the fixed header + footer)
             so the dashed border never gets overrun. */}
         <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-2">
-          {CATEGORY.map((cat) => {
-            const group = items.filter((i) => i.category === cat.id);
-            if (!group.length) return null;
-            return (
-              <section key={cat.id} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">
-                    {cat.label}
-                  </span>
-                  <p className="font-mono text-[10px] leading-snug text-zinc-600">{cat.desc}</p>
-                </div>
-                {group.map((v) => (
-                  <LibCard
-                    key={v.id}
-                    v={v}
-                    busy={busy === v.id}
-                    onMode={(m) => setMode(v.id, m)}
-                    onInstalled={load}
-                  />
-                ))}
-              </section>
-            );
-          })}
-          {!items.length && !loading && (
-            <p className="font-mono text-[11px] text-zinc-600">no add-ons.</p>
+          {query ? (
+            <section className="flex flex-col gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">
+                {results.length} result{results.length === 1 ? "" : "s"}
+              </span>
+              {results.slice(0, 60).map((p) => (
+                <CatalogRow key={p.ref} p={p} onToggled={load} />
+              ))}
+              {results.length > 60 && (
+                <p className="font-mono text-[10px] text-zinc-600">
+                  showing 60 of {results.length} — refine your search
+                </p>
+              )}
+              {!results.length && (
+                <p className="font-mono text-[11px] text-zinc-600">no plugins match “{q}”.</p>
+              )}
+            </section>
+          ) : (
+            <>
+              {CATEGORY.map((cat) => {
+                const group = items.filter((i) => i.category === cat.id);
+                if (!group.length) return null;
+                return (
+                  <section key={cat.id} className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">
+                        {cat.label}
+                      </span>
+                      <p className="font-mono text-[10px] leading-snug text-zinc-600">{cat.desc}</p>
+                    </div>
+                    {group.map((v) => (
+                      <LibCard
+                        key={v.id}
+                        v={v}
+                        busy={busy === v.id}
+                        onMode={(m) => setMode(v.id, m)}
+                        onInstalled={load}
+                      />
+                    ))}
+                  </section>
+                );
+              })}
+
+              {active.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">
+                      Active
+                    </span>
+                    <p className="font-mono text-[10px] leading-snug text-zinc-600">
+                      Other enabled Claude Code plugins.
+                    </p>
+                  </div>
+                  {active.map((p) => (
+                    <CatalogRow key={p.ref} p={p} onToggled={load} />
+                  ))}
+                </section>
+              )}
+            </>
           )}
         </div>
 
         {/* footer (fixed) */}
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
-          Flip a switch to drop its command in your send box — hit ↵. Shell installs
-          (npx/curl) run there; ponytail&apos;s <span className="text-zinc-400">/plugin</span> flow
-          runs in an interactive Claude session. Mode changes apply next session.
+          {catalog.length
+            ? `${catalog.length} plugins across your registered marketplaces — search to browse, flip a switch to install/enable. Changes apply next session.`
+            : "Search to browse, flip a switch to install/enable."}
         </footer>
       </Boundary>
     </AppPanel>
+  );
+}
+
+// A compact catalog row — name · marketplace · description + the UNIVERSAL
+// install/enable/disable switch (POST /api/plugins/toggle). Turning a not-yet-
+// installed plugin on installs it first (a few seconds), then enables it.
+function CatalogRow({ p, onToggled }: { p: CatalogPlugin; onToggled: () => void }) {
+  const [on, setOn] = useState(p.enabled);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setOn(p.enabled), [p.enabled, p.ref]);
+  const toggle = async () => {
+    const next = !on;
+    setBusy(true);
+    setOn(next); // optimistic
+    try {
+      const r = await fetch("/api/plugins/toggle", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ref: p.ref, on: next }),
+      });
+      const d = await r.json();
+      setOn(!!d.enabled);
+      onToggled();
+    } catch {
+      setOn(!next);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const market = p.marketplace === "claude-plugins-official" ? "official" : p.marketplace;
+  return (
+    <div className="flex items-start gap-2.5 rounded-md border border-zinc-800/70 bg-zinc-900/30 p-2.5 transition-colors hover:border-zinc-700">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-[13px] text-zinc-200">{p.name}</span>
+          <span className="shrink-0 rounded bg-zinc-800/60 px-1 py-px font-mono text-[8px] uppercase tracking-wider text-zinc-500">
+            {market}
+          </span>
+        </div>
+        {p.description && (
+          <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">
+            {p.description.slice(0, 120)}
+            {p.description.length > 120 ? "…" : ""}
+          </p>
+        )}
+      </div>
+      <div className="shrink-0 pt-0.5">
+        <Switch
+          on={on}
+          disabled={busy}
+          onClick={toggle}
+          title={on ? "disable" : "enable / install"}
+        />
+      </div>
+    </div>
   );
 }
 

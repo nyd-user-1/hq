@@ -64,3 +64,20 @@ export function uninstallPlugin(ref: string): InstallResult {
   const r = run(["plugin", "uninstall", ref]);
   return { error: r.err, log: r.out.trim().slice(-2000) };
 }
+
+// The universal on/off for ANY catalog plugin. ON: `claude plugin enable <ref>`
+// (fast — for an installed-but-disabled plugin); if it's not installed yet, fall
+// back to `install … --scope user`. OFF: `claude plugin disable <ref>` (stays
+// installed, inactive). The caller re-reads enabledPlugins for the real result.
+export function setPluginEnabled(ref: string, on: boolean): InstallResult {
+  if (!on) {
+    const r = run(["plugin", "disable", ref]);
+    return { error: r.err, log: r.out.trim().slice(-2000) };
+  }
+  const e = run(["plugin", "enable", ref]);
+  if (/not installed|not found|no (such )?plugin|isn't installed/i.test((e.err || "") + e.out)) {
+    const i = run(["plugin", "install", ref, "--scope", "user"]);
+    return { error: i.err, log: `${e.out}\n${i.out}`.trim().slice(-2000) };
+  }
+  return { error: e.err, log: e.out.trim().slice(-2000) };
+}
