@@ -1268,13 +1268,22 @@ export default function Terminal({
       // (session switch) — drop this response rather than write stale state.
       if (mySeq !== loadSeqRef.current || loadQueryRef.current !== q) return;
       if (staged) {
-        // Staging view: don't display the newest session — just keep the
-        // recent-sessions list fresh and watch for a newborn (a session born
-        // after staging). The moment one appears, flip to it.
+        // Staging view: keep the recent-sessions list + projects fresh, but NEVER
+        // navigate ourselves to whatever happens to be newest. The ONLY session we
+        // flip to is the one THIS terminal just birthed from the send box —
+        // birthAndDrive sets drivenSessionRef AND router.push()es there itself, so
+        // this is a redundant safety net, gated so a BACKGROUND session (a TUI or
+        // another tab finishing a turn) can NEVER yank you out of the home view.
+        // (Was: flip to ANY session born after staging → the "ripped out of the
+        // home page when a background chat finished" bug.)
         setResume(d.resume ?? null);
         setProjects(d.projects ?? []);
         setNow(Date.now());
-        if (d.id && (d.bornAt ?? 0) > stagedAtRef.current)
+        if (
+          d.id &&
+          d.id === drivenSessionRef.current &&
+          (d.bornAt ?? 0) > stagedAtRef.current
+        )
           router.replace(`${pathnameRef.current}?session=${d.id}`, { scroll: false });
         return;
       }
