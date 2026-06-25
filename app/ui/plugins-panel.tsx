@@ -188,7 +188,7 @@ function Switch({
 function StatusChip({ v }: { v: LibView }) {
   const base = "rounded px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider";
   if (v.affordance === "modes") {
-    if (!v.installed) return <span className={`${base} bg-zinc-800/60 text-zinc-500`}>not installed</span>;
+    if (!v.installed) return null;
     return v.on ? (
       <span className={`${base} bg-emerald-500/15 text-emerald-300`}>on · {v.mode}</span>
     ) : (
@@ -198,9 +198,7 @@ function StatusChip({ v }: { v: LibView }) {
   if (v.affordance === "install")
     return v.installed ? (
       <span className={`${base} bg-emerald-500/15 text-emerald-300`}>installed</span>
-    ) : (
-      <span className={`${base} bg-zinc-800/60 text-zinc-500`}>not installed</span>
-    );
+    ) : null;
   if (v.affordance === "run") return <span className={`${base} bg-blue-500/15 text-blue-300`}>tool</span>;
   return <span className={`${base} bg-purple-500/15 text-purple-300`}>pack</span>;
 }
@@ -230,9 +228,15 @@ function LibCard({
           target="_blank"
           rel="noreferrer"
           title={v.repo}
-          className="shrink-0 font-mono text-[10px] text-zinc-600 transition-colors hover:text-zinc-400"
+          aria-label={`Open ${v.repo} on GitHub`}
+          className="shrink-0 text-zinc-600 transition-colors hover:text-zinc-300"
         >
-          {v.repo}
+          {/* lucide square-arrow-out-up-right */}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" />
+            <path d="m21 3-9 9" />
+            <path d="M15 3h6v6" />
+          </svg>
         </a>
       </div>
 
@@ -330,22 +334,19 @@ function PrefillSwitch({
 }) {
   const [armed, setArmed] = useState(false);
   return (
-    <div className="mt-3 flex flex-col gap-1.5">
-      <div className="flex items-center gap-2.5">
-        <Switch
-          on={armed}
-          title={`${label} — drops the command in your send box`}
-          onClick={() => {
-            prefill(command);
-            setArmed(true);
-            window.setTimeout(() => setArmed(false), 2500);
-          }}
-        />
-        <span className="font-mono text-[11px] text-zinc-300">
-          {armed ? (interactive ? "→ paste in your claude terminal" : "→ in send box · hit ↵") : label}
-        </span>
-      </div>
-      <code className="break-all font-mono text-[10px] text-zinc-600">{command}</code>
+    <div className="mt-3 flex items-center gap-2.5">
+      <Switch
+        on={armed}
+        title={`${label} — drops the command in your send box`}
+        onClick={() => {
+          prefill(command);
+          setArmed(true);
+          window.setTimeout(() => setArmed(false), 2500);
+        }}
+      />
+      <span className="font-mono text-[11px] text-zinc-300">
+        {armed ? (interactive ? "→ paste in your claude terminal" : "→ in send box · hit ↵") : label}
+      </span>
     </div>
   );
 }
