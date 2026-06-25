@@ -862,7 +862,13 @@ export default function Terminal({
   };
   // ?session=new = the "+" staging view: no session of its own. The stream
   // runs unpinned so the pane can flip to the newborn the moment it appears.
-  const staged = sessionParam === "new";
+  // The new-session picker shows on an explicit "?session=new" AND as the HOME view
+  // on a cold open — Terminal 1 with nothing pinned and no pair open. (Terminal 2,
+  // or T1-while-a-pair-is-open, still follows the newest session.) stagedAtRef is
+  // stamped when `staged` flips true, so the picker never auto-flips to an existing
+  // session — only to one BORN after you landed here.
+  const staged =
+    sessionParam === "new" || (paramKey === "session" && !sessionParam && !sibling);
   const pinned = staged ? null : sessionParam; // null = newest session
   // ?install=1 = preview the deployed install card locally (the empty-state the
   // terminal shows when there's no session — i.e. on a Vercel deploy).
