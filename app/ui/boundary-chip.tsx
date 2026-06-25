@@ -3,8 +3,7 @@
 import { useState } from "react";
 
 // Shared chip shell — the boundary-line chip look. BoundaryChip (click-to-copy a
-// path), PanelMenu (the ▾ menu variant) and SearchTrigger (the 🔍 variant) all
-// wear this so every chip sitting on a boundary line is visually identical.
+// path) wears this so every chip sitting on a boundary line is visually identical.
 export const CHIP_CLASS =
   "boundary-flash-chip cursor-pointer bg-zinc-800 px-2 py-0.5 font-mono text-[10px] text-zinc-400 transition-colors hover:text-zinc-200";
 

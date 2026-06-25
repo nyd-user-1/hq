@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { NAV_HEADERS, type NavHeader, type ToggleKey } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
 import { usePlanner } from "@/app/ui/planner-state";
@@ -31,7 +31,33 @@ export default function PanelNav() {
       {NAV_HEADERS.map((h) => (
         <Dropdown key={h.title} header={h} toggles={toggles} />
       ))}
+      <SearchNav />
     </nav>
+  );
+}
+
+// Search is a single destination, not a group — so it sits in the nav row as a
+// DIRECT item (not a dropdown), styled like the dropdown triggers, after Metrics.
+// Replaces the old boundary "search" chip: toggles the /search panel (click while
+// open → back to "/") and carries the terminal pins so it never drops a pair.
+function SearchNav() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const pathname = usePathname() ?? "/";
+  const active = pathname.startsWith("/search");
+  return (
+    <button
+      type="button"
+      title="Search every session and memory"
+      onClick={() =>
+        router.push(withPins(active ? "/" : "/search", params.toString()), {
+          scroll: false,
+        })
+      }
+      className={`${TRIGGER} ${active ? ACTIVE : IDLE}`}
+    >
+      Search
+    </button>
   );
 }
 

@@ -6,7 +6,6 @@ import SidebarColumn from "@/app/ui/sidebar-column";
 import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import Terminal from "@/app/ui/terminal";
-import SearchTrigger from "@/app/ui/search-trigger";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import PairColumn from "@/app/ui/pair-column";
 import FilesOverlay from "@/app/ui/files-overlay";
@@ -66,11 +65,7 @@ export default async function Shell({
             {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
                 remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
             <PairColumn initialFocus={focusDefault}>
-              <Boundary
-                label="terminal.tsx"
-                lead={<SidebarToggle />}
-                trail={<SearchTrigger />}
-              >
+              <Boundary label="terminal.tsx" lead={<SidebarToggle />}>
                 <Suspense
                   fallback={
                     <p className="text-sm text-zinc-600">loading terminal…</p>
