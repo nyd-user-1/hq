@@ -558,62 +558,72 @@ export default function CommandPalette() {
     inputRef.current?.focus();
   }, [scope]);
 
-  // Debounced universal search as you type → /api/command-search (corpus-balanced,
-  // so Docs + every corpus surface, not just the newest few). A big limit feeds the
-  // lazy-loaded list; we reveal PAGE at a time client-side.
+  // ── Data loading: each source keyed to EXACTLY what it depends on ───────────
+  // The invariant that keeps regressing if you collapse these: scope-data (the
+  // Finder table, Favorites) depends ONLY on `scope` — it's filtered client-side,
+  // so `q` MUST NOT be a dependency, or it refetches + replaces hundreds of rows
+  // on every keystroke (the server's 5s cache hides the cost server-side, so the
+  // lag shows up only as client jank — easy to miss). ONLY the server search
+  // (All + corpus chips) depends on `q`. Three separate effects so a future edit
+  // can't silently re-couple them.
+
+  // FILES — the Finder table. Loaded once on entering the scope (or reopening);
+  // `q` filters the rows client-side (filteredRows), NEVER refetches.
   useEffect(() => {
+    if (!open || scope !== "files") return;
+    let alive = true;
+    setHits([]);
+    fetch("/api/files-all")
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setFileRows(Array.isArray(d?.rows) ? d.rows : []);
+      })
+      .catch(() => {
+        if (alive) setFileRows([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, scope]);
+
+  // FAVORITES — everything starred across the stores. Also scope-data (no `q`).
+  useEffect(() => {
+    if (!open || scope !== "favorites") return;
+    let alive = true;
+    fetch("/api/favorites")
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) {
+          setHits(Array.isArray(d?.hits) ? d.hits : []);
+          setShown(PAGE);
+        }
+      })
+      .catch(() => {
+        if (alive) setHits([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, scope]);
+
+  // SEARCH — the ONE q-dependent load: a debounced /api/command-search for "All"
+  // and the single-corpus chips. MENU is client-filtered commands; FILES /
+  // FAVORITES are scope-data (their own effects above), so this MUST skip them —
+  // otherwise it re-runs their loads on every keystroke.
+  useEffect(() => {
+    if (scope === "files" || scope === "favorites") return;
     const query = q.trim();
-    // FILES = the Finder table — its own data source (file index). The query just
-    // filters rows client-side, so load it once per entry, not per keystroke.
-    if (scope === "files") {
-      setHits([]);
-      let aliveAll = true;
-      fetch("/api/files-all")
-        .then((r) => r.json())
-        .then((d) => {
-          if (aliveAll) setFileRows(Array.isArray(d?.rows) ? d.rows : []);
-        })
-        .catch(() => {
-          if (aliveAll) setFileRows([]);
-        });
-      return () => {
-        aliveAll = false;
-      };
-    }
-    // FAVORITES = everything starred across all three stores; rendered as hits.
-    if (scope === "favorites") {
-      let aliveF = true;
-      fetch("/api/favorites")
-        .then((r) => r.json())
-        .then((d) => {
-          if (aliveF) {
-            setHits(Array.isArray(d?.hits) ? d.hits : []);
-            setShown(PAGE);
-          }
-        })
-        .catch(() => {
-          if (aliveF) setHits([]);
-        });
-      return () => {
-        aliveF = false;
-      };
-    }
-    // MENU is purely the command launcher (Actions/Navigate) — never search hits.
-    // Typing filters the commands client-side; corpus search lives in the chips.
     if (scope === "menu") {
       setHits([]);
       setShown(PAGE);
       return;
     }
-    // "All" searches every corpus; a corpus chip searches/browses just that one.
-    // (MENU returned above; FILES is the client-filtered table above.)
-    const serverScope = scope;
     let alive = true;
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/command-search?q=${encodeURIComponent(query)}&scope=${serverScope}&limit=200`,
+          `/api/command-search?q=${encodeURIComponent(query)}&scope=${scope}&limit=200`,
           { signal: ctrl.signal }
         );
         const data = await res.json();
@@ -624,8 +634,8 @@ export default function CommandPalette() {
       } catch {
         if (alive) setHits([]); // ignore aborts (alive is already false then)
       }
-      // Typed search debounces 90ms (server is fast: memoized docs, cached
-      // commits, FTS5); a chip-click browse (empty q) fires at once.
+      // Typed search debounces 90ms (server is fast: memoized readers, FTS5);
+      // a chip-click browse (empty q) fires at once.
     }, query ? 90 : 0);
     return () => {
       alive = false;

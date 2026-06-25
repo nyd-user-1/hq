@@ -80,6 +80,7 @@ HQ has a real component library. Naming taxonomy: **`[Category][Descriptor][Elem
 - **Search index versioning:** `INDEX_VERSION` in `lib/archive.ts` MUST match `VERSION` in `scripts/build-search-index.mjs`.
 - **Parallel-route back nav:** a `<Link>` that only STRIPS a searchParam inside `@panel` reuses the cached view. Use `app/ui/back-link.tsx` (push + `router.refresh()`), or always keep a param.
 - **Pin-carrying (see Architecture)** — every in-panel link must carry `?session`/`?pair`, or the terminal switches sessions + the panel snaps back. Deferred fix in To Do `t_c6cae04f76`.
+- **⌘K data-load keying (don't re-couple).** In `command-palette.tsx` each data source is its OWN effect keyed to exactly what it depends on: **Files** (`/api/files-all`) and **Favorites** load on `[open, scope]` — the query filters their rows CLIENT-side, so `q` must never be a dependency; only the **server search** (All + corpus chips → `/api/command-search`) is keyed on `[q, scope]` (debounced + aborted). Collapsing these back into one `[q, scope]` effect makes Files/Favorites refetch + replace hundreds of rows on every keystroke — and the server's 5s read-cache HIDES it (warm ~7ms), so it only shows as client jank. Keep them split.
 - **Context tier:** Opus 1M tier; `CONTEXT_LIMIT = 1_000_000`. 200k = the price cliff marker, not a wall.
 - **`useSearchParams` needs a Suspense boundary** or `/_not-found` prerender fails.
 - **HQ-native sidecars live under `~/.claude/hq/`**: `todo.json`, `sessions-meta.json`, `components-order.json`, `notes/*.md`. NOT the agent's memory dir.

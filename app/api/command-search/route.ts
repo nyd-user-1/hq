@@ -55,6 +55,11 @@ const ORDER: SearchScope[] = [
 
 const RRF_K = 60; // Reciprocal Rank Fusion constant (qmd uses k=60)
 const PER = 25; // hits pulled per corpus — deep enough to lazy-load through
+// Typo-recovery (bounded Levenshtein over ~1500 metadata items) is a FALLBACK for
+// when the exact pass came up nearly empty — running it on every query added
+// ~100ms+ for no benefit when there are already plenty of real hits. Only fuzz
+// when the exact pass is sparse.
+const FUZZY_WHEN_FEWER_THAN = 8;
 
 // Relevance tier from how the query matches the title (lower = better). Exact
 // title and prefix are what a user almost always means; a contiguous-phrase hit
@@ -145,7 +150,7 @@ export async function GET(req: Request) {
   // keeps it to genuine misspellings — clean substring matches are the server's
   // job above. Cheap; transcripts/docs fuzzy is the Phase-2 trigram index.
   const toks = queryTokens(q);
-  if (!scoped && toks.length && hits.length < limit) {
+  if (!scoped && toks.length && hits.length < FUZZY_WHEN_FEWER_THAN) {
     const fz: { item: CorpusItem; d: number }[] = [];
     for (const item of metadataCorpus()) {
       const key = `${item.kind}:${item.ref}`;
