@@ -1810,16 +1810,26 @@ export default function Terminal({
     const onCompose = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       const text = detail?.text;
-      if (typeof text === "string" && text)
-        setDraft((d) =>
-          detail?.replace ? text : d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text,
-        );
+      if (typeof text === "string") {
+        if (detail?.replace)
+          setDraft(text); // replace — incl. clearing with "" (the install switch's off)
+        else if (text)
+          setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text));
+      }
       // install/run prefills want the box focused so the user just hits enter.
       if (detail?.focus) taRef.current?.focus();
     };
     window.addEventListener("hq:compose", onCompose);
     return () => window.removeEventListener("hq:compose", onCompose);
   }, [paramKey]);
+
+  // Mirror the draft out so panels (e.g. the plugin install switch) can reflect
+  // whether their prefilled command is still in the box — and flip off if the
+  // user clears or edits it.
+  useEffect(() => {
+    if (paramKey !== "session") return;
+    window.dispatchEvent(new CustomEvent("hq:draft", { detail: { text: draft } }));
+  }, [draft, paramKey]);
 
   // Capture the current draft as a to-do on the HQ list, then clear the box.
   async function todoDraft() {

@@ -35,6 +35,14 @@ export default function PluginsPanel() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  // the live send-box draft, mirrored from the terminal — an install switch is ON
+  // exactly while its command is the box's content (so editing/clearing flips it).
+  const [draft, setDraft] = useState("");
+  useEffect(() => {
+    const onDraft = (e: Event) => setDraft((e as CustomEvent).detail?.text ?? "");
+    window.addEventListener("hq:draft", onDraft);
+    return () => window.removeEventListener("hq:draft", onDraft);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,7 +139,13 @@ export default function PluginsPanel() {
                   <p className="font-mono text-[10px] leading-snug text-zinc-600">{cat.desc}</p>
                 </div>
                 {group.map((v) => (
-                  <LibCard key={v.id} v={v} busy={busy === v.id} onMode={(m) => setMode(v.id, m)} />
+                  <LibCard
+                    key={v.id}
+                    v={v}
+                    busy={busy === v.id}
+                    draft={draft}
+                    onMode={(m) => setMode(v.id, m)}
+                  />
                 ))}
               </section>
             );
@@ -206,10 +220,12 @@ function StatusChip({ v }: { v: LibView }) {
 function LibCard({
   v,
   busy,
+  draft,
   onMode,
 }: {
   v: LibView;
   busy: boolean;
+  draft: string;
   onMode: (m: string) => void;
 }) {
   const needsPrefill =
@@ -217,7 +233,7 @@ function LibCard({
     (v.affordance === "install" && !v.installed) ||
     v.affordance === "run";
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3 transition-colors hover:border-zinc-700 hover:bg-zinc-900/60">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2">
           <span className="text-sm text-zinc-100">{v.name}</span>
@@ -293,6 +309,7 @@ function LibCard({
           command={v.command}
           label={v.affordance === "run" ? "Run" : "Install"}
           interactive={v.interactive}
+          draft={draft}
         />
       )}
 
@@ -327,25 +344,25 @@ function PrefillSwitch({
   command,
   label,
   interactive,
+  draft,
 }: {
   command: string;
   label: string;
   interactive?: boolean;
+  draft: string;
 }) {
-  const [armed, setArmed] = useState(false);
+  // ON exactly while this command is the send box's content — so flipping off
+  // clears the box, and the user editing/clearing the box flips the switch off.
+  const on = draft.trim() === command.trim();
   return (
     <div className="mt-3 flex items-center gap-2.5">
       <Switch
-        on={armed}
+        on={on}
         title={`${label} — drops the command in your send box`}
-        onClick={() => {
-          prefill(command);
-          setArmed(true);
-          window.setTimeout(() => setArmed(false), 2500);
-        }}
+        onClick={() => prefill(on ? "" : command)}
       />
       <span className="font-mono text-[11px] text-zinc-300">
-        {armed ? (interactive ? "→ paste in your claude terminal" : "→ in send box · hit ↵") : label}
+        {on ? (interactive ? "→ paste in your claude terminal" : "→ in send box · hit ↵") : label}
       </span>
     </div>
   );
