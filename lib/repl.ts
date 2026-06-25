@@ -1,386 +1,211 @@
-// HQ Live REPL — persistent `claude` stream-json processes, one per driven
-// session. This is the WRITE half of HQ: where the read half tails the transcript
-// the TUI writes, this OWNS a warm `claude` process and drives it. See the brief
-// "The HQ Live REPL" (notes) for the full design + Phase 0 findings.
+// HQ Live REPL — CLIENT to the persistent REPL daemon.
 //
-// One process per session, kept alive across turns (warm context). We speak the
-// bidirectional stream-json protocol: user turns as JSON lines on stdin, streaming
-// events (tokens, tool calls, results) on stdout. Tool permissions escalate to a
-// local MCP shim (repl-approve-mcp.mjs) that long-polls /api/terminal/repl/permission
-// → the browser renders Approve/Deny → the verdict rides back.
+// The warm `claude` processes no longer live here. They live in a standalone
+// daemon (lib/repl-daemon.mjs) that OUTLIVES the Next server — so a dev restart no
+// longer wipes the pool or risks two processes resuming one transcript. This
+// module keeps the exact public API the routes expect, but each call is now an RPC
+// to the daemon over a unix domain socket. The daemon is lazily auto-spawned
+// (detached + unref) on first use, so `npm run dev` is still the only thing to run.
 //
-// SAFETY: this is a SIBLING process to any live TUI. The UX contract is "minimize
-// the TUI, drive from HQ" — one active writer at a time. stopRepl() releases it.
-import { spawn, type ChildProcess } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import fs from "node:fs";
+// The Next side keeps everything that needs lib/* — notably resolving a session's
+// cwd from its transcript (sessionCwd) — and passes plain data to the lean daemon.
+// Permissions are owned end-to-end by the daemon (the shim posts to it directly),
+// so this client no longer brokers them; it only relays the operator's answer.
+import http from "node:http";
+import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { sessionCwd } from "@/lib/transcript";
-import { classify } from "@/lib/permission-policy";
-import { writeFileAtomicSync } from "@/lib/atomic";
-import { allocChannel, channelServerPath } from "@/lib/channel";
-
-// HQ-driven sessions are spawned via `claude -p`, so their transcript entrypoint
-// is "sdk-cli" — which Recents filters out. Record the ids we drive in a sidecar
-// so lib/sessions can surface them in Recents as the real sessions they are.
-function recordDriven(id: string) {
-  if (!id || id.startsWith("new:")) return;
-  try {
-    const dir = path.join(os.homedir(), ".claude", "hq");
-    fs.mkdirSync(dir, { recursive: true });
-    const p = path.join(dir, "repl-sessions.json");
-    let arr: string[] = [];
-    try { arr = JSON.parse(fs.readFileSync(p, "utf8")); } catch { /* fresh */ }
-    if (!arr.includes(id)) writeFileAtomicSync(p, JSON.stringify([...arr, id].slice(-300)));
-  } catch { /* best-effort */ }
-}
 
 export type ReplEvent = Record<string, unknown> & { type?: string; subtype?: string };
-
-type PendingPermission = {
-  request: ReplEvent;
-  resolve: (decision: PermissionDecision) => void;
-  timer: ReturnType<typeof setTimeout>;
-};
 
 export type PermissionDecision =
   | { behavior: "allow"; updatedInput?: Record<string, unknown> }
   | { behavior: "deny"; message?: string };
 
-type Repl = {
-  child: ChildProcess;
-  requestedId: string;
-  sessionId: string | null; // resolved from the init event
-  cwd: string;
-  startedAt: number;
-  lastActivity: number;
-  busy: boolean; // true between a sent turn and its result
-  alive: boolean;
-  stdoutBuf: string;
-  events: ReplEvent[]; // ring buffer for late SSE subscribers
-  subscribers: Set<(e: ReplEvent) => void>;
-  pending: Map<string, PendingPermission>; // permission asks keyed by tool_use_id
-  reapTimer?: ReturnType<typeof setTimeout>; // disconnect-grace kill (cleared on reconnect)
-};
-
-// Survive Next dev HMR (module re-eval) so we never orphan a running process.
-const g = globalThis as unknown as {
-  __hqRepls?: Map<string, Repl>;
-  __hqReaper?: ReturnType<typeof setInterval>;
-};
-const repls: Map<string, Repl> = g.__hqRepls ?? (g.__hqRepls = new Map());
-
-const EVENT_CAP = 1500;
-const IDLE_MS = 30 * 60 * 1000; // reap a REPL untouched for 30 min
-const DISCONNECT_GRACE_MS = 20 * 1000; // browser gone this long (no turn running) → release
-const PERMISSION_TIMEOUT_MS = 10 * 60 * 1000; // deny if unanswered for 10 min
-
-function shimPath(): string {
-  return path.join(process.cwd(), "lib", "repl-approve-mcp.mjs");
+const SOCK = path.join(os.homedir(), ".claude", "hq", "repl-daemon.sock");
+function daemonPath(): string {
+  return path.join(process.cwd(), "lib", "repl-daemon.mjs");
 }
 
-// GUI-launched apps (HQ.app via launchd/Dock) get a minimal PATH that omits where
-// `claude` is installed (e.g. ~/.npm-global/bin), so a bare spawn("claude") fails
-// ENOENT. Resolve to an absolute path the way the native launcher resolves node.
-// HQ_CLAUDE_BIN overrides; otherwise probe the common install dirs; finally fall
-// back to "claude" so a normal shell PATH (dev / interactive TUI) keeps working.
-function resolveClaudeBin(): string {
-  const override = process.env.HQ_CLAUDE_BIN;
-  if (override) return override;
-  const home = os.homedir();
-  const candidates = [
-    path.join(home, ".npm-global", "bin", "claude"),
-    "/opt/homebrew/bin/claude",
-    "/usr/local/bin/claude",
-    path.join(home, ".local", "bin", "claude"),
-    path.join(home, ".bun", "bin", "claude"),
-    "/usr/bin/claude",
-  ];
-  for (const c of candidates) {
-    try { if (fs.existsSync(c)) return c; } catch { /* keep probing */ }
-  }
-  return "claude"; // rely on PATH (dev / interactive shell)
-}
-
-function emit(repl: Repl, e: ReplEvent) {
-  repl.lastActivity = Date.now();
-  repl.events.push(e);
-  if (repl.events.length > EVENT_CAP) repl.events.splice(0, repl.events.length - EVENT_CAP);
-  for (const cb of repl.subscribers) {
-    try { cb(e); } catch { /* a dead subscriber shouldn't break the fan-out */ }
-  }
-}
-
-function handleLine(repl: Repl, line: string) {
-  if (!line.trim()) return;
-  let e: ReplEvent;
-  try { e = JSON.parse(line) as ReplEvent; } catch { return; }
-  // Learn the real session id from init (a NEW session won't match requestedId).
-  if (e.type === "system" && e.subtype === "init" && typeof e.session_id === "string") {
-    repl.sessionId = e.session_id as string;
-  }
-  if (e.type === "result") repl.busy = false; // turn complete
-  emit(repl, e);
-}
-
-// Low-level spawn: create + register a REPL under `key`. `resumeId` is the
-// session to --resume ("" = a fresh session, whose real id arrives via init).
-// HQ_REPL_SESSION = key so the permission shim posts back under the same key.
-function spawnRepl(
-  key: string,
-  opts: { cwd: string; resumeId?: string; sessionId?: string; model?: string },
-): Repl {
-  const port = process.env.HQ_PORT ?? process.env.PORT ?? "3002";
-
-  // Channels are OPT-IN (HQ_CHANNELS=1): a research-preview path must never be
-  // able to destabilize the proven drive flow until it's been live-tested. When
-  // on, merge a per-session channel server ALONGSIDE the permission shim (don't
-  // clobber it) and load it past the dev allowlist. See lib/channel.ts.
-  const ch = process.env.HQ_CHANNELS === "1" ? allocChannel(key) : null;
-  const mcpServers: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {
-    "hq-approve": { command: "node", args: [shimPath()] },
-  };
-  if (ch) {
-    mcpServers["hq"] = {
-      command: "node",
-      args: [channelServerPath()],
-      env: { HQ_CHANNEL_PORT: String(ch.port), HQ_CHANNEL_TOKEN: ch.token, HQ_REPL_SESSION: key },
-    };
-  }
-  const mcpConfig = JSON.stringify({ mcpServers });
-
-  const args = [
-    "-p",
-    "--verbose",
-    "--input-format", "stream-json",
-    "--output-format", "stream-json",
-    "--include-partial-messages",
-    "--replay-user-messages",
-    "--permission-mode", "default",
-    "--mcp-config", mcpConfig,
-    "--permission-prompt-tool", "mcp__hq-approve__approve",
-    ...(ch ? ["--dangerously-load-development-channels", "server:hq"] : []),
-    ...(opts.model ? ["--model", opts.model] : []),
-    // resume an existing session, OR birth a new one with a preassigned id.
-    ...(opts.resumeId
-      ? ["--resume", opts.resumeId]
-      : opts.sessionId
-        ? ["--session-id", opts.sessionId]
-        : []),
-  ];
-
-  const child = spawn(resolveClaudeBin(), args, {
-    cwd: opts.cwd,
-    env: { ...process.env, HQ_PORT: port, HQ_REPL_SESSION: key },
-    stdio: ["pipe", "pipe", "pipe"],
+// ── transport: HTTP over the daemon's unix socket ────────────────────────────
+function ping(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.request(
+      { socketPath: SOCK, path: "/ping", method: "GET", timeout: 800 },
+      (res) => { res.resume(); resolve(res.statusCode === 200); },
+    );
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+    req.end();
   });
+}
 
-  const repl: Repl = {
-    child,
-    requestedId: key,
-    sessionId: opts.resumeId || opts.sessionId || null,
-    cwd: opts.cwd,
-    startedAt: Date.now(),
-    lastActivity: Date.now(),
-    busy: false,
-    alive: true,
-    stdoutBuf: "",
-    events: [],
-    subscribers: new Set(),
-    pending: new Map(),
-  };
-  repls.set(key, repl);
-  recordDriven(key); // surface HQ-driven sessions in Recents despite sdk-cli entrypoint
+function spawnDaemon(): void {
+  const child = spawn(process.execPath, [daemonPath()], {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env, HQ_DAEMON_SOCK: SOCK },
+  });
+  child.unref();
+}
 
-  child.stdout!.on("data", (d: Buffer) => {
-    repl.stdoutBuf += d.toString();
-    let i: number;
-    while ((i = repl.stdoutBuf.indexOf("\n")) >= 0) {
-      handleLine(repl, repl.stdoutBuf.slice(0, i));
-      repl.stdoutBuf = repl.stdoutBuf.slice(i + 1);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Survive HMR re-eval (the memo resets, but a re-ping just finds the live daemon).
+const g = globalThis as unknown as { __hqDaemonReady?: Promise<void> | null };
+function ensureDaemon(): Promise<void> {
+  if (g.__hqDaemonReady) return g.__hqDaemonReady;
+  g.__hqDaemonReady = (async () => {
+    if (await ping()) return;
+    spawnDaemon();
+    for (let i = 0; i < 40; i++) { // up to ~4s for the socket to come up
+      if (await ping()) return;
+      await sleep(100);
     }
-  });
-  child.stderr!.on("data", (d: Buffer) => {
-    emit(repl, { type: "hq_stderr", text: d.toString().slice(0, 2000) });
-  });
-  child.on("exit", (code, sig) => {
-    repl.alive = false;
-    repl.busy = false;
-    if (repl.reapTimer) { clearTimeout(repl.reapTimer); repl.reapTimer = undefined; }
-    emit(repl, { type: "hq_exit", code, signal: sig });
-    // fail any outstanding permission asks closed
-    for (const [, p] of repl.pending) { clearTimeout(p.timer); p.resolve({ behavior: "deny", message: "session ended" }); }
-    repl.pending.clear();
-  });
-
-  return repl;
+    throw new Error("repl daemon failed to start");
+  })().catch((e) => { g.__hqDaemonReady = null; throw e; });
+  return g.__hqDaemonReady;
 }
 
-// Start (or return) the REPL for an EXISTING session (--resume from its own cwd).
-export function ensureRepl(
-  requestedId: string,
-  opts: { model?: string } = {},
-): Repl {
-  const existing = repls.get(requestedId);
-  if (existing?.alive) return existing;
+type HttpErr = Error & { code?: string };
+
+function rawRequest<T>(method: string, pathname: string, body?: unknown): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const payload = body === undefined ? undefined : JSON.stringify(body);
+    const req = http.request(
+      {
+        socketPath: SOCK,
+        path: pathname,
+        method,
+        headers: payload ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } : undefined,
+      },
+      (res) => {
+        let buf = "";
+        res.on("data", (d) => (buf += d.toString()));
+        res.on("end", () => { try { resolve(buf ? (JSON.parse(buf) as T) : ({} as T)); } catch { resolve({} as T); } });
+      },
+    );
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+// Ensure the daemon is up, then make the call; if the socket vanished (daemon
+// died between calls) respawn once and retry.
+async function call<T>(method: string, pathname: string, body?: unknown): Promise<T> {
+  await ensureDaemon();
+  try {
+    return await rawRequest<T>(method, pathname, body);
+  } catch (e) {
+    const code = (e as HttpErr).code;
+    if (code === "ECONNREFUSED" || code === "ENOENT") {
+      g.__hqDaemonReady = null;
+      await ensureDaemon();
+      return rawRequest<T>(method, pathname, body);
+    }
+    throw e;
+  }
+}
+
+// ── public API (same shape the routes have always called) ────────────────────
+// Each call degrades gracefully if the daemon is unreachable, mirroring the old
+// in-process "couldn't write" behavior (false / not-running) rather than 500ing —
+// except startNewSession, where a failure must surface to the user.
+
+type Status = {
+  running: boolean;
+  busy?: boolean;
+  sessionId?: string | null;
+  cwd?: string;
+  startedAt?: number;
+  lastActivity?: number;
+};
+
+// Start (or keep) the warm process for an EXISTING session. cwd is resolved HERE
+// (the daemon has no transcript reader) from the session's own transcript.
+export async function ensureRepl(requestedId: string, opts: { model?: string } = {}): Promise<void> {
   const cwd = sessionCwd(requestedId) ?? process.env.HOME ?? process.cwd();
-  return spawnRepl(requestedId, { cwd, resumeId: requestedId, model: opts.model });
+  try { await call("POST", "/start", { session: requestedId, cwd, model: opts.model }); }
+  catch { /* daemon unreachable — surfaced by the next status/send */ }
 }
 
-// Birth a BRAND-NEW session in `cwd`, driven by HQ. We PREASSIGN the id
-// (--session-id) rather than waiting to learn it from init — a fresh stream-json
-// process doesn't emit init until its first stdin turn, so waiting would hang.
-// Keyed by the id from the start, so the UI's ensureRepl(id) finds this exact
-// warm process (idempotent) instead of trying to --resume a not-yet-existing one.
-export function startNewSession(cwd: string, opts: { model?: string } = {}): string {
-  const sessionId = randomUUID();
-  spawnRepl(sessionId, { cwd, sessionId, model: opts.model });
-  return sessionId;
+// Birth a BRAND-NEW session in `cwd`, driven by HQ. Throws on failure (the caller
+// — the `new` action — try/catches and reports it).
+export async function startNewSession(cwd: string, opts: { model?: string } = {}): Promise<string> {
+  const r = await call<{ sessionId?: string }>("POST", "/new", { cwd, model: opts.model });
+  if (!r.sessionId) throw new Error("daemon did not return a session id");
+  return r.sessionId;
 }
 
-export function getRepl(requestedId: string): Repl | undefined {
-  return repls.get(requestedId);
+export async function replStatus(requestedId: string): Promise<Status> {
+  try { return await call<Status>("GET", `/status?session=${encodeURIComponent(requestedId)}`); }
+  catch { return { running: false }; }
 }
 
-export function replStatus(requestedId: string) {
-  const r = repls.get(requestedId);
-  if (!r) return { running: false };
-  return {
-    running: r.alive,
-    busy: r.busy,
-    sessionId: r.sessionId,
-    cwd: r.cwd,
-    startedAt: r.startedAt,
-    lastActivity: r.lastActivity,
-  };
-}
-
-// Send a user turn into the warm process.
-export function sendTurn(
+export async function sendTurn(
   requestedId: string,
   payload: { text: string; images?: { data: string; mime: string }[] },
-): boolean {
-  const r = repls.get(requestedId);
-  if (!r?.alive || !r.child.stdin) return false;
-  const content: Record<string, unknown>[] = [];
-  for (const img of payload.images ?? []) {
-    content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.data } });
-  }
-  if (payload.text.trim()) content.push({ type: "text", text: payload.text });
-  if (content.length === 0) return false;
-  const msg = { type: "user", message: { role: "user", content } };
-  r.busy = true;
-  r.lastActivity = Date.now();
-  r.child.stdin.write(JSON.stringify(msg) + "\n");
-  emit(r, { type: "hq_sent", at: Date.now() });
-  return true;
+): Promise<boolean> {
+  const cwd = sessionCwd(requestedId) ?? process.env.HOME ?? process.cwd();
+  try {
+    const r = await call<{ ok?: boolean }>("POST", "/send", {
+      session: requestedId, cwd, text: payload.text, images: payload.images ?? [],
+    });
+    return r.ok === true;
+  } catch { return false; }
 }
 
-// Subscribe to a REPL's event stream. Replays the buffered events first so a
-// freshly-connected browser catches up, then streams live. Returns an unsubscribe.
-export function subscribe(requestedId: string, cb: (e: ReplEvent) => void): () => void {
-  const r = repls.get(requestedId);
-  if (!r) return () => {};
-  // A (re)connect cancels any pending disconnect-reap — a brief nav gap shouldn't kill the process.
-  if (r.reapTimer) { clearTimeout(r.reapTimer); r.reapTimer = undefined; }
-  for (const e of r.events) { try { cb(e); } catch { /* ignore */ } }
-  r.subscribers.add(cb);
-  return () => {
-    r.subscribers.delete(cb);
-    // Last browser gone → release the warm process after a short grace (unless mid-turn,
-    // which the idle reaper will collect once it finishes). The grace absorbs page nav.
-    if (r.subscribers.size === 0 && !r.reapTimer) {
-      r.reapTimer = setTimeout(() => {
-        const cur = repls.get(requestedId);
-        if (!cur) return;
-        cur.reapTimer = undefined;
-        if (cur.subscribers.size > 0 || cur.busy) return;
-        stopRepl(requestedId);
-        repls.delete(requestedId);
-      }, DISCONNECT_GRACE_MS);
-    }
-  };
+export async function stopRepl(requestedId: string): Promise<boolean> {
+  try { const r = await call<{ ok?: boolean }>("POST", "/stop", { session: requestedId }); return r.ok === true; }
+  catch { return false; }
 }
 
-export function stopRepl(requestedId: string): boolean {
-  const r = repls.get(requestedId);
-  if (!r) return false;
-  if (r.reapTimer) { clearTimeout(r.reapTimer); r.reapTimer = undefined; }
-  try { r.child.kill("SIGTERM"); } catch { /* already gone */ }
-  r.alive = false;
-  return true;
-}
-
-// Permission bridge: the MCP shim calls registerPermission() (via the route) and
-// awaits; the browser answers via resolvePermission(). Keyed by tool_use_id.
-export function registerPermission(requestedId: string, request: ReplEvent): Promise<PermissionDecision> {
-  const r = repls.get(requestedId);
-  const toolUseId = String(request.tool_use_id ?? request.toolUseId ?? Math.random());
-
-  // AUTO-MODE CLASSIFIER: decide the safe/known calls (read-only tools, read-only
-  // Bash) per ~/.claude/hq/permission-policy.json so the operator isn't pinged on
-  // every call. Only an "ask" verdict surfaces an Approve/Deny card; allow/deny
-  // resolve immediately and are logged (hq_permission_auto) for the activity feed.
-  const verdict = classify({
-    tool_name: typeof request.tool_name === "string" ? request.tool_name : undefined,
-    input:
-      request.input && typeof request.input === "object"
-        ? (request.input as Record<string, unknown>)
-        : undefined,
-  });
-  if (verdict !== "ask") {
-    if (r) emit(r, { type: "hq_permission_auto", tool_use_id: toolUseId, behavior: verdict, request });
-    return Promise.resolve(
-      verdict === "allow"
-        ? { behavior: "allow" }
-        : { behavior: "deny", message: "auto-denied by HQ permission policy" },
-    );
-  }
-
-  return new Promise<PermissionDecision>((resolve) => {
-    const timer = setTimeout(() => {
-      r?.pending.delete(toolUseId);
-      resolve({ behavior: "deny", message: "approval timed out" });
-    }, PERMISSION_TIMEOUT_MS);
-    if (r) {
-      r.pending.set(toolUseId, { request, resolve, timer });
-      emit(r, { type: "hq_permission", tool_use_id: toolUseId, request });
-    } else {
-      clearTimeout(timer);
-      resolve({ behavior: "deny", message: "no active session" });
-    }
-  });
-}
-
-export function resolvePermission(
+export async function resolvePermission(
   requestedId: string,
   toolUseId: string,
   decision: PermissionDecision,
-): boolean {
-  const r = repls.get(requestedId);
-  const p = r?.pending.get(toolUseId);
-  if (!r || !p) return false;
-  clearTimeout(p.timer);
-  r.pending.delete(toolUseId);
-  p.resolve(decision);
-  emit(r, { type: "hq_permission_resolved", tool_use_id: toolUseId, behavior: decision.behavior });
-  return true;
+): Promise<boolean> {
+  try {
+    const r = await call<{ ok?: boolean }>("POST", "/answer", { session: requestedId, tool_use_id: toolUseId, decision });
+    return r.ok === true;
+  } catch { return false; }
 }
 
-// Reap idle REPLs. Called opportunistically from routes AND on the timer below.
-export function reapIdle() {
-  const now = Date.now();
-  for (const [id, r] of repls) {
-    if (!r.alive) { repls.delete(id); continue; }
-    if (now - r.lastActivity > IDLE_MS) { stopRepl(id); repls.delete(id); }
-  }
-}
+// The daemon self-reaps on its own timer; kept as a no-op so the route's
+// opportunistic call site is unchanged.
+export function reapIdle(): void { /* handled inside the daemon */ }
 
-// Background reaper. reapIdle() also runs opportunistically on each POST, but if
-// the browser closes there are no more POSTs — so without this a warm process
-// would linger until the dev server dies (the orphaned-PID-3930 pattern). Guard
-// with a global handle so dev HMR re-eval never stacks intervals.
-if (g.__hqReaper) clearInterval(g.__hqReaper);
-g.__hqReaper = setInterval(reapIdle, 60 * 1000);
-(g.__hqReaper as unknown as { unref?: () => void }).unref?.();
+// Subscribe to a REPL's event stream. Opens a streaming /subscribe request to the
+// daemon (which replays its buffer first, then streams live) and pipes each
+// newline-delimited event to `cb`. Returns an unsubscribe that aborts the request
+// — the daemon then runs its disconnect-grace release. Synchronous return so the
+// SSE route's `unsub = subscribe(id, write)` shape is unchanged.
+export function subscribe(requestedId: string, cb: (e: ReplEvent) => void): () => void {
+  let req: http.ClientRequest | undefined;
+  let aborted = false;
+  (async () => {
+    try { await ensureDaemon(); } catch { return; }
+    if (aborted) return;
+    req = http.request(
+      { socketPath: SOCK, path: `/subscribe?session=${encodeURIComponent(requestedId)}`, method: "GET" },
+      (res) => {
+        let buf = "";
+        res.on("data", (d) => {
+          buf += d.toString();
+          let i: number;
+          while ((i = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, i);
+            buf = buf.slice(i + 1);
+            if (line.trim()) { try { cb(JSON.parse(line) as ReplEvent); } catch { /* skip */ } }
+          }
+        });
+        res.on("error", () => { /* stream ended */ });
+      },
+    );
+    req.on("error", () => { /* daemon gone; EventSource will retry the route */ });
+    req.end();
+  })();
+  return () => { aborted = true; try { req?.destroy(); } catch { /* already gone */ } };
+}

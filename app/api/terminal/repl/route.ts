@@ -34,7 +34,7 @@ export const maxDuration = 300;
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("session");
   if (!id) return new NextResponse("session required", { status: 400 });
-  return NextResponse.json(replStatus(id));
+  return NextResponse.json(await replStatus(id));
 }
 
 export async function POST(req: Request) {
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     if (!safeCwd) return new NextResponse(`folder not allowed: ${cwd}`, { status: 403 });
     cwd = safeCwd;
     try {
-      const sessionId = startNewSession(cwd, { model: body.model });
+      const sessionId = await startNewSession(cwd, { model: body.model });
       return NextResponse.json({ ok: true, sessionId, cwd });
     } catch (e) {
       return new NextResponse(e instanceof Error ? e.message : String(e), { status: 500 });
@@ -89,15 +89,15 @@ export async function POST(req: Request) {
   if (!session) return new NextResponse("session required", { status: 400 });
 
   if (action === "start") {
-    ensureRepl(session, { model: body.model });
-    return NextResponse.json({ ok: true, status: replStatus(session) });
+    await ensureRepl(session, { model: body.model });
+    return NextResponse.json({ ok: true, status: await replStatus(session) });
   }
   if (action === "send") {
     // Capture fork-ness BEFORE we resume + write — once hq sends, the last surface
     // flips to "hq" and the signal is gone. forking = a live terminal was the writer.
     const forking = isLiveTerminal(session);
-    ensureRepl(session, { model: body.model }); // idempotent — starts if needed
-    const ok = sendTurn(session, { text: body.text ?? "", images: body.images ?? [] });
+    await ensureRepl(session, { model: body.model }); // idempotent — starts if needed
+    const ok = await sendTurn(session, { text: body.text ?? "", images: body.images ?? [] });
     // HQ took the wheel (owner-idempotent — only the first send writes). "fork-hq"
     // when it branched a live terminal; plain "to-hq" for a cold resume / birth.
     if (ok) recordHandoff(session, forking ? "fork-hq" : "to-hq");
@@ -105,11 +105,11 @@ export async function POST(req: Request) {
   }
   if (action === "stop") {
     recordHandoff(session, "to-terminal"); // wheel released to the TUI (deliberate stop only; reaper/grace bypass this route)
-    return NextResponse.json({ ok: stopRepl(session) });
+    return NextResponse.json({ ok: await stopRepl(session) });
   }
   if (action === "answer") {
     const decision = body.decision as PermissionDecision;
-    const ok = resolvePermission(session, String(body.tool_use_id), decision);
+    const ok = await resolvePermission(session, String(body.tool_use_id), decision);
     return NextResponse.json({ ok });
   }
   return new NextResponse("unknown action", { status: 400 });

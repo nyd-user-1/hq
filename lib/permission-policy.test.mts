@@ -23,7 +23,7 @@ process.env.HOME = sandbox;
 process.env.USERPROFILE = sandbox; // Windows parity
 
 const { classify, DEFAULT_POLICY, readPolicy, writePolicy, policyPath } = await import(
-  "./permission-policy.ts"
+  "./permission-classify.mjs"
 );
 
 test("first read seeds the policy file with the default", () => {
