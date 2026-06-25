@@ -323,8 +323,7 @@ function RecentSessions({
   const sessionParam = params.get("session");
 
   const [filter, setFilter] = useState("");
-  const [projectFilter, setProjectFilter] = useState<string | null>(null);
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false); // the "Columns" dropdown
   const [menuFor, setMenuFor] = useState<string | null>(null); // row whose ⋯ menu is open
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set()); // optimistic hide
@@ -337,6 +336,33 @@ function RecentSessions({
   const [editField, setEditField] = useState<"title" | "project" | "related">("title");
   const [editValue, setEditValue] = useState("");
   const filterRef = useRef<HTMLDivElement>(null);
+  // Column visibility (the "Columns" dropdown — replaces the project filter). Session
+  // + Action always show; the rest toggle, persisted to localStorage.
+  const TABLE_COLS: readonly (readonly ["description" | "project" | "context" | "surface" | "lastActivity", string])[] = [
+    ["description", "Description"],
+    ["project", "Project"],
+    ["context", "Context"],
+    ["surface", "Surface"],
+    ["lastActivity", "Last activity"],
+  ];
+  type TableCol = (typeof TABLE_COLS)[number][0];
+  const [cols, setCols] = useState<Record<TableCol, boolean>>({
+    description: true, project: true, context: true, surface: true, lastActivity: true,
+  });
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("hq:table-cols") || "null");
+      if (saved && typeof saved === "object") setCols((c) => ({ ...c, ...saved }));
+    } catch {
+      /* no storage / private mode — defaults stand */
+    }
+  }, []);
+  const toggleCol = (c: TableCol) =>
+    setCols((v) => {
+      const n = { ...v, [c]: !v[c] };
+      try { localStorage.setItem("hq:table-cols", JSON.stringify(n)); } catch { /* ignore */ }
+      return n;
+    });
   // allMode: every transcript, fetched from /api/sessions/all. Refetched on focus
   // and on a debounced transcript-change push (the sidebar's fs.watch SSE) — never
   // on the 1s poll. Seeds the favorite/hidden sets so existing state shows like the
@@ -479,11 +505,9 @@ function RecentSessions({
     pairParam ? `${pathname}?session=${id}&pair=${pairParam}` : `${pathname}?session=${id}`;
 
   const q = filter.trim().toLowerCase();
-  const projectNames = [...new Set(source.map((s) => s.project))].sort();
   const rows = source
     .filter((s) => !hidden.has(s.id))
     .filter((s) => !archived.has(s.id))
-    .filter((s) => !projectFilter || s.project === projectFilter)
     .filter((s) => !q || `${s.id} ${s.project} ${s.snippet ?? ""}`.toLowerCase().includes(q))
     .slice()
     .sort((a, b) => b.lastActive - a.lastActive);
@@ -507,44 +531,32 @@ function RecentSessions({
         <div ref={filterRef} className="relative ml-auto">
           <button
             onClick={() => setFilterOpen((o) => !o)}
-            title="filter by project"
-            aria-label="Filter by project"
+            title="show / hide columns"
+            aria-label="Columns"
             aria-haspopup="menu"
             aria-expanded={filterOpen}
-            className="flex max-w-full items-center rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            className="flex max-w-full items-center gap-1 rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
           >
-            <span className="truncate">{projectFilter ?? "Filter"}</span>
+            Columns
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </button>
           {filterOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full z-30 mt-1 flex max-h-72 w-48 flex-col overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
+              className="absolute right-0 top-full z-30 mt-1 flex w-44 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
             >
-              <button
-                role="menuitem"
-                onClick={() => {
-                  setProjectFilter(null);
-                  setFilterOpen(false);
-                }}
-                className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
-              >
-                <span className="rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
-                  All
-                </span>
-                {projectFilter === null && <span className="ml-auto text-xs text-blue-400">✓</span>}
-              </button>
-              {projectNames.map((p) => (
+              {TABLE_COLS.map(([key, label]) => (
                 <button
-                  key={p}
-                  role="menuitem"
-                  onClick={() => {
-                    setProjectFilter((prev) => (prev === p ? null : p));
-                    setFilterOpen(false);
-                  }}
-                  className="flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-zinc-900"
+                  key={key}
+                  role="menuitemcheckbox"
+                  aria-checked={cols[key]}
+                  onClick={() => toggleCol(key)}
+                  className="flex items-center justify-between rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
                 >
-                  <span className="min-w-0 truncate font-mono text-[11px] text-zinc-300">{p}</span>
-                  {projectFilter === p && <span className="ml-auto text-xs text-blue-400">✓</span>}
+                  {label}
+                  {cols[key] && <span className="text-blue-400">✓</span>}
                 </button>
               ))}
             </div>
@@ -553,16 +565,16 @@ function RecentSessions({
       </div>
 
       {/* the table */}
-      <div className="scrollbar-none max-h-80 overflow-y-auto rounded-lg border border-zinc-800">
+      <div className="scrollbar-none max-h-[55vh] overflow-y-auto rounded-lg border border-zinc-800">
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
             <span className="w-24 shrink-0">Session</span>
-            <span className="min-w-0 flex-1">Description</span>
-            <span className="w-20 shrink-0">Project</span>
-            <span className="w-16 shrink-0 text-right">Context</span>
-            <span className="w-12 shrink-0 text-right">Surface</span>
-            <span className="w-24 shrink-0 text-right">Last activity</span>
+            {cols.description && <span className="min-w-0 flex-1">Description</span>}
+            {cols.project && <span className="w-20 shrink-0">Project</span>}
+            {cols.context && <span className="w-16 shrink-0 text-right">Context</span>}
+            {cols.surface && <span className="w-12 shrink-0 text-right">Surface</span>}
+            {cols.lastActivity && <span className="w-24 shrink-0 text-right">Last activity</span>}
           </div>
           <span className="w-16 shrink-0 text-center">Action</span>
         </div>
@@ -631,38 +643,48 @@ function RecentSessions({
                     </span>
                   </span>
                   {/* description */}
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
-                    {s.snippet || "—"}
-                  </span>
+                  {cols.description && (
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
+                      {s.snippet || "—"}
+                    </span>
+                  )}
                   {/* project */}
-                  <span
-                    className={`w-20 shrink-0 truncate text-[11px] ${
-                      s.project === "Unassigned" ? "text-zinc-600" : "text-zinc-400"
-                    }`}
-                  >
-                    {s.project}
-                  </span>
+                  {cols.project && (
+                    <span
+                      className={`w-20 shrink-0 truncate text-[11px] ${
+                        s.project === "Unassigned" ? "text-zinc-600" : "text-zinc-400"
+                      }`}
+                    >
+                      {s.project}
+                    </span>
+                  )}
                   {/* ctx — amber when the 1M window is ~70%+ full */}
-                  <span
-                    className={`w-16 shrink-0 text-right text-[11px] tabular-nums ${
-                      s.contextTokens >= CONTEXT_LIMIT * 0.7 ? "text-amber-500/90" : "text-zinc-500"
-                    }`}
-                  >
-                    {s.contextTokens > 0 ? fmtTokens(s.contextTokens) : ""}
-                  </span>
+                  {cols.context && (
+                    <span
+                      className={`w-16 shrink-0 text-right text-[11px] tabular-nums ${
+                        s.contextTokens >= CONTEXT_LIMIT * 0.7 ? "text-amber-500/90" : "text-zinc-500"
+                      }`}
+                    >
+                      {s.contextTokens > 0 ? fmtTokens(s.contextTokens) : ""}
+                    </span>
+                  )}
                   {/* last surface — hq vs CC (Claude Code terminal) */}
-                  <span
-                    className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${
-                      s.surface === "hq" ? "text-emerald-500/80" : "text-zinc-600"
-                    }`}
-                    title={s.surface === "hq" ? "last worked on in hq" : "last worked on in a Claude Code terminal"}
-                  >
-                    {s.surface === "hq" ? "hq" : "CC"}
-                  </span>
+                  {cols.surface && (
+                    <span
+                      className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${
+                        s.surface === "hq" ? "text-emerald-500/80" : "text-zinc-600"
+                      }`}
+                      title={s.surface === "hq" ? "last worked on in hq" : "last worked on in a Claude Code terminal"}
+                    >
+                      {s.surface === "hq" ? "hq" : "CC"}
+                    </span>
+                  )}
                   {/* last activity */}
-                  <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">
-                    {fmtAgo(now - s.lastActive)}
-                  </span>
+                  {cols.lastActivity && (
+                    <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">
+                      {fmtAgo(now - s.lastActive)}
+                    </span>
+                  )}
                 </Link>
                 {/* action — the ⋯ kebab → dropdown (sidebar Recents menu), now trailing */}
                 <div className="flex w-16 shrink-0 items-center justify-center">
@@ -684,6 +706,11 @@ function RecentSessions({
             })
           )}
         </div>
+      </div>
+
+      {/* row count — bottom-right under the table (scroll-only, no pagination) */}
+      <div className="flex justify-end px-1 font-mono text-[10px] text-zinc-600">
+        {rows.length} session{rows.length === 1 ? "" : "s"}
       </div>
 
       {/* the ⋯ dropdown — fixed so the scroll box can't clip it. One at a time. */}
