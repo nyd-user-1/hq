@@ -8,8 +8,22 @@ const SHA = /^[0-9a-f]{7,40}$/i;
 
 // Lightweight markdown for the terminal — no library. Handles the cases Claude's
 // replies actually use: **bold**, *italic*, `code` (accent-colored, the "purple"
-// the real CLI shows), [links](url), # headings, and - / 1. lists. Full GFM
-// (tables, nested lists) would be the reason to reach for react-markdown later.
+// the real CLI shows), [links](url), # headings, - / 1. lists, and GFM tables.
+// (Nested lists are the only thing left that'd push us to react-markdown.)
+
+// A GFM table separator row, e.g. `|---|:--:|` — all pipes/dashes/colons/space,
+// with at least one dash and one pipe (so it can't be confused with prose).
+const isSepRow = (s: string) => /^[\s|:-]+$/.test(s) && s.includes("-") && s.includes("|");
+// Split a `| a | b |` row into trimmed cells (drop the outer pipes).
+const parseRow = (s: string) =>
+  s.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+// Column alignment from a separator cell (`:--` left, `--:` right, `:-:` center).
+const alignClass = (s: string) => {
+  const t = s.trim();
+  const l = t.startsWith(":");
+  const r = t.endsWith(":");
+  return l && r ? "text-center" : r ? "text-right" : "text-left";
+};
 
 const INLINE =
   /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\*([^*]+)\*)|(\[([^\]]+)\]\(([^)\s]+)\))/g;
@@ -98,7 +112,7 @@ export default function Markdown({ text }: { text: string }) {
     blocks.push(
       <pre
         key={key++}
-        className="overflow-x-auto whitespace-pre rounded-md bg-zinc-900/60 p-2.5 font-mono text-[12px] leading-relaxed text-zinc-300"
+        className="whitespace-pre-wrap break-words rounded-md bg-zinc-900/60 p-2.5 font-mono text-[12px] leading-relaxed text-zinc-300"
       >
         {code.join("\n")}
       </pre>
@@ -111,7 +125,9 @@ export default function Markdown({ text }: { text: string }) {
     flushPara();
   };
 
-  for (const line of text.split("\n")) {
+  const lines = text.split("\n");
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
     // Fenced code: ``` toggles a verbatim block — its lines are NEVER joined.
     if (line.trim().startsWith("```")) {
       if (code === null) {
@@ -124,6 +140,52 @@ export default function Markdown({ text }: { text: string }) {
     }
     if (code !== null) {
       code.push(line);
+      continue;
+    }
+
+    // GFM table: a `|`-cell row whose NEXT line is a |---|---| separator. Consume
+    // the header, the separator (for alignment), and every following pipe row.
+    if (line.includes("|") && li + 1 < lines.length && isSepRow(lines[li + 1])) {
+      flush();
+      const header = parseRow(line);
+      const aligns = parseRow(lines[li + 1]).map(alignClass);
+      const rows: string[][] = [];
+      let j = li + 2;
+      while (j < lines.length && lines[j].includes("|") && lines[j].trim() !== "") {
+        rows.push(parseRow(lines[j]));
+        j++;
+      }
+      blocks.push(
+        <table key={key++} className="w-full border-collapse text-[12px]">
+          <thead>
+            <tr>
+              {header.map((c, ci) => (
+                <th
+                  key={ci}
+                  className={`border border-zinc-800 bg-zinc-900/40 px-2 py-1 font-semibold text-zinc-200 ${aligns[ci] ?? "text-left"}`}
+                >
+                  {inline(c)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={ri}>
+                {r.map((c, ci) => (
+                  <td
+                    key={ci}
+                    className={`border border-zinc-800 px-2 py-1 align-top text-zinc-300 ${aligns[ci] ?? "text-left"}`}
+                  >
+                    {inline(c)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+      li = j - 1; // resume after the consumed table rows
       continue;
     }
 

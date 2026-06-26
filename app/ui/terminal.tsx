@@ -2169,7 +2169,22 @@ export default function Terminal({
           />
         </summary>
         <pre className="scrollbar-none max-h-72 overflow-auto whitespace-pre-wrap break-words border-t border-zinc-800 px-3 py-2 text-[11px] leading-relaxed text-zinc-400">
-          {it.detail}
+          {["Edit", "MultiEdit", "Write"].includes(it.tool)
+            ? it.detail.split("\n").map((line, li) => (
+                <div
+                  key={li}
+                  className={
+                    line.startsWith("+ ")
+                      ? "bg-emerald-500/10 text-emerald-300"
+                      : line.startsWith("- ")
+                        ? "bg-red-500/10 text-red-300"
+                        : undefined
+                  }
+                >
+                  {line || " "}
+                </div>
+              ))
+            : it.detail}
         </pre>
       </details>
     );
