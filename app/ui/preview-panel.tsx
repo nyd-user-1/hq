@@ -23,6 +23,9 @@ export default function PreviewPanel() {
   const wasOnline = useRef<boolean | null>(null);
   const pickedRef = useRef(false); // auto-select the first live project just once
   const urlRef = useRef<HTMLInputElement>(null);
+  const [starting, setStarting] = useState<string | null>(null); // project path hq is launching
+  const [startError, setStartError] = useState<string | null>(null);
+  const [managed, setManaged] = useState<string | null>(null); // path of the dev server hq is running
 
   // Load the universal project list on open, then refresh on an interval (cheap
   // localhost TCP checks) so the live dots stay current. Auto-select the first
@@ -49,6 +52,10 @@ export default function PreviewPanel() {
             setReloadKey((k) => k + 1);
           }
         }
+        const ds = await fetch("/api/dev-server", { cache: "no-store" })
+          .then((r) => r.json())
+          .catch(() => null);
+        if (alive) setManaged(ds?.server?.projectPath ?? null);
       } catch {
         /* keep the last list */
       }
@@ -107,18 +114,42 @@ export default function PreviewPanel() {
     }
   };
 
-  const pickProject = (p: PreviewProject) => {
+  const pickProject = async (p: PreviewProject) => {
     setSelectedPath(p.path);
-    if (p.url) applyUrl(p.url);
-    else {
-      // no detected URL — focus the bar so you type one (saved on submit)
-      setDraft("");
-      setTimeout(() => urlRef.current?.focus(), 0);
+    setStartError(null);
+    // already running → just show it.
+    if (p.live && p.url) {
+      applyUrl(p.url);
+      return;
     }
+    // known URL but not running → ask hq to START its dev server (reuse-if-live,
+    // single-slot), then point the frame once the port answers.
+    if (p.url) {
+      const port = Number(new URL(p.url).port);
+      setStarting(p.path);
+      try {
+        const r = await fetch("/api/dev-server", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "start", path: p.path, name: p.name, port }),
+        }).then((res) => res.json());
+        if (r.ok) applyUrl(r.url);
+        else setStartError(r.error || "Couldn't start the dev server.");
+      } catch {
+        setStartError("Couldn't reach hq to start the server.");
+      } finally {
+        setStarting(null);
+      }
+      return;
+    }
+    // no detected URL — focus the bar so you type one (saved on submit)
+    setDraft("");
+    setTimeout(() => urlRef.current?.focus(), 0);
   };
 
   const liveCount = projects.filter((p) => p.live).length;
   const sorted = [...projects].sort((a, b) => Number(b.live) - Number(a.live));
+  const startingName = projects.find((p) => p.path === starting)?.name ?? "the project";
 
   return (
     <AppPanel open={open} onClose={() => setOpen(false)} rootId="preview-panel-root">
@@ -199,6 +230,25 @@ export default function PreviewPanel() {
                 <path d="M3 3v5h5" />
               </svg>
             </button>
+            {managed && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await fetch("/api/dev-server", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ action: "stop" }),
+                  }).catch(() => {});
+                  setManaged(null);
+                }}
+                title="Stop the dev server hq started"
+                className="shrink-0 rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-red-300"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <rect x="6" y="6" width="12" height="12" rx="1.5" />
+                </svg>
+              </button>
+            )}
           </form>
 
           {/* the live frame + reconnect overlay */}
@@ -210,7 +260,21 @@ export default function PreviewPanel() {
                 Pick a project above to preview its dev server.
               </div>
             )}
-            {url && online === false && (
+            {starting && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-950/95 text-center">
+                <span className="size-2.5 animate-pulse rounded-full bg-emerald-500" />
+                <p className="font-mono text-xs text-zinc-200">starting dev server…</p>
+                <p className="font-mono text-[10px] text-zinc-500">hq is launching {startingName} — first compile can take a few seconds</p>
+              </div>
+            )}
+            {!starting && startError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-950/95 px-6 text-center">
+                <span className="size-2.5 rounded-full bg-red-500" />
+                <p className="font-mono text-xs text-red-300">couldn&apos;t start the dev server</p>
+                <p className="font-mono text-[10px] text-zinc-500">{startError}</p>
+              </div>
+            )}
+            {!starting && !startError && url && online === false && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-950/92 text-center">
                 <span className="size-2.5 animate-pulse rounded-full bg-amber-500" />
                 <p className="font-mono text-xs text-zinc-200">dev server offline</p>
