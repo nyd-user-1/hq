@@ -10,6 +10,7 @@ import { useApi } from "@/app/ui/api-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 import { usePlugins } from "@/app/ui/plugins-state";
 import { usePreview } from "@/app/ui/preview-state";
+import { useSkills } from "@/app/ui/skills-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -27,6 +28,7 @@ export default function PanelNav() {
     text: useTextEditor(),
     plugins: usePlugins(),
     preview: usePreview(),
+    skills: useSkills(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">

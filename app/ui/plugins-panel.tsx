@@ -1,110 +1,49 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
 import { usePlugins } from "@/app/ui/plugins-state";
-import type { LibView } from "@/lib/plugins";
 import type { CatalogPlugin } from "@/lib/plugin-catalog";
+import type { PluginDetail } from "@/lib/plugin-detail";
 
-// HQ's plugin CONTROL PANEL — a drill-down over the Claude Code plugin ecosystem.
-// Home = Active · Browse · Custom. Active lists what's enabled; Browse drills into
-// Plugins (all 240, A-Z) / Skills / Commands / Agents; Custom is hq's featured
-// picks. Every card is unified: a not-installed plugin shows an "Install" text
-// button (it installs + enables, then becomes a switch); an installed one shows
-// the enable/disable switch. Search up top spans the whole catalog from any view.
+// hq's Plugins panel — ONE surface over the Claude Code plugin ecosystem.
+// "Yours" = what's enabled right now (the switch toggles it off → disabled).
+// "Catalog" = everything else, filtered by the catalog's own categories. Click a
+// card to DRILL IN (like Shipped/commits): the detail view shows the full
+// description, provenance (marketplace · repo · version), and — for installed
+// plugins — what it ships (commands/agents/skills/hooks, read off disk). The card
+// leads with the VENDOR (Adobe, Anthropic, 42Crunch…) — the real provenance —
+// and the switch enables/disables it (writes settings.json `enabledPlugins` via
+// `claude plugin enable/disable` — applies next session).
 
-// hq's featured plugins → their GitHub repos (the chip links here).
-const FEATURED: Record<string, string> = {
-  "ponytail@ponytail": "DietrichGebert/ponytail",
-  "caveman@caveman": "JuliusBrussee/caveman",
-};
-const MARKETPLACE_URL = "https://github.com/anthropics/claude-plugins-official";
+// hq's own picks — sorted to the top of the catalog.
+const FEATURED = new Set(["ponytail@ponytail", "caveman@caveman"]);
 
-// Drop a command into the terminal send box (Terminal 1), focused — used for the
-// few add-ons that install via npx rather than `claude plugin`.
-function prefill(cmd: string) {
-  window.dispatchEvent(
-    new CustomEvent("hq:compose", { detail: { text: cmd, replace: true, focus: true } }),
-  );
-}
-
-type View = "home" | "active" | "browse" | "custom" | "b-plugins" | "b-skills" | "b-commands" | "b-agents";
-const PARENT: Record<View, View | null> = {
-  home: null,
-  active: "home",
-  browse: "home",
-  custom: "home",
-  "b-plugins": "browse",
-  "b-skills": "browse",
-  "b-commands": "browse",
-  "b-agents": "browse",
-};
-const TITLE: Record<View, string> = {
-  home: "Control Panel",
-  active: "Active",
-  browse: "Browse",
-  custom: "Custom",
-  "b-plugins": "Plugins",
-  "b-skills": "Skills",
-  "b-commands": "Commands",
-  "b-agents": "Agents",
-};
-
-// A normalized card row — built from a catalog plugin (ref → toggle) or a curated
-// npx add-on (command → inject).
-type Row = {
-  key: string;
-  name: string;
-  description: string;
-  chipLabel: string;
-  chipKind: "featured" | "official" | "other";
-  chipHref: string;
-  ref?: string;
-  command?: string;
-  enabled: boolean;
-  installed: boolean;
-};
-
-function catalogRow(cp: CatalogPlugin): Row {
-  const repo = FEATURED[cp.ref];
-  const official = cp.marketplace === "claude-plugins-official";
-  return {
-    key: cp.ref,
-    name: cp.name,
-    description: cp.description,
-    ref: cp.ref,
-    enabled: cp.enabled,
-    installed: cp.enabled,
-    chipLabel: repo ? "FEATURED" : official ? "OFFICIAL" : cp.marketplace,
-    chipKind: repo ? "featured" : official ? "official" : "other",
-    chipHref: repo
-      ? `https://github.com/${repo}`
-      : official
-        ? MARKETPLACE_URL
-        : `https://github.com/search?q=${encodeURIComponent(cp.marketplace)}`,
-  };
+function titleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 export default function PluginsPanel() {
   const { open, setOpen } = usePlugins();
-  const [items, setItems] = useState<LibView[]>([]);
   const [catalog, setCatalog] = useState<CatalogPlugin[]>([]);
   const [q, setQ] = useState("");
-  const [view, setView] = useState<View>("home");
+  const [cat, setCat] = useState("all");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+
+  // drill-down: the opened plugin + its on-demand detail.
+  const [selected, setSelected] = useState<CatalogPlugin | null>(null);
+  const [detail, setDetail] = useState<PluginDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailNonce, setDetailNonce] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
     setErr("");
     try {
-      const [a, b] = await Promise.all([
-        fetch("/api/plugins", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/plugins/catalog", { cache: "no-store" }).then((r) => r.json()),
-      ]);
-      setItems(a?.plugins ?? []);
-      setCatalog(b?.plugins ?? []);
+      const r = await fetch("/api/plugins/catalog", { cache: "no-store" }).then((res) => res.json());
+      setCatalog(r?.plugins ?? []);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "failed to load");
     } finally {
@@ -116,42 +55,63 @@ export default function PluginsPanel() {
     if (open) load();
   }, [open, load]);
 
+  // fetch detail when a card is opened (or after a toggle bumps the nonce).
+  useEffect(() => {
+    if (!selected) {
+      setDetail(null);
+      return;
+    }
+    let abort = false;
+    setDetailLoading(true);
+    fetch(`/api/plugins/detail?ref=${encodeURIComponent(selected.ref)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!abort) setDetail(d?.detail ?? null);
+      })
+      .catch(() => {
+        if (!abort) setDetail(null);
+      })
+      .finally(() => {
+        if (!abort) setDetailLoading(false);
+      });
+    return () => {
+      abort = true;
+    };
+  }, [selected, detailNonce]);
+
   const query = q.trim().toLowerCase();
-  const sorted = [...catalog].sort((a, b) => a.name.localeCompare(b.name));
-  const results = query
-    ? sorted.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.description.toLowerCase().includes(query) ||
-          p.marketplace.toLowerCase().includes(query),
-      )
-    : [];
-  const active = sorted.filter((p) => p.enabled);
+  const matchesQuery = useCallback(
+    (p: CatalogPlugin) =>
+      !query ||
+      p.name.toLowerCase().includes(query) ||
+      p.description.toLowerCase().includes(query) ||
+      (p.author ?? "").toLowerCase().includes(query) ||
+      (p.category ?? "").toLowerCase().includes(query),
+    [query],
+  );
 
-  // Custom = hq's featured picks: ponytail + caveman (catalog refs) + impeccable (npx).
-  const customRows: Row[] = [];
-  for (const ref of Object.keys(FEATURED)) {
-    const cp = catalog.find((p) => p.ref === ref);
-    if (cp) customRows.push(catalogRow(cp));
-  }
-  const imp = items.find((i) => i.id === "impeccable");
-  if (imp) {
-    customRows.push({
-      key: "impeccable",
-      name: imp.name,
-      description: imp.blurb,
-      command: imp.command ?? "npx impeccable install",
-      enabled: imp.installed,
-      installed: imp.installed,
-      chipLabel: "FEATURED",
-      chipKind: "featured",
-      chipHref: `https://github.com/${imp.repo}`,
-    });
-  }
+  // Yours = enabled (filtered by the search box). Pool = everything installable.
+  const yours = catalog.filter((p) => p.enabled && matchesQuery(p));
+  const pool = catalog.filter((p) => !p.enabled);
 
-  const back = () => (query ? setQ("") : PARENT[view] ? setView(PARENT[view]!) : undefined);
-  const atHome = view === "home" && !query;
-  const title = query ? "Search" : TITLE[view];
+  // category chips, built from the installable pool, most-populous first.
+  const cats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of pool) if (p.category) counts[p.category] = (counts[p.category] ?? 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [pool]);
+
+  const catalogList = pool
+    .filter((p) => (cat === "all" || p.category === cat) && matchesQuery(p))
+    .sort(
+      (a, b) =>
+        Number(FEATURED.has(b.ref)) - Number(FEATURED.has(a.ref)) || a.name.localeCompare(b.name),
+    );
+
+  const detailChanged = useCallback(() => {
+    load();
+    setDetailNonce((n) => n + 1);
+  }, [load]);
 
   return (
     <AppPanel
@@ -161,192 +121,355 @@ export default function PluginsPanel() {
       widthClass="sm:w-[min(360px,40vw)]"
     >
       <Boundary label="plugins-panel.tsx">
-        {/* header */}
-        <div className="flex shrink-0 items-center gap-2">
-          {!atHome && (
-            <button onClick={back} title="Back" aria-label="Back" className="flex shrink-0 items-center rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {/* header — search+refresh, or back+name in the drill-down */}
+        {selected ? (
+          <div className="flex shrink-0 items-center">
+            <button
+              onClick={() => setSelected(null)}
+              title="Back to catalog"
+              aria-label="Back"
+              className="flex min-w-0 max-w-full items-center gap-2 rounded-md px-2 py-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                 <path d="m15 18-6-6 6-6" />
               </svg>
+              <span className="min-w-0 truncate font-mono text-[11px] text-zinc-100">{selected.name}</span>
             </button>
-          )}
-          <span className="min-w-0 flex-1 truncate font-mono text-[10px] uppercase tracking-wide text-zinc-400">{title}</span>
-          <button onClick={() => load()} disabled={loading} title="Refresh" aria-label="Refresh" className="flex shrink-0 items-center rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50">
-            <svg className={loading ? "animate-spin" : ""} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
-          </button>
-        </div>
-
-        {/* search */}
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={catalog.length ? `Search ${catalog.length} plugins…` : "Search plugins…"}
-          className="shrink-0 rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
-        />
+          </div>
+        ) : (
+          <div className="flex shrink-0 items-center gap-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={catalog.length ? `Search ${catalog.length} plugins…` : "Search plugins…"}
+              className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+            />
+            <button
+              onClick={() => load()}
+              disabled={loading}
+              title="Refresh"
+              aria-label="Refresh"
+              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+            >
+              <svg className={loading ? "animate-spin" : ""} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {err && (
           <p className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">{err}</p>
         )}
 
-        <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-2">
-          {query ? (
-            <>
-              <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">
-                {results.length} result{results.length === 1 ? "" : "s"}
-              </span>
-              {results.map((p) => <PluginRow key={p.ref} row={catalogRow(p)} onChanged={load} />)}
-              {!results.length && !loading && <p className="font-mono text-[11px] text-zinc-600">no plugins match “{q}”.</p>}
-            </>
-          ) : view === "home" ? (
-            <>
-              <CategoryRow label="Active" desc="Plugins enabled right now." count={active.length} onClick={() => setView("active")} />
-              <CategoryRow label="Browse" desc="The whole catalog — Plugins · Skills · Commands · Agents." count={catalog.length} onClick={() => setView("browse")} />
-              <CategoryRow label="Custom" desc="hq's featured picks." count={customRows.length} onClick={() => setView("custom")} />
-            </>
-          ) : view === "active" ? (
-            active.length ? active.map((p) => <PluginRow key={p.ref} row={catalogRow(p)} onChanged={load} />)
-                          : <p className="font-mono text-[11px] text-zinc-600">nothing enabled yet.</p>
-          ) : view === "custom" ? (
-            customRows.map((r) => <PluginRow key={r.key} row={r} onChanged={load} />)
-          ) : view === "browse" ? (
-            <>
-              <CategoryRow label="Plugins" desc="Official + added, A→Z." count={catalog.length} onClick={() => setView("b-plugins")} />
-              <CategoryRow label="Skills" desc="SKILL.md you can run." count={0} onClick={() => setView("b-skills")} />
-              <CategoryRow label="Commands" desc="Custom slash commands." count={0} onClick={() => setView("b-commands")} />
-              <CategoryRow label="Agents" desc="Subagent definitions." count={0} onClick={() => setView("b-agents")} />
-            </>
-          ) : view === "b-plugins" ? (
-            sorted.map((p) => <PluginRow key={p.ref} row={catalogRow(p)} onChanged={load} />)
-          ) : (
-            // b-skills / b-commands / b-agents — coming next
-            <p className="font-mono text-[11px] leading-relaxed text-zinc-600">
-              Coming next — this will list your installed {TITLE[view].toLowerCase()} (from disk + every enabled plugin) with the same install/enable switch.
-            </p>
-          )}
-        </div>
+        {selected ? (
+          <PluginDetailView base={selected} detail={detail} loading={detailLoading} onChanged={detailChanged} />
+        ) : (
+          <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col overflow-y-auto pr-2">
+            {/* YOURS */}
+            <SectionLabel label="Yours" count={catalog.filter((p) => p.enabled).length} />
+            <div className="mt-2 flex flex-col gap-4">
+              {yours.length ? (
+                yours.map((p) => <PluginCard key={p.ref} p={p} onOpen={setSelected} onChanged={load} />)
+              ) : (
+                <p className="px-0.5 font-mono text-[11px] text-zinc-600">
+                  {query ? "no enabled plugins match." : "Nothing enabled yet — install one below."}
+                </p>
+              )}
+            </div>
+
+            {/* CATALOG — the category bar sticks while you scroll the list. NOTE:
+                the scroll PARENT must stay overflow-y-only — adding overflow-x here
+                breaks position:sticky rendering in Safari (cards bleed through the
+                bar). overscroll-x-contain keeps a chip swipe from nudging the list. */}
+            <div className="sticky top-0 z-10 mt-6 bg-[#09090b] pb-4 pt-1">
+              <SectionLabel label="Catalog" count={pool.length} />
+              <div className="scrollbar-none mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain">
+                <CatChip label="all" count={pool.length} active={cat === "all"} onClick={() => setCat("all")} />
+                {cats.map(([c, n]) => (
+                  <CatChip key={c} label={c} count={n} active={cat === c} onClick={() => setCat(c)} />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {catalogList.length ? (
+                catalogList.map((p) => <PluginCard key={p.ref} p={p} onOpen={setSelected} onChanged={load} />)
+              ) : (
+                <p className="px-0.5 font-mono text-[11px] text-zinc-600">
+                  {loading ? "loading…" : query ? `no plugins match “${q}”.` : "nothing here."}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* footer */}
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
-          {atHome
-            ? `${catalog.length} plugins across your registered marketplaces. Search anywhere, or drill in.`
-            : "Install enables it · the switch toggles it · changes apply next session."}
+          {selected
+            ? "The switch enables/disables it · changes apply next session."
+            : `${catalog.length} plugins across your marketplaces · install enables it, the switch toggles it, changes apply next session.`}
         </footer>
       </Boundary>
     </AppPanel>
   );
 }
 
-// A drill-down category row (sports "Sideline" pattern): label · desc · count + ›.
-function CategoryRow({ label, desc, count, onClick }: { label: string; desc: string; count: number; onClick: () => void }) {
+function SectionLabel({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="flex shrink-0 items-baseline gap-2">
+      <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">{label}</span>
+      <span className="font-mono text-[10px] tabular-nums text-zinc-600">{count}</span>
+    </div>
+  );
+}
+
+function CatChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between gap-3 rounded-md border border-zinc-800/70 bg-zinc-900/20 px-3 py-3 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900/50"
+      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+        active
+          ? "border-zinc-200 bg-zinc-200 text-zinc-900"
+          : "border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+      }`}
     >
-      <div className="min-w-0">
-        <div className="text-[15px] text-zinc-100">{label}</div>
-        <div className="mt-0.5 font-mono text-[10px] text-zinc-600">{desc}</div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2 text-zinc-500">
-        <span className="font-mono text-[11px] tabular-nums">{count}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="m9 18 6-6-6-6" />
-        </svg>
-      </div>
+      <span>{label}</span>
+      <span className={`tabular-nums ${active ? "text-zinc-500" : "text-zinc-600"}`}>{count}</span>
     </button>
   );
 }
 
-// The unified plugin card: name · linked chip · description + control. Not
-// installed → an "Install" text button (model-picker styling); once installed →
-// the enable/disable switch.
-function PluginRow({ row, onChanged }: { row: Row; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [enabled, setEnabled] = useState(row.enabled);
-  useEffect(() => setEnabled(row.enabled), [row.enabled, row.key]);
+// The list card: vendor-led identity + one control. The whole card drills into
+// the detail view; the control stops propagation so toggling never opens it.
+function PluginCard({
+  p,
+  onOpen,
+  onChanged,
+}: {
+  p: CatalogPlugin;
+  onOpen: (p: CatalogPlugin) => void;
+  onChanged: () => void;
+}) {
+  const firstParty = (p.author ?? "").toLowerCase() === "anthropic";
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(p)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(p);
+        }
+      }}
+      className="cursor-pointer rounded-md border border-zinc-800/70 bg-zinc-900/30 p-2.5 text-left transition-colors hover:border-zinc-600"
+    >
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-200">{p.name}</span>
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <EnableControl refId={p.ref} enabled={p.enabled} onChanged={onChanged} />
+        </div>
+      </div>
 
-  const toggle = async (on: boolean) => {
-    if (!row.ref) return;
-    setBusy(true);
-    setEnabled(on);
-    try {
-      const r = await fetch("/api/plugins/toggle", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ref: row.ref, on }),
-      });
-      const d = await r.json();
-      setEnabled(!!d.enabled);
-      onChanged();
-    } catch {
-      setEnabled(!on);
-    } finally {
-      setBusy(false);
-    }
-  };
+      {(p.author || p.category) && (
+        <div className="mt-0.5 truncate font-mono text-[10px]">
+          {p.author && (
+            <span className={firstParty ? "text-orange-300/70" : "text-zinc-500"}>{p.author}</span>
+          )}
+          {p.author && p.category && <span className="text-zinc-700"> · </span>}
+          {p.category && <span className="text-zinc-600">{titleCase(p.category)}</span>}
+        </div>
+      )}
 
-  const chipCls =
-    row.chipKind === "official"
-      ? "text-orange-400/90 hover:text-orange-400 hover:ring-[0.5px] hover:ring-orange-400/70"
-      : row.chipKind === "featured"
-        ? "text-blue-300/80 hover:text-blue-200 hover:ring-[0.5px] hover:ring-blue-400/60"
-        : "text-zinc-500 hover:text-zinc-300";
+      {p.description && (
+        <p className="mt-3 line-clamp-3 text-[11px] leading-snug text-zinc-500">{p.description}</p>
+      )}
+    </div>
+  );
+}
+
+// The drill-down: full description, provenance, and what the plugin ships.
+function PluginDetailView({
+  base,
+  detail,
+  loading,
+  onChanged,
+}: {
+  base: CatalogPlugin;
+  detail: PluginDetail | null;
+  loading: boolean;
+  onChanged: () => void;
+}) {
+  const d = detail;
+  const author = d?.author ?? base.author;
+  const category = d?.category ?? base.category;
+  const firstParty = (author ?? "").toLowerCase() === "anthropic";
+  const ships = d?.ships;
+  const shipsAny = ships && (ships.commands.length || ships.agents.length || ships.skills.length || ships.hooks.length);
 
   return (
-    <div className="flex items-start gap-2.5 rounded-md border border-zinc-800/70 bg-zinc-900/30 p-2.5 transition-colors hover:border-zinc-700">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] text-zinc-200">{row.name}</span>
-          <a
-            href={row.chipHref}
-            target="_blank"
-            rel="noreferrer"
-            title={row.chipKind === "official" ? "Claude marketplace" : row.chipHref}
-            className={`inline-flex shrink-0 items-center rounded bg-zinc-800/60 px-1.5 py-0.5 font-mono text-[8px] uppercase leading-none tracking-wider transition-colors ${chipCls}`}
-          >
-            {row.chipLabel}
-          </a>
+    <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2">
+      {/* provenance + control */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {(author || category) && (
+            <div className="truncate font-mono text-[11px]">
+              {author && <span className={firstParty ? "text-orange-300/80" : "text-zinc-400"}>{author}</span>}
+              {author && category && <span className="text-zinc-700"> · </span>}
+              {category && <span className="text-zinc-500">{titleCase(category)}</span>}
+            </div>
+          )}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10px] text-zinc-600">
+            <span>{d?.marketplace ?? base.ref.split("@")[1]}</span>
+            {d?.version && (
+              <>
+                <span className="text-zinc-800">·</span>
+                <span className="text-zinc-500">{d.version}</span>
+              </>
+            )}
+            {d?.sha && (
+              <>
+                <span className="text-zinc-800">·</span>
+                <span>{d.sha}</span>
+              </>
+            )}
+          </div>
         </div>
-        {row.description && (
-          <p className="mt-3 text-[11px] leading-snug text-zinc-500">
-            {row.description.slice(0, 120)}
-            {row.description.length > 120 ? "…" : ""}
-          </p>
-        )}
+        <div className="shrink-0">
+          <EnableControl refId={base.ref} enabled={d?.enabled ?? base.enabled} onChanged={onChanged} />
+        </div>
       </div>
-      <div className="flex shrink-0 items-center pt-0.5">
-        {row.ref ? (
-          enabled ? (
-            <Switch on disabled={busy} onClick={() => toggle(false)} title="disable" />
-          ) : (
-            <InstallButton busy={busy} onClick={() => toggle(true)} />
-          )
-        ) : row.command ? (
-          row.installed ? (
-            <span className="font-mono text-[10px] text-emerald-300">installed</span>
-          ) : (
-            <InstallButton busy={false} onClick={() => prefill(row.command!)} />
-          )
-        ) : null}
+
+      {/* full description */}
+      <p className="text-[12px] leading-relaxed text-zinc-300">
+        {d?.description || base.description || (loading ? "" : "No description.")}
+      </p>
+
+      {/* link — the source repository (manifest source.url) */}
+      {d?.repo && (
+        <div className="flex flex-wrap gap-2">
+          <LinkChip
+            href={d.repo}
+            label="Repository"
+            leading={d.repo.includes("github.com") ? <GitHubMark /> : undefined}
+          />
+        </div>
+      )}
+
+      {/* SHIPS — what installing this actually adds, read off disk */}
+      {loading && !d ? (
+        <p className="font-mono text-[11px] text-zinc-600">loading…</p>
+      ) : d?.installed ? (
+        shipsAny ? (
+          <div className="flex flex-col gap-3 border-t border-dashed border-zinc-800 pt-4">
+            <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">Ships</span>
+            <ShipGroup label="Commands" items={ships!.commands.map((c) => `/${c}`)} />
+            <ShipGroup label="Agents" items={ships!.agents} />
+            <ShipGroup label="Skills" items={ships!.skills} />
+            <ShipGroup label="Hooks" items={ships!.hooks} />
+          </div>
+        ) : (
+          <p className="border-t border-dashed border-zinc-800 pt-4 font-mono text-[11px] text-zinc-600">
+            Installed — adds no commands, agents or skills.
+          </p>
+        )
+      ) : (
+        <p className="border-t border-dashed border-zinc-800 pt-4 font-mono text-[11px] text-zinc-600">
+          Install to see the commands, agents and skills it adds.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ShipGroup({ label, items }: { label: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="font-mono text-[10px] text-zinc-600">
+        {label} <span className="text-zinc-700">{items.length}</span>
+      </span>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((it) => (
+          <span
+            key={it}
+            className="truncate rounded border border-zinc-800 bg-zinc-900/40 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300"
+          >
+            {it}
+          </span>
+        ))}
       </div>
     </div>
   );
 }
 
-// Install control — the send-box model-picker styling: bare text, muted bg on
-// hover. Shows "installing…" while the install runs.
-function InstallButton({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+function LinkChip({ href, label, leading }: { href: string; label: string; leading?: React.ReactNode }) {
   return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title={href}
+      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 px-2 py-1 font-mono text-[10px] text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+    >
+      {leading}
+      {label}
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 17 17 7M9 7h8v8" />
+      </svg>
+    </a>
+  );
+}
+
+// The GitHub mark, inlined as a vector path with fill=currentColor so it's
+// crisp at any size and inherits the chip's text color + hover lightening (a
+// raster asset can't do either — hence not using the public/ files).
+function GitHubMark() {
+  return (
+    <svg aria-hidden width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+    </svg>
+  );
+}
+
+// Shared enable/disable control: the switch when on, an Install button when off.
+// Used by both the list card and the drill-down.
+function EnableControl({ refId, enabled, onChanged }: { refId: string; enabled: boolean; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [on, setOn] = useState(enabled);
+  useEffect(() => setOn(enabled), [enabled, refId]);
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    setOn(next);
+    try {
+      const r = await fetch("/api/plugins/toggle", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ref: refId, on: next }),
+      });
+      const d = await r.json();
+      setOn(!!d.enabled);
+      onChanged();
+    } catch {
+      setOn(!next);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return on ? (
+    <Switch on disabled={busy} onClick={() => toggle(false)} title="disable" />
+  ) : (
     <button
       type="button"
       disabled={busy}
-      onClick={onClick}
+      onClick={() => toggle(true)}
       className="rounded-md px-2 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-60"
     >
       {busy ? "installing…" : "Install"}

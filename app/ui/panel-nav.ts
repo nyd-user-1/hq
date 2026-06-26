@@ -65,7 +65,7 @@ export const NAV_TARGETS: NavTarget[] = [
 // crowded dropdown out in a grid (Console 2×3, Metrics 2×4). Source of truth for
 // STRUCTURE + ORDER; routing/open-tests still run off PANEL_ROUTES + the
 // client-state contexts.
-export type ToggleKey = "api" | "planner" | "text" | "plugins" | "preview";
+export type ToggleKey = "api" | "planner" | "text" | "plugins" | "preview" | "skills";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey };
@@ -88,7 +88,7 @@ export const NAV_HEADERS: NavHeader[] = [
     items: [
       { title: "Text", toggle: "text" },
       { title: "Tree", href: "/tree" },
-      { title: "Skills", href: "/skills" },
+      { title: "Skills", toggle: "skills" },
       { title: "CMD", href: "/cmd" },
       { title: "Routines", href: "/routines" },
       { title: "Plugins", toggle: "plugins" },

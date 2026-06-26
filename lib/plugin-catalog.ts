@@ -16,7 +16,13 @@ const MARKETPLACES = path.join(CLAUDE_DIR, "plugins", "marketplaces");
 
 type Manifest = {
   name?: string;
-  plugins?: Array<{ name?: string; description?: string; category?: string }>;
+  plugins?: Array<{
+    name?: string;
+    description?: string;
+    category?: string;
+    author?: { name?: string } | string;
+    homepage?: string;
+  }>;
 };
 
 export type CatalogPlugin = {
@@ -25,6 +31,8 @@ export type CatalogPlugin = {
   marketplace: string;
   description: string;
   category?: string;
+  author?: string; // the vendor/org that publishes it — the card's identity line
+  homepage?: string; // the plugin's real homepage (the name links here)
   enabled: boolean; // installed + active (settings.json enabledPlugins[ref] === true)
 };
 
@@ -73,12 +81,20 @@ export function getCatalog(): CatalogPlugin[] {
     for (const p of j.plugins ?? []) {
       if (!p?.name) continue;
       const ref = `${p.name}@${market}`;
+      const author =
+        typeof p.author === "string"
+          ? p.author
+          : typeof p.author?.name === "string"
+            ? p.author.name
+            : undefined;
       out.push({
         ref,
         name: p.name,
         marketplace: market,
         description: typeof p.description === "string" ? p.description : "",
         category: typeof p.category === "string" ? p.category : undefined,
+        author,
+        homepage: typeof p.homepage === "string" ? p.homepage : undefined,
         enabled: enabled[ref] === true,
       });
     }

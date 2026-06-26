@@ -15,6 +15,8 @@ import { ApiProvider } from "@/app/ui/api-state";
 import ApiPanel from "@/app/ui/api-panel";
 import { PluginsProvider } from "@/app/ui/plugins-state";
 import PluginsPanel from "@/app/ui/plugins-panel";
+import { SkillsProvider } from "@/app/ui/skills-state";
+import SkillsPanel from "@/app/ui/skills-panel";
 import { PreviewProvider } from "@/app/ui/preview-state";
 import PreviewPanel from "@/app/ui/preview-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
@@ -50,6 +52,7 @@ export default async function Shell({
       <PlannerProvider>
       <ApiProvider>
       <PluginsProvider>
+      <SkillsProvider>
       <PreviewProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
@@ -98,6 +101,9 @@ export default async function Shell({
           {/* The independent Plugins library panel's own portal root — a peer that
               can sit open alongside the route panel, the planner, and the API. */}
           <div id="plugins-panel-root" className="flex h-full min-w-0" />
+          {/* The independent Skills library panel's own portal root — first of
+              the console panels to migrate out of @panel/(console). */}
+          <div id="skills-panel-root" className="flex h-full min-w-0" />
           {/* The independent Preview panel's own portal root — the in-app live
               view of a project's dev server, open alongside everything else. */}
           <div id="preview-panel-root" className="flex h-full min-w-0" />
@@ -111,10 +117,12 @@ export default async function Shell({
       <PlannerPanel />
       <ApiPanel />
       <PluginsPanel />
+      <SkillsPanel />
       <PreviewPanel />
       <TextEditor />
       </TextEditorProvider>
       </PreviewProvider>
+      </SkillsProvider>
       </PluginsProvider>
       </ApiProvider>
       </PlannerProvider>
