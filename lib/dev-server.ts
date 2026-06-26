@@ -55,6 +55,20 @@ function portLive(port: number, timeout = 400): Promise<boolean> {
   });
 }
 
+// An OS-assigned free localhost port — for static sites (bankit) that have no
+// dev script and thus no inferred port to target.
+function freePort(): Promise<number> {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once("error", () => resolve(0));
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address();
+      const p = addr && typeof addr === "object" ? addr.port : 0;
+      srv.close(() => resolve(p));
+    });
+  });
+}
+
 // The project's serve command: its package.json dev/start script via npm, else a
 // static server for a plain index.html site (e.g. bankit). null = can't serve.
 function serveCommand(projectPath: string, port: number): { cmd: string; args: string[] } | null {
@@ -131,6 +145,9 @@ export async function startDevServer(
   name: string,
   port: number,
 ): Promise<StartResult> {
+  // static sites have no inferred port → assign a free one.
+  if (!port) port = await freePort();
+  if (!port) return { ok: false, error: "Couldn't find a free port." };
   const url = `http://localhost:${port}`;
   // already serving (your own server, or a prior hq one)? reuse — touch nothing.
   if (await portLive(port)) return { ok: true, url };

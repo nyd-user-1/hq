@@ -26,6 +26,7 @@ export default function PreviewPanel() {
   const [starting, setStarting] = useState<string | null>(null); // project path hq is launching
   const [startError, setStartError] = useState<string | null>(null);
   const [managed, setManaged] = useState<string | null>(null); // path of the dev server hq is running
+  const latestPick = useRef<string | null>(null); // ignore a stale start once you've clicked another
 
   // Load the universal project list on open, then refresh on an interval (cheap
   // localhost TCP checks) so the live dots stay current. Auto-select the first
@@ -115,6 +116,7 @@ export default function PreviewPanel() {
   };
 
   const pickProject = async (p: PreviewProject) => {
+    latestPick.current = p.path;
     setSelectedPath(p.path);
     setStartError(null);
     // already running → just show it.
@@ -122,29 +124,28 @@ export default function PreviewPanel() {
       applyUrl(p.url);
       return;
     }
-    // known URL but not running → ask hq to START its dev server (reuse-if-live,
-    // single-slot), then point the frame once the port answers.
-    if (p.url) {
-      const port = Number(new URL(p.url).port);
-      setStarting(p.path);
-      try {
-        const r = await fetch("/api/dev-server", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "start", path: p.path, name: p.name, port }),
-        }).then((res) => res.json());
-        if (r.ok) applyUrl(r.url);
-        else setStartError(r.error || "Couldn't start the dev server.");
-      } catch {
-        setStartError("Couldn't reach hq to start the server.");
-      } finally {
-        setStarting(null);
-      }
-      return;
+    // not running → switch the frame OFF the previous project FIRST (so you don't
+    // see, e.g., hq behind the overlay) and ask hq to START it. dev-script projects
+    // use their inferred port; static sites (bankit) get a free port (0 → server).
+    setUrl("");
+    setOnline(null);
+    wasOnline.current = null;
+    setStarting(p.path);
+    const port = p.url ? Number(new URL(p.url).port) : 0;
+    try {
+      const r = await fetch("/api/dev-server", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "start", path: p.path, name: p.name, port }),
+      }).then((res) => res.json());
+      if (latestPick.current !== p.path) return; // a newer click superseded this one
+      if (r.ok) applyUrl(r.url);
+      else setStartError(r.error || "Couldn't start the dev server.");
+    } catch {
+      if (latestPick.current === p.path) setStartError("Couldn't reach hq to start the server.");
+    } finally {
+      if (latestPick.current === p.path) setStarting(null);
     }
-    // no detected URL — focus the bar so you type one (saved on submit)
-    setDraft("");
-    setTimeout(() => urlRef.current?.focus(), 0);
   };
 
   const liveCount = projects.filter((p) => p.live).length;
