@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { getSkills } from "@/lib/skills";
 import { installPathFor } from "@/lib/plugin-detail";
+import { CLI_SKILLS } from "@/lib/cli-registry";
+import { parseFrontmatter } from "@/lib/frontmatter";
 
 // The Skills LIBRARY — the "explode the plugins into capabilities" reader. One
 // unified list of every skill available to you, from three sources, each tagged
@@ -14,34 +16,22 @@ import { installPathFor } from "@/lib/plugin-detail";
 const HOME = os.homedir();
 const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(HOME, ".claude");
 
-export type SkillSource = "user" | "plugin";
+export type SkillSource = "user" | "plugin" | "builtin";
 
 export type LibrarySkill = {
   id: string; // unique across sources
   name: string; // slug → the /<name> command
   title: string;
   description: string;
-  tokens: number; // ~4 chars/token estimate
+  tokens: number; // ~4 chars/token estimate; 0 for built-ins (no file)
   argHint?: string;
   source: SkillSource;
-  sourceLabel: string; // "You" · the plugin name
+  sourceLabel: string; // "You" · the plugin name · "Built-in"
   pluginRef?: string;
-  path: string; // SKILL.md path — every library skill is a real file on disk
+  path?: string; // SKILL.md path (user/plugin); built-ins have no file on disk
 };
 
 const est = (s: string) => Math.round(s.length / 4);
-
-// First --- … --- block as flat key: value pairs (matches lib/skills).
-function frontmatter(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const block = text.match(/^---\n([\s\S]*?)\n---/);
-  if (!block) return out;
-  for (const line of block[1].split("\n")) {
-    const kv = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
-    if (kv) out[kv[1]] = kv[2].replace(/^["']|["']$/g, "").trim();
-  }
-  return out;
-}
 
 function enabledRefs(): string[] {
   try {
@@ -71,7 +61,7 @@ function pluginSkills(): LibrarySkill[] {
       const file = path.join(dir, e.name, "SKILL.md");
       try {
         const text = fs.readFileSync(file, "utf8");
-        const fm = frontmatter(text);
+        const fm = parseFrontmatter(text);
         out.push({
           id: `plugin:${ref}:${e.name}`,
           name: e.name,
@@ -120,6 +110,21 @@ export function getSkillsLibrary(): LibrarySkill[] {
     sourceLabel: "You",
     path: s.path,
   }));
+  const plugin = pluginSkills();
 
-  return [...user, ...pluginSkills()];
+  // bundled built-in skills (from the CLI registry), minus any name you already
+  // have on disk (user or plugin) so nothing double-shows.
+  const onDisk = new Set([...user, ...plugin].map((s) => s.name));
+  const builtin: LibrarySkill[] = CLI_SKILLS.filter((b) => !onDisk.has(b.name)).map((b) => ({
+    id: `builtin:${b.name}`,
+    name: b.name,
+    title: b.name,
+    description: b.desc,
+    tokens: 0,
+    argHint: b.args,
+    source: "builtin",
+    sourceLabel: "Built-in",
+  }));
+
+  return [...user, ...plugin, ...builtin];
 }

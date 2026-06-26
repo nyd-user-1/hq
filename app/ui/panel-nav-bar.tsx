@@ -11,6 +11,7 @@ import { useTextEditor } from "@/app/ui/text-editor-state";
 import { usePlugins } from "@/app/ui/plugins-state";
 import { usePreview } from "@/app/ui/preview-state";
 import { useSkills } from "@/app/ui/skills-state";
+import { useCommands } from "@/app/ui/commands-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -29,6 +30,7 @@ export default function PanelNav() {
     plugins: usePlugins(),
     preview: usePreview(),
     skills: useSkills(),
+    commands: useCommands(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">
@@ -96,7 +98,7 @@ function Dropdown({
   // "Active" when the current route is one of the header's route leaves, or one
   // of its toggle leaves is open.
   const active = header.items.some((it) =>
-    "href" in it ? it.href === pathname : toggles[it.toggle].open,
+    "href" in it ? it.href === pathname : "toggle" in it ? toggles[it.toggle].open : false,
   );
   const cols = header.cols ?? 1;
   return (
@@ -122,7 +124,15 @@ function Dropdown({
           }`}
         >
           {header.items.map((it) =>
-            "href" in it ? (
+            "soon" in it ? (
+              <span
+                key={it.title}
+                title="Coming soon"
+                className="cursor-default rounded px-3 py-1.5 font-mono text-[11px] text-zinc-700"
+              >
+                {it.title}
+              </span>
+            ) : "href" in it ? (
               <Link
                 key={it.title}
                 href={withPins(it.href, params.toString())}

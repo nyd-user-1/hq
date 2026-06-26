@@ -4,9 +4,9 @@ import TabNav from "@/app/ui/tab-nav";
 
 export const dynamic = "force-dynamic";
 
-// Console panel: Skills · CMD · Routines · Firehose. Sessions + SDK were removed
-// (the sidebar Recents owns session selection now; SDK runs are searchable via
-// the Search panel). Shipped lives in the Activity panel.
+// Console panel: Tree · Routines · Firehose. Skills + CMD migrated to their own
+// standalone panels (skills-panel.tsx / commands-panel.tsx, opened from the
+// Console menu); Sessions + SDK were removed earlier. Shipped lives in Activity.
 export default function ConsoleLayout({
   children,
 }: {
@@ -17,8 +17,6 @@ export default function ConsoleLayout({
       <TabNav
         tabs={[
           { title: "Tree", href: "/tree", segment: "tree" },
-          { title: "Skills", href: "/skills", segment: "skills" },
-          { title: "CMD", href: "/cmd", segment: "cmd" },
           { title: "Routines", href: "/routines", segment: "routines" },
           { title: "Firehose", href: "/firehose", segment: "firehose" },
         ]}

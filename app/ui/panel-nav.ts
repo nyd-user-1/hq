@@ -13,7 +13,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
   { title: "Activity", href: "/projects", routes: ["/projects", "/todo", "/components", "/shipped"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/calls", "/guardrails", "/savings", "/audit"] },
-  { title: "Console", href: "/tree", routes: ["/tree", "/skills", "/cmd", "/routines", "/firehose"] },
+  { title: "Console", href: "/tree", routes: ["/tree", "/routines", "/firehose"] },
   { title: "Compose", href: "/compose", routes: ["/compose"] },
 ];
 
@@ -46,8 +46,6 @@ export const NAV_TARGETS: NavTarget[] = [
   { title: "Memory Audit", href: "/audit", group: "Metrics", keywords: "memory notes audit" },
   // Console
   { title: "Tree", href: "/tree", group: "Console", keywords: "agents subagents hierarchy background dispatched jobs teams sidechain explore" },
-  { title: "Skills", href: "/skills", group: "Console", keywords: "skills launcher commands" },
-  { title: "CMD", href: "/cmd", group: "Console", keywords: "slash commands cli reference" },
   { title: "Routines", href: "/routines", group: "Console", keywords: "cron scheduled jobs" },
   { title: "Firehose", href: "/firehose", group: "Console", keywords: "stream events live feed" },
   // Standalone panels. (Search isn't here — the palette's own input IS the
@@ -65,34 +63,40 @@ export const NAV_TARGETS: NavTarget[] = [
 // crowded dropdown out in a grid (Console 2×3, Metrics 2×4). Source of truth for
 // STRUCTURE + ORDER; routing/open-tests still run off PANEL_ROUTES + the
 // client-state contexts.
-export type ToggleKey = "api" | "planner" | "text" | "plugins" | "preview" | "skills";
+export type ToggleKey = "api" | "planner" | "text" | "plugins" | "preview" | "skills" | "commands";
 export type NavLeaf =
   | { title: string; href: string }
-  | { title: string; toggle: ToggleKey };
+  | { title: string; toggle: ToggleKey }
+  | { title: string; soon: true }; // a greyed, non-clickable "coming soon" leaf
 export type NavHeader = { title: string; items: NavLeaf[]; cols?: number };
 
 export const NAV_HEADERS: NavHeader[] = [
   {
     title: "Activity",
+    cols: 2, // 8 items → 2×4
     items: [
       { title: "Projects", href: "/projects" },
       { title: "To Do", href: "/todo" },
       { title: "Components", href: "/components" },
       { title: "Shipped", href: "/shipped" },
       { title: "Compose", href: "/compose" },
+      { title: "Text", toggle: "text" },
+      { title: "Tree", href: "/tree" },
+      { title: "Preview", toggle: "preview" },
     ],
   },
   {
     title: "Console",
-    cols: 2, // 7 items → 2 cols
+    cols: 2, // capability panels — the four `soon` ones aren't built yet
     items: [
-      { title: "Text", toggle: "text" },
-      { title: "Tree", href: "/tree" },
+      { title: "Commands", toggle: "commands" },
       { title: "Skills", toggle: "skills" },
-      { title: "CMD", href: "/cmd" },
-      { title: "Routines", href: "/routines" },
       { title: "Plugins", toggle: "plugins" },
-      { title: "Preview", toggle: "preview" },
+      { title: "Routines", href: "/routines" },
+      { title: "Hooks", soon: true },
+      { title: "MCP", soon: true },
+      { title: "Agents", soon: true },
+      { title: "Output Styles", soon: true },
     ],
   },
   {

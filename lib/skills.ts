@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { parseFrontmatter } from "@/lib/frontmatter";
 
 // Discover the user's installed skills from disk — same "disk is the database"
 // read as the rest of HQ. Each skill is a folder under ~/.claude/skills/<name>/
@@ -23,19 +24,6 @@ export type Skill = {
 
 const est = (s: string) => Math.round(s.length / 4);
 
-// First --- … --- block, parsed as flat key: value pairs (single-line values —
-// enough for name/description/argument-hint; matches lib/audit's simplicity).
-function frontmatter(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const block = text.match(/^---\n([\s\S]*?)\n---/);
-  if (!block) return out;
-  for (const line of block[1].split("\n")) {
-    const kv = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
-    if (kv) out[kv[1]] = kv[2].replace(/^["']|["']$/g, "").trim();
-  }
-  return out;
-}
-
 export function getSkills(): Skill[] {
   let dirs: fs.Dirent[];
   try {
@@ -49,7 +37,7 @@ export function getSkills(): Skill[] {
     const file = path.join(SKILLS_DIR, dir.name, "SKILL.md");
     try {
       const text = fs.readFileSync(file, "utf8");
-      const fm = frontmatter(text);
+      const fm = parseFrontmatter(text);
       skills.push({
         name: dir.name,
         title: fm.name || dir.name,

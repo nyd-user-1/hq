@@ -287,7 +287,7 @@ function PluginCard({
       )}
 
       {p.description && (
-        <p className="mt-3 line-clamp-3 text-[11px] leading-snug text-zinc-500">{p.description}</p>
+        <p className="mt-3 line-clamp-2 text-[11px] leading-snug text-zinc-500">{p.description}</p>
       )}
     </div>
   );
