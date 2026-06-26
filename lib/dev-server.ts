@@ -157,13 +157,29 @@ export async function startDevServer(
   const sc = serveCommand(projectPath, port);
   if (!sc) return { ok: false, error: "No dev/start script and no index.html — set a URL manually." };
 
+  // Strip HQ's OWN Next.js env before spawning the child. When HQ runs as the
+  // packaged desktop standalone, process.env carries NODE_ENV=production + Next's
+  // private standalone config — inheriting those POISONS a spawned `next dev`
+  // ("non-standard NODE_ENV", "Invalid distDirRoot" Turbopack panic). The child
+  // must start from a clean slate so it boots as its OWN project, not inside HQ's.
+  const childEnv: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k === "NODE_ENV" || k === "HQ_BUILD_DIR" || k.startsWith("__NEXT") || k.startsWith("NEXT_PRIVATE"))
+      continue;
+    childEnv[k] = v;
+  }
+
   const log: string[] = [];
   let child: ChildProcess;
   try {
     child = spawn(sc.cmd, sc.args, {
       cwd: projectPath,
       env: {
-        ...process.env,
+        ...childEnv,
+        // childEnv already dropped HQ's NODE_ENV + Next internals; force the child
+        // to development (what `next dev` wants — and it satisfies the type, which
+        // augments ProcessEnv to require NODE_ENV).
+        NODE_ENV: "development",
         PATH: `${EXTRA_PATH}:${process.env.PATH ?? ""}`,
         PORT: String(port),
         BROWSER: "none",
