@@ -13,6 +13,20 @@ import { spawn, type ChildProcess } from "node:child_process";
 // restarted hq can still see + stop it (by pid).
 const SIDECAR = path.join(os.homedir(), ".claude", "hq", "dev-servers.json");
 
+// A PATH that finds npm/node regardless of how hq was launched. A GUI-launched
+// app (the packaged desktop bundle) inherits a MINIMAL PATH — no homebrew, no
+// npm-global — so `spawn("npm")` would die instantly ("exited during startup").
+// Prepend the usual node homes (npm global, both homebrew prefixes, system).
+const EXTRA_PATH = [
+  path.join(os.homedir(), ".npm-global", "bin"),
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+  "/usr/bin",
+  "/bin",
+  "/usr/sbin",
+  "/sbin",
+].join(":");
+
 export type Managed = {
   projectPath: string;
   name: string;
@@ -131,7 +145,13 @@ export async function startDevServer(
   try {
     child = spawn(sc.cmd, sc.args, {
       cwd: projectPath,
-      env: { ...process.env, PORT: String(port), BROWSER: "none", FORCE_COLOR: "0" },
+      env: {
+        ...process.env,
+        PATH: `${EXTRA_PATH}:${process.env.PATH ?? ""}`,
+        PORT: String(port),
+        BROWSER: "none",
+        FORCE_COLOR: "0",
+      },
       detached: true, // own process group → survives an hq restart, killable as a group
       stdio: ["ignore", "pipe", "pipe"],
     });

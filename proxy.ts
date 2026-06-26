@@ -42,14 +42,23 @@ export function proxy(req: NextRequest): NextResponse {
   // DNS-rebinding defense: the Host must be a loopback name on every request.
   if (!hostIsLocal(req.headers.get("host"))) return forbid("host");
 
-  // CSRF defense: a declared origin/site must be local. Absent headers (top-level
-  // navigations, non-browser clients) are allowed — browsers can't suppress
-  // Origin on a cross-origin request, so "absent" is never a cross-site attack.
-  const origin = req.headers.get("origin");
-  if (origin && !originIsLocal(origin)) return forbid("origin");
+  // CSRF defense applies ONLY to state-changing requests. A GET/HEAD/OPTIONS can't
+  // mutate HQ, and its response isn't readable cross-origin (CORS), so framing HQ
+  // in the Preview panel, loading a page, or any cross-site GET is harmless — the
+  // CSRF surface is non-safe methods only. (The Host/DNS-rebind check above still
+  // covers EVERY request.) This is what lets the Preview iframe show any localhost
+  // app, HQ itself included, while a cross-site POST stays blocked.
+  const safe = req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS";
+  if (!safe) {
+    // Absent headers (non-browser local clients — the OTEL exporter, hooks) pass;
+    // browsers can't suppress Origin on a cross-origin non-GET, so "absent" is
+    // never a cross-site attack.
+    const origin = req.headers.get("origin");
+    if (origin && !originIsLocal(origin)) return forbid("origin");
 
-  const site = req.headers.get("sec-fetch-site");
-  if (site && site !== "same-origin" && site !== "none") return forbid("site");
+    const site = req.headers.get("sec-fetch-site");
+    if (site && site !== "same-origin" && site !== "none") return forbid("site");
+  }
 
   return NextResponse.next();
 }
