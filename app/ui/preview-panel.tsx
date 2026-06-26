@@ -139,8 +139,10 @@ export default function PreviewPanel() {
         body: JSON.stringify({ action: "start", path: p.path, name: p.name, port }),
       }).then((res) => res.json());
       if (latestPick.current !== p.path) return; // a newer click superseded this one
-      if (r.ok) applyUrl(r.url);
-      else setStartError(r.error || "Couldn't start the dev server.");
+      if (r.ok) {
+        applyUrl(r.url);
+        setManaged(p.path); // hq started it → closing the panel will stop it (don't wait for the poll)
+      } else setStartError(r.error || "Couldn't start the dev server.");
     } catch {
       if (latestPick.current === p.path) setStartError("Couldn't reach hq to start the server.");
     } finally {
@@ -148,12 +150,28 @@ export default function PreviewPanel() {
     }
   };
 
+  // Closing the panel (the X) stops the dev server hq started — closing preview
+  // means you're done, so don't leave a ~1GB `next dev` running in the background.
+  // Only ever stops an hq-MANAGED server (`managed`); a dev server you started
+  // yourself is never tracked here, so it's left untouched.
+  const closePanel = () => {
+    if (managed) {
+      fetch("/api/dev-server", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "stop" }),
+      }).catch(() => {});
+      setManaged(null);
+    }
+    setOpen(false);
+  };
+
   const liveCount = projects.filter((p) => p.live).length;
   const sorted = [...projects].sort((a, b) => Number(b.live) - Number(a.live));
   const startingName = projects.find((p) => p.path === starting)?.name ?? "the project";
 
   return (
-    <AppPanel open={open} onClose={() => setOpen(false)} rootId="preview-panel-root">
+    <AppPanel open={open} onClose={closePanel} rootId="preview-panel-root">
       <Boundary label="preview-panel.tsx">
         <div className="flex min-h-0 flex-1 flex-col gap-2 font-mono">
           {/* header: status dot · "preview" · live count */}
