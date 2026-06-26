@@ -42,7 +42,7 @@ export default function Boundary({
     <div
       className={`boundary-flash relative flex min-h-0 min-w-0 flex-1 flex-col gap-4 ${frame}`}
     >
-      <span className="absolute -top-2.5 left-4 flex max-w-[calc(100%-2rem)] items-center gap-2">
+      <span className="absolute -top-2.5 left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2">
         {lead}
         <BoundaryChip label={label} />
         {trail}
