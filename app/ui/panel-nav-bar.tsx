@@ -12,6 +12,10 @@ import { usePlugins } from "@/app/ui/plugins-state";
 import { usePreview } from "@/app/ui/preview-state";
 import { useSkills } from "@/app/ui/skills-state";
 import { useCommands } from "@/app/ui/commands-state";
+import { useHooks } from "@/app/ui/hooks-state";
+import { useMcp } from "@/app/ui/mcp-state";
+import { useAgents } from "@/app/ui/agents-state";
+import { useOutputStyles } from "@/app/ui/output-styles-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -31,6 +35,10 @@ export default function PanelNav() {
     preview: usePreview(),
     skills: useSkills(),
     commands: useCommands(),
+    hooks: useHooks(),
+    mcp: useMcp(),
+    agents: useAgents(),
+    outputStyles: useOutputStyles(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">

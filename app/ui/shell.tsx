@@ -19,6 +19,14 @@ import { SkillsProvider } from "@/app/ui/skills-state";
 import SkillsPanel from "@/app/ui/skills-panel";
 import { CommandsProvider } from "@/app/ui/commands-state";
 import CommandsPanel from "@/app/ui/commands-panel";
+import { HooksProvider } from "@/app/ui/hooks-state";
+import HooksPanel from "@/app/ui/hooks-panel";
+import { McpProvider } from "@/app/ui/mcp-state";
+import McpPanel from "@/app/ui/mcp-panel";
+import { AgentsProvider } from "@/app/ui/agents-state";
+import AgentsPanel from "@/app/ui/agents-panel";
+import { OutputStylesProvider } from "@/app/ui/output-styles-state";
+import OutputStylesPanel from "@/app/ui/output-styles-panel";
 import { PreviewProvider } from "@/app/ui/preview-state";
 import PreviewPanel from "@/app/ui/preview-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
@@ -56,6 +64,10 @@ export default async function Shell({
       <PluginsProvider>
       <SkillsProvider>
       <CommandsProvider>
+      <HooksProvider>
+      <McpProvider>
+      <AgentsProvider>
+      <OutputStylesProvider>
       <PreviewProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
@@ -109,6 +121,12 @@ export default async function Shell({
           <div id="skills-panel-root" className="flex h-full min-w-0" />
           {/* The independent Commands library panel's own portal root. */}
           <div id="commands-panel-root" className="flex h-full min-w-0" />
+          {/* The Console capability panels — Hooks · MCP · Agents · Output Styles,
+              each its own client-state portal, siblings of Skills/Commands. */}
+          <div id="hooks-panel-root" className="flex h-full min-w-0" />
+          <div id="mcp-panel-root" className="flex h-full min-w-0" />
+          <div id="agents-panel-root" className="flex h-full min-w-0" />
+          <div id="output-styles-panel-root" className="flex h-full min-w-0" />
           {/* The independent Preview panel's own portal root — the in-app live
               view of a project's dev server, open alongside everything else. */}
           <div id="preview-panel-root" className="flex h-full min-w-0" />
@@ -124,10 +142,18 @@ export default async function Shell({
       <PluginsPanel />
       <SkillsPanel />
       <CommandsPanel />
+      <HooksPanel />
+      <McpPanel />
+      <AgentsPanel />
+      <OutputStylesPanel />
       <PreviewPanel />
       <TextEditor />
       </TextEditorProvider>
       </PreviewProvider>
+      </OutputStylesProvider>
+      </AgentsProvider>
+      </McpProvider>
+      </HooksProvider>
       </CommandsProvider>
       </SkillsProvider>
       </PluginsProvider>

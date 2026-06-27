@@ -63,7 +63,18 @@ export const NAV_TARGETS: NavTarget[] = [
 // crowded dropdown out in a grid (Console 2×3, Metrics 2×4). Source of truth for
 // STRUCTURE + ORDER; routing/open-tests still run off PANEL_ROUTES + the
 // client-state contexts.
-export type ToggleKey = "api" | "planner" | "text" | "plugins" | "preview" | "skills" | "commands";
+export type ToggleKey =
+  | "api"
+  | "planner"
+  | "text"
+  | "plugins"
+  | "preview"
+  | "skills"
+  | "commands"
+  | "hooks"
+  | "mcp"
+  | "agents"
+  | "outputStyles";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey }
@@ -87,16 +98,16 @@ export const NAV_HEADERS: NavHeader[] = [
   },
   {
     title: "Console",
-    cols: 2, // capability panels — the four `soon` ones aren't built yet
+    cols: 2, // capability panels — all standalone client-state toggles now
     items: [
       { title: "Commands", toggle: "commands" },
       { title: "Skills", toggle: "skills" },
       { title: "Plugins", toggle: "plugins" },
       { title: "Routines", href: "/routines" },
-      { title: "Hooks", soon: true },
-      { title: "MCP", soon: true },
-      { title: "Agents", soon: true },
-      { title: "Output Styles", soon: true },
+      { title: "Hooks", toggle: "hooks" },
+      { title: "MCP", toggle: "mcp" },
+      { title: "Agents", toggle: "agents" },
+      { title: "Output Styles", toggle: "outputStyles" },
     ],
   },
   {
