@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>fleet — deck (wireframe)</title>
+<style>
+  :root{
+    --bg:#09090b; --panel:#0c0c0e; --panel2:#0f0f12; --raised:#141417;
+    --line:#26262a; --line2:#1a1a1d;
+    --t1:#e4e4e7; --t2:#a1a1aa; --t3:#71717a; --t4:#52525b; --t5:#3f3f46;
+    --control:#34d399;  /* emerald — hq drives it */
+    --observe:#38bdf8;  /* sky — live TUI, watch only */
+    --amber:#fbbf24; --red:#f87171; --idle:#52525b;
+    --ink:#818cf8;      /* indigo — the analytics layer, none of the status hues */
+    --ink-soft:rgba(129,140,248,.16);
+    --runway:#1c1c20;
+  }
+  *{box-sizing:border-box}
+  html{color-scheme:dark}
+  body{
+    margin:0; background:var(--bg); color:var(--t1);
+    font:12px/1.45 ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    -webkit-font-smoothing:antialiased; padding:26px;
+    font-variant-numeric:tabular-nums;
+  }
+  .eyebrow{ text-transform:uppercase; letter-spacing:.18em; font-size:9px; color:var(--t4); }
+  .mono-id{ color:var(--control); }
+  .dim{ color:var(--t3) } .dimmer{ color:var(--t4) }
+
+  /* ── hq Boundary frame + file chip ─────────────────────────────── */
+  .boundary{ position:relative; border:1px dashed var(--line); border-radius:12px;
+    background:var(--panel); max-width:1180px; margin:0 auto; }
+  .chip{ position:absolute; top:-9px; left:18px; background:var(--bg); padding:0 8px;
+    font-size:10px; color:var(--t3); border:1px solid var(--line2); border-radius:5px;
+    line-height:16px; }
+  .chip b{ color:var(--t2); font-weight:500 }
+
+  /* ── header ────────────────────────────────────────────────────── */
+  header{ display:flex; align-items:center; gap:14px; padding:16px 18px 13px;
+    border-bottom:1px solid var(--line2); }
+  header .title{ font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--t1) }
+  .census{ display:flex; align-items:center; gap:10px; color:var(--t3); font-size:11px }
+  .census b{ color:var(--t2); font-weight:500 }
+  .needs{ color:var(--amber) }
+  .pill-control{ color:var(--control) } .pill-observe{ color:var(--observe) }
+  .spacer{ margin-left:auto }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden }
+  .seg button{ background:transparent; border:0; color:var(--t3); font:inherit; font-size:10px;
+    padding:4px 10px; cursor:pointer; letter-spacing:.04em }
+  .seg button[aria-pressed=true]{ background:var(--raised); color:var(--t1) }
+  .seg button:focus-visible{ outline:2px solid var(--ink); outline-offset:-2px }
+
+  /* ── deck body: strip board + canvas ───────────────────────────── */
+  .deck{ display:grid; grid-template-columns:264px 1fr; min-height:560px }
+  .board{ border-right:1px solid var(--line2); padding:12px 10px; display:flex; flex-direction:column; gap:6px }
+  .board .eyebrow{ padding:2px 6px 6px }
+
+  /* a flight strip */
+  .strip{ display:block; width:100%; text-align:left; background:var(--panel2);
+    border:1px solid var(--line2); border-radius:8px; padding:9px 10px 8px; cursor:pointer;
+    color:inherit; font:inherit; transition:border-color .12s, background .12s }
+  .strip:hover{ border-color:var(--line); background:var(--raised) }
+  .strip[aria-current=true]{ border-color:var(--ink); box-shadow:inset 2px 0 0 var(--ink) }
+  .strip:focus-visible{ outline:2px solid var(--ink); outline-offset:1px }
+  .strip.dead{ opacity:.45 }
+  .strip-top{ display:flex; align-items:center; gap:7px; font-size:11px }
+  .dot{ width:7px; height:7px; border-radius:50%; flex:none; position:relative }
+  .dot.work{ background:var(--control) } .dot.need{ background:var(--amber) }
+  .dot.live{ background:var(--observe) } .dot.idle{ background:var(--idle) }
+  .dot.pulse::after{ content:""; position:absolute; inset:0; border-radius:50%;
+    background:inherit; animation:ping 1.8s cubic-bezier(0,0,.2,1) infinite }
+  @keyframes ping{ 75%,100%{ transform:scale(2.4); opacity:0 } }
+  .proj{ color:var(--t1); font-weight:500 }
+  .sid{ color:var(--t4); font-size:10px }
+  .badge{ margin-left:auto; font-size:9px; letter-spacing:.08em; text-transform:uppercase;
+    padding:1px 5px; border-radius:4px; border:1px solid currentColor }
+  .b-control{ color:var(--control); background:color-mix(in srgb,var(--control) 12%,transparent) }
+  .b-observe{ color:var(--observe); border-style:dashed }
+
+  /* the runway — the signature */
+  .runway{ margin-top:7px; position:relative; height:9px; border-radius:3px;
+    background:var(--runway); overflow:hidden }
+  .runway .fill{ position:absolute; inset:0 auto 0 0; border-radius:3px }
+  .runway .cliff{ position:absolute; top:-2px; bottom:-2px; left:20%; width:1px;
+    background:var(--t3) }                 /* 200k notch on a 1M track */
+  .runway-meta{ display:flex; justify-content:space-between; margin-top:4px;
+    font-size:9px; color:var(--t4) }
+  .runway-meta .pct{ color:var(--t3) }
+
+  /* ── canvas ────────────────────────────────────────────────────── */
+  .canvas{ padding:14px 16px 18px; display:flex; flex-direction:column; gap:14px; min-width:0 }
+  .scopebar{ display:flex; align-items:center; gap:8px; font-size:11px; color:var(--t3) }
+  .scopebar .crumb b{ color:var(--t1); font-weight:500 }
+  .scopebar .crumb .sep{ color:var(--t5); margin:0 6px }
+  .scope-reset{ background:transparent; border:1px solid var(--line); color:var(--t3);
+    border-radius:5px; font:inherit; font-size:10px; padding:2px 8px; cursor:pointer }
+  .scope-reset:focus-visible{ outline:2px solid var(--ink); outline-offset:1px }
+
+  /* KPI band — stat tiles */
+  .kpis{ display:grid; grid-template-columns:repeat(6,1fr); gap:8px }
+  .tile{ background:var(--panel2); border:1px solid var(--line2); border-radius:8px; padding:9px 10px }
+  .tile .k-lbl{ font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--t4) }
+  .tile .k-val{ font-size:21px; letter-spacing:-.02em; color:var(--t1); margin-top:3px; line-height:1 }
+  .tile .k-val small{ font-size:11px; color:var(--t3); letter-spacing:0 }
+  .tile .k-sub{ font-size:9px; color:var(--t4); margin-top:3px }
+  .k-sub .up{ color:var(--control) } .k-sub .dn{ color:var(--red) }
+
+  /* the 2x2 of shapes */
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px }
+  .card{ background:var(--panel2); border:1px solid var(--line2); border-radius:9px;
+    padding:11px 12px 12px; min-width:0 }
+  .card .head{ display:flex; align-items:baseline; gap:8px; margin-bottom:9px }
+  .card .head .shape{ margin-left:auto; font-size:8px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--t5); border:1px solid var(--line2); border-radius:4px; padding:1px 5px }
+  .card .head .t{ font-size:11px; color:var(--t2) }
+
+  /* series (svg area) */
+  .series svg{ width:100%; height:74px; display:block }
+  .series .cap{ display:flex; justify-content:space-between; font-size:9px; color:var(--t4); margin-top:5px }
+
+  /* ranking (h-bars) */
+  .rank{ display:flex; flex-direction:column; gap:7px }
+  .rrow{ display:grid; grid-template-columns:42px 1fr 52px; align-items:center; gap:8px; font-size:10px }
+  .rrow .nm{ color:var(--t2) }
+  .rrow .track{ height:8px; background:var(--runway); border-radius:3px; overflow:hidden }
+  .rrow .track i{ display:block; height:100%; background:var(--ink); opacity:.7; border-radius:3px }
+  .rrow .v{ text-align:right; color:var(--t3) }
+
+  /* distribution (histogram) */
+  .hist{ display:flex; align-items:flex-end; gap:4px; height:74px }
+  .hist .bar{ flex:1; background:var(--ink); opacity:.55; border-radius:2px 2px 0 0; min-height:3px }
+  .hist .bar.hot{ background:var(--amber); opacity:.7 }
+  .histx{ display:flex; justify-content:space-between; font-size:9px; color:var(--t4); margin-top:6px }
+
+  /* inventory (decay list) */
+  .inv{ display:flex; flex-direction:column; gap:8px }
+  .irow{ display:grid; grid-template-columns:1fr 54px 30px; align-items:center; gap:8px; font-size:10px }
+  .irow .nm{ color:var(--t2) } .irow .nm small{ color:var(--t5) }
+  .irow .decay{ height:6px; background:var(--runway); border-radius:3px; overflow:hidden }
+  .irow .decay i{ display:block; height:100%; background:var(--t4); border-radius:3px }
+  .irow .age{ text-align:right; color:var(--red) }
+
+  /* ── dock posture ──────────────────────────────────────────────── */
+  .dock{ display:none; padding:11px 14px; gap:14px; align-items:center }
+  body[data-posture=dock] .deck{ display:none }
+  body[data-posture=dock] .dock{ display:flex }
+  .dock .mini-strips{ display:flex; gap:6px; flex:none }
+  .ministrip{ display:flex; align-items:center; gap:6px; background:var(--panel2);
+    border:1px solid var(--line2); border-radius:6px; padding:5px 8px; font-size:10px }
+  .ministrip .runway{ width:54px; margin:0 }
+  .dock .hero{ flex:1; min-width:0; display:flex; align-items:center; gap:12px }
+  .dock .hero svg{ height:34px; flex:1 }
+  .dock .hero .lbl{ font-size:9px; color:var(--t4); white-space:nowrap }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:14px; padding:11px 18px; border-top:1px solid var(--line2);
+    font-size:9px; color:var(--t4) }
+  .legend span{ display:inline-flex; align-items:center; gap:5px }
+  .legend i{ width:9px; height:9px; border-radius:2px; display:inline-block }
+
+  @media (max-width:820px){
+    .deck{ grid-template-columns:1fr } .board{ border-right:0; border-bottom:1px solid var(--line2) }
+    .kpis{ grid-template-columns:repeat(3,1fr) } .grid2{ grid-template-columns:1fr }
+  }
+  @media (prefers-reduced-motion:reduce){ .dot.pulse::after{ animation:none; display:none } }
+</style>
+</head>
+<body data-posture="deck" data-scope="fleet">
+<div class="boundary">
+  <span class="chip">● claude · <b>fleet.tsx</b> · overlay</span>
+
+  <header>
+    <span class="title">Fleet</span>
+    <span class="census">
+      <b id="liveN">4</b> live
+      <span class="sep dimmer">·</span>
+      <span class="pill-control"><b id="ctrlN">2</b> control</span>
+      <span class="pill-observe"><b id="obsN">2</b> observe</span>
+      <span class="sep dimmer">·</span>
+      <span class="needs">1 needs you</span>
+    </span>
+    <span class="spacer"></span>
+    <span class="seg" role="group" aria-label="posture">
+      <button id="bDeck" aria-pressed="true">Deck</button>
+      <button id="bDock" aria-pressed="false">Dock</button>
+    </span>
+  </header>
+
+  <!-- ───────────────────────── DECK ───────────────────────── -->
+  <div class="deck">
+    <!-- strip board / roster -->
+    <nav class="board" aria-label="roster">
+      <div class="eyebrow">Strip board · urgency</div>
+      <button class="strip" data-sid="164da397" aria-current="true">
+        <div class="strip-top">
+          <span class="dot need pulse"></span>
+          <span class="proj">hq</span><span class="sid">164da397</span>
+          <span class="badge b-control">control</span>
+        </div>
+        <div class="runway"><span class="fill" style="width:91%;background:var(--red)"></span><span class="cliff"></span></div>
+        <div class="runway-meta"><span>needs you · perm ask</span><span class="pct">910k · 9% left</span></div>
+      </button>
+
+      <button class="strip" data-sid="71dbc4b0">
+        <div class="strip-top">
+          <span class="dot work pulse"></span>
+          <span class="proj">hq</span><span class="sid">71dbc4b0</span>
+          <span class="badge b-control">control</span>
+        </div>
+        <div class="runway"><span class="fill" style="width:52%;background:var(--amber)"></span><span class="cliff"></span></div>
+        <div class="runway-meta"><span>working · mid-turn</span><span class="pct">520k · 48% left</span></div>
+      </button>
+
+      <button class="strip" data-sid="fe571e64">
+        <div class="strip-top">
+          <span class="dot live"></span>
+          <span class="proj">web</span><span class="sid">fe571e64</span>
+          <span class="badge b-observe">observe</span>
+        </div>
+        <div class="runway"><span class="fill" style="width:64%;background:var(--amber)"></span><span class="cliff"></span></div>
+        <div class="runway-meta"><span>live tui · watch only</span><span class="pct">640k · 36% left</span></div>
+      </button>
+
+      <button class="strip" data-sid="a9aad78d">
+        <div class="strip-top">
+          <span class="dot idle"></span>
+          <span class="proj">api</span><span class="sid">a9aad78d</span>
+          <span class="badge b-observe">observe</span>
+        </div>
+        <div class="runway"><span class="fill" style="width:14%;background:var(--control)"></span><span class="cliff"></span></div>
+        <div class="runway-meta"><span>idle · 7h</span><span class="pct">140k · 86% left</span></div>
+      </button>
+
+      <button class="strip dead" data-sid="3c2f01bb">
+        <div class="strip-top">
+          <span class="dot idle"></span>
+          <span class="proj">hq</span><span class="sid">3c2f01bb</span>
+          <span class="badge b-control">control</span>
+        </div>
+        <div class="runway"><span class="fill" style="width:30%;background:var(--idle)"></span><span class="cliff"></span></div>
+        <div class="runway-meta"><span>exited</span><span class="pct">300k · ended</span></div>
+      </button>
+
+      <div style="margin-top:auto;padding:8px 6px 2px" class="eyebrow">select = scope · ⤢ = drive</div>
+    </nav>
+
+    <!-- canvas / dashboard -->
+    <section class="canvas" aria-label="dashboard">
+      <div class="scopebar">
+        <span class="crumb" id="crumb"><b>Fleet</b><span class="sep">▸</span>all sessions · 14d</span>
+        <span class="spacer" style="margin-left:auto"></span>
+        <button class="scope-reset" id="scopeReset" hidden>← Fleet</button>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="grid2">
+        <div class="card series">
+          <div class="head"><span class="t" id="c1t">Tokens / day</span><span class="shape">series</span></div>
+          <div id="c1"></div>
+        </div>
+        <div class="card">
+          <div class="head"><span class="t" id="c2t">Tokens by project</span><span class="shape">ranking</span></div>
+          <div class="rank" id="c2"></div>
+        </div>
+        <div class="card">
+          <div class="head"><span class="t" id="c3t">Time per turn</span><span class="shape">distribution</span></div>
+          <div id="c3"></div>
+        </div>
+        <div class="card">
+          <div class="head"><span class="t" id="c4t">Unused · 30d+</span><span class="shape" id="c4shape">inventory</span></div>
+          <div id="c4"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ───────────────────────── DOCK ───────────────────────── -->
+  <div class="dock">
+    <div class="mini-strips">
+      <span class="ministrip"><span class="dot need pulse"></span>hq<span class="dim">164d</span>
+        <span class="runway"><span class="fill" style="width:91%;background:var(--red)"></span><span class="cliff"></span></span></span>
+      <span class="ministrip"><span class="dot work pulse"></span>hq<span class="dim">71db</span>
+        <span class="runway"><span class="fill" style="width:52%;background:var(--amber)"></span><span class="cliff"></span></span></span>
+      <span class="ministrip"><span class="dot live"></span>web<span class="dim">fe57</span>
+        <span class="runway"><span class="fill" style="width:64%;background:var(--amber)"></span><span class="cliff"></span></span></span>
+    </div>
+    <div class="hero">
+      <span class="lbl eyebrow">tok / day · 1.24M wk</span>
+      <svg viewBox="0 0 300 40" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0,30 L40,24 L80,28 L120,14 L160,20 L200,9 L240,18 L300,6"
+          fill="none" stroke="var(--ink)" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--control)"></i> control — hq drives</span>
+    <span><i style="background:var(--observe)"></i> observe — live TUI, watch only</span>
+    <span><i style="background:var(--amber)"></i> needs you / premium zone</span>
+    <span><i style="background:var(--red)"></i> deep premium / near limit</span>
+    <span><i style="background:var(--t3)"></i> ⎸ 200k price cliff on a 1M runway</span>
+    <span><i style="background:var(--ink)"></i> analytics ink (monitor layer)</span>
+  </div>
+</div>
+
+<script>
+/* two scopes, one set of shapes — the thesis of the design */
+const area = (pts,capL,capR,fill) => `<div class="series"><svg viewBox="0 0 300 74" preserveAspectRatio="none" aria-hidden="true">
+  <path d="${pts} L300,74 L0,74 Z" fill="${fill||'var(--ink-soft)'}"/>
+  <path d="${pts}" fill="none" stroke="var(--ink)" stroke-width="1.5"/></svg>
+  <div class="cap"><span>${capL||''}</span><span>${capR||''}</span></div></div>`;
+
+const bars = rows => `<div class="rank">${rows.map(r=>`<div class="rrow">
+  <span class="nm">${r[0]}</span><span class="track"><i style="width:${r[1]}%"></i></span>
+  <span class="v">${r[2]}</span></div>`).join('')}</div>`;
+
+const hist = (vals,hot,xl,xr) => `<div class="hist">${vals.map((v,i)=>
+  `<span class="bar${hot&&i>=hot?' hot':''}" style="height:${v}%"></span>`).join('')}</div>
+  <div class="histx"><span>${xl}</span><span>${xr}</span></div>`;
+
+const inv = rows => `<div class="inv">${rows.map(r=>`<div class="irow">
+  <span class="nm">${r[0]} <small>${r[1]}</small></span>
+  <span class="decay"><i style="width:${r[2]}%"></i></span>
+  <span class="age">${r[3]}</span></div>`).join('')}</div>`;
+
+const tile = (l,v,s) => `<div class="tile"><div class="k-lbl">${l}</div>
+  <div class="k-val">${v}</div><div class="k-sub">${s||''}</div></div>`;
+
+const DATA = {
+  fleet:{
+    crumb:'<b>Fleet</b><span class="sep">▸</span>all sessions · 14d',
+    kpis:[
+      tile('sessions','23','<span class="up">+4</span> vs last wk'),
+      tile('tokens · wk','1.24<small>M</small>','<span class="dn">+18%</span> burn'),
+      tile('turns','412','17.9 / session'),
+      tile('projects','6','hq leads'),
+      tile('todos','14','<span class="up">5</span> pending'),
+      tile('avg / session','2.1<small>h</small>','38 turns'),
+    ],
+    c1t:'Tokens / day', c1:area('M0,58 L40,46 L80,52 L120,30 L160,40 L200,18 L240,34 L300,12','14d ago','today'),
+    c2t:'Tokens by project',
+    c2:bars([['hq',100,'612k'],['web',58,'355k'],['api',34,'208k'],['cli',12,'74k']]),
+    c3t:'Turns to 200k · across sessions',
+    c3:hist([20,38,60,85,70,46,30,18,10],6,'1 turn','40+'),
+    c4shape:'inventory', c4t:'Unused · 30d+',
+    c4:inv([['skill','design-md',88,'41d'],['plugin','impeccable',72,'37d'],['command','/wrap',64,'33d'],['agent','reviewer',40,'31d']]),
+  },
+  session:{
+    crumb:'<b>Fleet</b><span class="sep">▸</span><b>hq · 164da397</b>',
+    kpis:[
+      tile('turns','38','21 you · 17 claude'),
+      tile('ctx left','9<small>%</small>','<span class="dn">past cliff</span>'),
+      tile('tok / turn','1.8<small>k</small>','avg'),
+      tile('to 200k','turn 11','21 turns ago'),
+      tile('session','47<small>m</small>','4m idle'),
+      tile('model','Opus 4.8','1M tier'),
+    ],
+    c1t:'Context burn · this session',
+    c1:area('M0,70 L40,60 L80,52 L120,40 L160,30 L200,22 L240,14 L300,7','start','now · 910k'),
+    c2t:'Tokens by turn · top 8',
+    c2:bars([['t31',100,'18.2k'],['t18',46,'8.4k'],['t27',31,'5.7k'],['t04',20,'3.6k']]),
+    c3t:'Time per turn',
+    c3:hist([15,42,66,80,54,32,20,12,8],7,'2s','5m+'),
+    c4shape:'ranking', c4t:'Model usage · this session',
+    c4:bars([['Opus 4.8',100,'34 t'],['sub-agent',22,'3 t'],['Haiku',9,'1 t']]),
+  }
+};
+
+function render(scope){
+  const d = DATA[scope];
+  document.body.dataset.scope = scope;
+  document.getElementById('crumb').innerHTML = d.crumb;
+  document.getElementById('kpis').innerHTML = d.kpis.join('');
+  document.getElementById('c1t').textContent = d.c1t; document.getElementById('c1').innerHTML = d.c1;
+  document.getElementById('c2t').textContent = d.c2t; document.getElementById('c2').innerHTML = d.c2;
+  document.getElementById('c3t').textContent = d.c3t; document.getElementById('c3').innerHTML = d.c3;
+  document.getElementById('c4t').textContent = d.c4t; document.getElementById('c4').innerHTML = d.c4;
+  document.getElementById('c4shape').textContent = d.c4shape;
+  document.getElementById('scopeReset').hidden = scope==='fleet';
+}
+
+document.querySelectorAll('.strip').forEach(s=>{
+  s.addEventListener('click',()=>{
+    document.querySelectorAll('.strip').forEach(x=>x.setAttribute('aria-current','false'));
+    s.setAttribute('aria-current','true');
+    render('session');               // click a session → canvas re-scopes to it
+  });
+});
+document.getElementById('scopeReset').addEventListener('click',()=>{
+  document.querySelectorAll('.strip').forEach(x=>x.setAttribute('aria-current','false'));
+  render('fleet');
+});
+const setPosture = p => {
+  document.body.dataset.posture = p;
+  bDeck.setAttribute('aria-pressed', p==='deck'); bDock.setAttribute('aria-pressed', p==='dock');
+};
+bDeck.addEventListener('click',()=>setPosture('deck'));
+bDock.addEventListener('click',()=>setPosture('dock'));
+
+render('fleet');
+</script>
+</body>
+</html>

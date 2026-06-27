@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { statSync } from "node:fs";
 import { basename } from "node:path";
 import { listRepls } from "@/lib/repl";
-import { getRecentSessions, isLiveTerminal, sessionMeta } from "@/lib/sessions";
+import { getRecentSessions, getSessions, isLiveTerminal, sessionMeta } from "@/lib/sessions";
 import { getSessionsMeta } from "@/lib/sessions-meta";
 import { sessionFilePath } from "@/lib/transcript";
 
@@ -30,12 +30,16 @@ export type FleetRow = {
   watched: boolean; // a UI client is attached to its stream
   startedAt: number;
   lastActivity: number;
+  contextTokens: number; // current context-window size → the runway fill; 0 if unknown
 };
 
 export async function GET() {
   const meta = getSessionsMeta();
   const agents = await listRepls();
   const driven = new Set(agents.map((a) => a.sessionId || a.key));
+  // Join each row's current context-window size for the runway. getSessions reads
+  // off the same incremental usage cache, so this is cheap on a warm poll.
+  const ctxBySession = new Map(getSessions(120).map((s) => [s.id, s.contextTokens]));
 
   // CONTROL — every warm agent the daemon holds.
   const control: FleetRow[] = agents.map((a): FleetRow => {
@@ -66,6 +70,7 @@ export async function GET() {
       watched: a.subscribers > 0,
       startedAt: a.startedAt,
       lastActivity: a.lastActivity,
+      contextTokens: ctxBySession.get(id) ?? 0,
     };
   });
 
@@ -88,6 +93,7 @@ export async function GET() {
       watched: false,
       startedAt: s.lastActive,
       lastActivity: s.lastActive,
+      contextTokens: ctxBySession.get(s.id) ?? 0,
     }));
 
   const rows = [...control, ...observe];

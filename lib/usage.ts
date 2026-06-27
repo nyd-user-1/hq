@@ -354,6 +354,30 @@ export function contextSamples(): { ctx: number; create: number }[] {
   return out;
 }
 
+// Weighted tokens bucketed by LOCAL calendar day over the trailing `days` days,
+// oldest→newest, zero-filled so the series is continuous. Powers the Fleet
+// dashboard's tokens/day shape. Buckets step in fixed real-ms from a local-
+// midnight anchor — same deliberate ±1h DST drift as sessionBlock(), not worth
+// a TZ-aware rebuild (see that fn's note).
+export function tokensByDay(days = 14): { day: string; weighted: number }[] {
+  refreshCache();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const startMs = midnight.getTime() - (days - 1) * DAY_MS;
+  const buckets = new Array<number>(days).fill(0);
+  for (const r of allRecs()) {
+    if (r.ts < startMs) continue;
+    const idx = Math.floor((r.ts - startMs) / DAY_MS);
+    if (idx < 0 || idx >= days) continue;
+    buckets[idx] += shape(r.input, r.cw, r.cr, r.out) * modelWeight(r.model);
+  }
+  return buckets.map((w, i) => {
+    const d = new Date(startMs + i * DAY_MS);
+    return { day: `${d.getMonth() + 1}/${d.getDate()}`, weighted: Math.round(w) };
+  });
+}
+
 // Per-transcript deduped lifetime totals from the file cache (call getUsage()
 // or getForecast() first to warm it). Consumed by lib/sessions.ts.
 export function perFileTotals(): Map<string, Totals> {

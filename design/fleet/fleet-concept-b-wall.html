@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>fleet — wall (concept B)</title>
+<style>
+  :root{
+    --bg:#08080a; --tile:#0b0b0d; --tile2:#0e0e11; --raised:#141417;
+    --line:#1d1d20; --line2:#161618; --hair:#26262a;
+    --white:#e7e7ea; --t2:#a1a1aa; --muted:#71717a; --faint:#52525b; --ghost:#3f3f46;
+    /* the lifecycle — every hue earns its meaning, nothing invented */
+    --blue:#60a5fa;     /* loading  — spinning up / first tokens */
+    --orange:#fb923c;   /* working  — mid-turn, streaming */
+    --green:#4ade80;    /* finished — turn complete, healthy ctx */
+    --red:#f87171;      /* interrupted — esc / error / ctx critical */
+    --amber:#e0a83a;    /* idle     — nothing running, dormant */
+    /* purple is reserved for the transcript command-chip ONLY. not used as fleet chrome. */
+  }
+  *{box-sizing:border-box}
+  html{color-scheme:dark}
+  body{ margin:0; background:var(--bg); color:var(--white); padding:24px;
+    font:12px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased; }
+  .eyebrow{ text-transform:uppercase; letter-spacing:.18em; font-size:9px; color:var(--faint) }
+
+  .boundary{ position:relative; border:1px dashed var(--hair); border-radius:13px;
+    background:#0a0a0c; max-width:1200px; margin:0 auto; }
+  .chip{ position:absolute; top:-9px; left:18px; background:var(--bg); padding:0 8px;
+    font-size:10px; color:var(--muted); border:1px solid var(--line); border-radius:5px; line-height:16px }
+  .chip b{ color:var(--t2); font-weight:500 }
+
+  /* ── command bar ─────────────────────────────────────────────── */
+  header{ display:flex; align-items:center; gap:14px; padding:15px 18px 12px;
+    border-bottom:1px solid var(--line2); flex-wrap:wrap }
+  header .title{ font-size:12px; letter-spacing:.16em; text-transform:uppercase }
+  .census{ display:flex; align-items:center; gap:11px; font-size:11px; color:var(--muted) }
+  .census .n{ display:inline-flex; align-items:center; gap:5px; color:var(--t2) }
+  .census .d{ width:7px; height:7px; border-radius:50%; display:inline-block }
+  .census .total{ color:var(--muted) }
+  .spacer{ margin-left:auto }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden }
+  .seg button{ background:transparent; border:0; color:var(--muted); font:inherit; font-size:10px;
+    padding:4px 10px; cursor:pointer; letter-spacing:.03em }
+  .seg button[aria-pressed=true]{ background:var(--raised); color:var(--white) }
+  .seg button:disabled{ color:var(--ghost); cursor:default }
+  .seg button:focus-visible{ outline:2px solid var(--white); outline-offset:-2px }
+  .todash{ font-size:10px; color:var(--muted); text-decoration:none; border:1px solid var(--line);
+    border-radius:6px; padding:4px 9px } .todash:hover{ color:var(--t2); border-color:var(--hair) }
+
+  /* ── the wall: css-columns masonry, variable heights = the wall breathes ── */
+  .wall{ column-count:3; column-gap:12px; padding:14px 16px 6px }
+  @media (max-width:1040px){ .wall{ column-count:2 } }
+  @media (max-width:680px){ .wall{ column-count:1 } }
+
+  .tile{ break-inside:avoid; margin:0 0 12px; background:var(--tile);
+    border:1px solid var(--line); border-left:2px solid var(--st,var(--faint));
+    border-radius:11px; overflow:hidden; }
+  .tile.dead{ opacity:.5 }
+
+  .thead{ display:flex; align-items:center; gap:8px; padding:9px 11px 8px; border-bottom:1px solid var(--line2) }
+  .hdot{ width:7px; height:7px; border-radius:50%; flex:none; background:var(--green) }
+  .hdot.idle{ background:transparent; border:1.5px solid var(--amber) }
+  .hdot.dead{ background:var(--ghost) }
+  .proj{ color:var(--white); font-weight:500 }
+  .sid{ color:var(--green); font-size:11px } .tile.dead .sid,.tile .sid.idle{ color:var(--muted) }
+  .htools{ margin-left:auto; display:flex; gap:9px; color:var(--ghost); font-size:12px }
+  .htools span{ cursor:pointer } .htools span:hover{ color:var(--muted) }
+
+  /* transcript tail */
+  .scroll{ padding:10px 11px 2px; max-height:230px; overflow:hidden;
+    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 26px); mask-image:linear-gradient(to bottom,transparent 0,#000 26px) }
+  .turn{ margin-bottom:11px }
+  .who{ display:inline-flex; align-items:center; gap:6px; font-size:9px; letter-spacing:.12em; text-transform:uppercase }
+  .who .wd{ width:6px; height:6px; border-radius:50% } .who .ts{ color:var(--ghost); letter-spacing:.04em }
+  .who.you .wd{ background:var(--blue) } .who.you b{ color:var(--blue) }
+  .who.claude .wd{ background:var(--orange) } .who.claude b{ color:var(--orange) }
+  .who b{ font-weight:500 }
+  .msg{ margin-top:5px; padding:8px 10px; border:1px solid var(--line2); border-radius:8px;
+    color:var(--t2); font-size:11.5px; position:relative; background:var(--tile2) }
+  .msg.bare{ border:0; background:transparent; padding:6px 0; color:var(--muted) }
+  .cc{ background:#1e1b2e; color:#c4b5fd; border-radius:4px; padding:0 4px } /* the ONE purple — transcript cmd chip */
+  .cg{ background:#1d1d20; color:var(--t2); border-radius:4px; padding:0 4px }
+  .tok{ position:absolute; right:8px; bottom:-9px; font-size:9px; color:var(--muted);
+    background:var(--tile); border:1px solid var(--line); border-radius:5px; padding:1px 6px }
+  .shim{ height:9px; border-radius:4px; background:linear-gradient(90deg,var(--line2),var(--raised),var(--line2));
+    background-size:200% 100%; animation:shim 1.4s linear infinite; margin:7px 0 }
+  .shim.s2{ width:70% } .shim.s3{ width:45% }
+  @keyframes shim{ to{ background-position:-200% 0 } }
+
+  /* status line — the lifecycle, colored + pulsing */
+  .status{ display:flex; align-items:center; gap:7px; padding:8px 11px; font-size:10px; color:var(--muted) }
+  .sd{ width:7px; height:7px; border-radius:50%; flex:none; position:relative; background:currentColor }
+  .sd.hollow{ background:transparent; border:1.5px solid currentColor }
+  .pulse .sd::after{ content:""; position:absolute; inset:0; border-radius:50%; background:currentColor;
+    animation:ping 1.7s cubic-bezier(0,0,.2,1) infinite }
+  @keyframes ping{ 75%,100%{ transform:scale(2.5); opacity:0 } }
+  .status .meta{ color:var(--muted) } .status .ctx{ margin-left:auto; font-weight:500 }
+
+  /* send-box (control) */
+  .sendbox{ margin:2px 9px 9px; border:1px solid var(--line); border-radius:9px; background:#0a0a0c }
+  .sb-in{ padding:9px 10px 14px; font-size:10px; color:var(--ghost) }
+  .sb-bar{ display:flex; align-items:center; gap:10px; padding:6px 10px; border-top:1px solid var(--line2); font-size:11px }
+  .sb-bar .ic{ color:var(--muted); cursor:pointer } .sb-bar .ic:hover{ color:var(--t2) }
+  .sb-bar .sp{ margin-left:auto }
+  .sb-bar .ctx{ font-weight:500 } .sb-bar .model{ color:var(--muted) } .sb-bar .send{ color:var(--muted) }
+
+  /* observe (watch-only) — no color, encoded by glyph + absence of a live send-box */
+  .ctxmeter{ display:flex; align-items:center; gap:8px; margin:2px 11px 6px; font-size:10px; color:var(--muted) }
+  .ctxmeter .bar{ flex:1; height:4px; border-radius:2px; background:var(--line); overflow:hidden }
+  .ctxmeter .bar i{ display:block; height:100% }
+  .watchbar{ display:flex; align-items:center; gap:8px; margin:2px 9px 9px; padding:8px 10px;
+    border:1px dashed var(--line); border-radius:9px; font-size:10px; color:var(--muted) }
+  .watchbar .eye{ color:var(--t2) }
+  .watchbar .take{ margin-left:auto; color:var(--t2); text-decoration:none } .watchbar .take:hover{ color:var(--white) }
+
+  /* compact (idle / exited) */
+  .compact .status{ padding:10px 11px }
+  .expand-hint{ padding:2px 11px 9px; font-size:9px; color:var(--ghost) }
+
+  .more{ text-align:center; padding:6px 0 16px; font-size:10px; color:var(--ghost) }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:13px; padding:11px 18px; border-top:1px solid var(--line2); font-size:9px; color:var(--faint) }
+  .legend span{ display:inline-flex; align-items:center; gap:5px }
+  .legend i{ width:8px; height:8px; border-radius:50%; display:inline-block }
+
+  @media (prefers-reduced-motion:reduce){ .pulse .sd::after{ display:none } .shim{ animation:none } }
+</style>
+</head>
+<body>
+<div class="boundary">
+  <span class="chip">● claude · <b>fleet.tsx</b> · wall</span>
+
+  <header>
+    <span class="title">Fleet</span>
+    <span class="census">
+      <span class="n"><i class="d" style="background:var(--orange)"></i>2 working</span>
+      <span class="n"><i class="d" style="background:var(--blue)"></i>1 loading</span>
+      <span class="n"><i class="d" style="background:var(--green)"></i>3 done</span>
+      <span class="n"><i class="d" style="background:var(--red)"></i>1 interrupted</span>
+      <span class="n"><i class="d" style="background:var(--amber)"></i>3 idle</span>
+      <span class="total">· 23 sessions</span>
+    </span>
+    <span class="spacer"></span>
+    <span class="seg" role="group" aria-label="filter">
+      <button aria-pressed="true">All</button><button aria-pressed="false">Control</button><button aria-pressed="false">Observe</button>
+    </span>
+    <span class="seg" role="group" aria-label="layout">
+      <button aria-pressed="true">Masonry</button><button disabled title="group into per-project lanes">Lanes</button>
+    </span>
+    <a class="todash" href="fleet-concept-a-deck.html">Dashboard ↗</a>
+  </header>
+
+  <div class="wall" id="wall"></div>
+  <div class="more">↓ 14 more · virtualized — the wall is one infinite-scroll surface</div>
+
+  <div class="legend">
+    <span><i style="background:var(--blue)"></i>loading</span>
+    <span><i style="background:var(--orange)"></i>working</span>
+    <span><i style="background:var(--green)"></i>finished</span>
+    <span><i style="background:var(--red)"></i>interrupted</span>
+    <span><i style="background:var(--amber)"></i>idle</span>
+    <span><i style="background:var(--ghost)"></i>exited</span>
+    <span style="margin-left:auto">observe badge = watch-only · send-box present = control (drive in place)</span>
+  </div>
+</div>
+
+<script>
+const C = { working:'var(--orange)', loading:'var(--blue)', done:'var(--green)',
+           interrupted:'var(--red)', idle:'var(--amber)', exited:'var(--ghost)' };
+const ctxColor = p => p>=40?'var(--green)':p>=15?'var(--amber)':'var(--red)';
+
+function head(t){
+  const hd = t.state==='exited'?'dead':t.state==='idle'?'idle':'ok';
+  const sid = (t.state==='idle'||t.state==='exited')?'sid idle':'sid';
+  return `<div class="thead"><span class="hdot ${hd}"></span>
+    <span class="proj">${t.project}</span><span class="${sid}">${t.id}</span>
+    <span class="htools"><span>⋮</span><span>⤢</span></span></div>`;
+}
+function statusLine(t){
+  const active = t.state==='working'||t.state==='loading';
+  const hollow = t.state==='idle'?' hollow':'';
+  const ctx = t.ctx!=null && t.variant==='compact'
+    ? `<span class="ctx" style="color:${ctxColor(t.ctx)}">ctx ${t.ctx}%</span>` : '';
+  return `<div class="status${active?' pulse':''}" style="color:${C[t.state]}">
+    <span class="sd${hollow}"></span><span class="meta">${t.status}</span>${ctx}</div>`;
+}
+function footer(t){
+  if(t.variant==='compact') return t.state==='idle'?`<div class="expand-hint">▸ expand · drive</div>`:'';
+  if(t.mode==='observe') return `
+    <div class="ctxmeter">ctx <span class="bar"><i style="width:${t.ctx}%;background:${ctxColor(t.ctx)}"></i></span> ${t.ctx}%</div>
+    <div class="watchbar"><span class="eye">observe</span> · live TUI — watch only
+      <a class="take" href="#">take over ↗</a></div>`;
+  return `<div class="sendbox"><div class="sb-in">↵ send · ⇧↵ newline</div>
+    <div class="sb-bar"><span class="ic">+</span><span class="ic">⌕</span><span class="sp"></span>
+      <span class="ctx" style="color:${ctxColor(t.ctx)}">ctx ${t.ctx}%</span>
+      <span class="model">Opus 4.8</span><span class="send">↑</span></div></div>`;
+}
+const tile = t => `<div class="tile ${t.variant==='compact'?'compact ':''}${t.state==='exited'?'dead ':''}"
+  style="--st:${C[t.state]}">${head(t)}
+  ${t.variant==='compact'?'':`<div class="scroll">${t.body||''}</div>`}
+  ${statusLine(t)}${footer(t)}</div>`;
+
+const TILES = [
+  { project:'hq', id:'fe571e64', state:'working', mode:'control', variant:'live', ctx:48,
+    status:'working · streaming · 4.1k tok',
+    body:`<div class="turn"><div class="who claude"><span class="wd"></span><b>Claude</b><span class="ts">10:03 PM</span></div>
+      <div class="msg">I commit at each batch boundary &rarr; every landing is a durable milestone.
+        <span class="cg">build:check</span> gates the catastrophic kind before anything commits.<span class="tok">block · 4.1k tok</span></div></div>` },
+
+  { project:'cli', id:'87ba4702', state:'working', mode:'observe', variant:'live', ctx:12,
+    status:'live · streaming',
+    body:`<div class="turn"><div class="who claude"><span class="wd"></span><b>Claude</b><span class="ts">12:31 AM</span></div>
+      <div class="msg">Handoff updated in memory (<span class="cc">hq-plugin-library</span> + the index line), capturing the honest state for next time.<span class="tok">block · 13k tok</span></div></div>` },
+
+  { project:'hq', id:'71dbc4b0', state:'loading', mode:'control', variant:'live', ctx:62,
+    status:'loading · spinning up the session',
+    body:`<div class="turn"><div class="who you"><span class="wd"></span><b>You</b><span class="ts">12:42 AM</span></div>
+      <div class="msg bare">build concept B — the wall.</div></div>
+      <div class="shim"></div><div class="shim s2"></div><div class="shim s3"></div>` },
+
+  { project:'web', id:'a9aad78d', state:'done', mode:'control', variant:'live', ctx:86,
+    status:'finished · just now',
+    body:`<div class="turn"><div class="who you"><span class="wd"></span><b>You</b><span class="ts">12:18 AM</span></div>
+      <div class="msg bare">ship it.</div></div>
+      <div class="turn"><div class="who claude"><span class="wd"></span><b>Claude</b><span class="ts">12:19 AM</span></div>
+      <div class="msg">Pushed to <span class="cg">origin/main</span> (<span class="cc">beab30f</span>) — build green, tree clean.<span class="tok">block · 1.2k tok</span></div></div>` },
+
+  { project:'api', id:'3c2f01bb', state:'interrupted', mode:'control', variant:'live', ctx:31,
+    status:'interrupted · press ↑ to resume',
+    body:`<div class="turn"><div class="who claude"><span class="wd"></span><b>Claude</b><span class="ts">11:58 PM</span></div>
+      <div class="msg">Refactoring the reader to stream rows instead of buffering the whole&hairsp;—</div></div>` },
+
+  { project:'infra', id:'5e2a8801', state:'done', mode:'control', variant:'live', ctx:74,
+    status:'finished · 3m ago',
+    body:`<div class="turn"><div class="who claude"><span class="wd"></span><b>Claude</b><span class="ts">12:40 AM</span></div>
+      <div class="msg">Migration applied — 12 tables, 0 advisories. <span class="cg">supabase</span> branch merged.<span class="tok">block · 2.7k tok</span></div></div>` },
+
+  { project:'hq', id:'164da397', state:'idle', mode:'control', variant:'compact', ctx:9,
+    status:'idle — nothing running · last activity 1h 20m ago' },
+
+  { project:'web', id:'d41f9c20', state:'idle', mode:'observe', variant:'compact', ctx:54,
+    status:'live tui · idle · 22m' },
+
+  { project:'hq', id:'2b9d0f13', state:'exited', mode:'control', variant:'compact',
+    status:'exited · ended 4h ago' },
+];
+
+document.getElementById('wall').innerHTML = TILES.map(tile).join('');
+</script>
+</body>
+</html>

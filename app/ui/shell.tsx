@@ -9,6 +9,7 @@ import Terminal from "@/app/ui/terminal";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import TerminalRow from "@/app/ui/terminal-row";
 import FilesOverlay from "@/app/ui/files-overlay";
+import FleetOverlay from "@/app/ui/fleet-overlay";
 import { PlannerProvider } from "@/app/ui/planner-state";
 import PlannerPanel from "@/app/ui/planner-panel";
 import { ApiProvider } from "@/app/ui/api-state";
@@ -104,6 +105,7 @@ export default async function Shell({
                 stays mounted + live behind it. Suspense for useSearchParams. */}
             <Suspense fallback={null}>
               <FilesOverlay />
+              <FleetOverlay />
             </Suspense>
           </div>
 
