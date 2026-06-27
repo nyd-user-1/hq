@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // backs out one level at a time).
 
 type Todo = { id: string; text: string; done: boolean; body?: string };
-type Cmd = { name: string; description: string; sourceLabel: string };
+type Cmd = { name: string; description: string; sourceLabel: string; source?: string };
 type Step = "root" | "todo-get" | "command";
 
 export default function ComposeMenu({
@@ -70,7 +70,7 @@ export default function ComposeMenu({
       const rows: Cmd[] = [
         ...((c.commands ?? []) as Cmd[]),
         ...((s.skills ?? []) as Cmd[]),
-      ].map((x) => ({ name: x.name, description: x.description ?? "", sourceLabel: x.sourceLabel ?? "" }));
+      ].map((x) => ({ name: x.name, description: x.description ?? "", sourceLabel: x.sourceLabel ?? "", source: x.source }));
       const seen = new Set<string>();
       const deduped = rows
         .filter((x) => (seen.has(x.name) ? false : (seen.add(x.name), true)))
@@ -141,12 +141,10 @@ export default function ComposeMenu({
         <div className="absolute bottom-full left-0 z-30 mb-1.5 flex max-h-[340px] w-72 flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
           {/* ── ROOT — Attach · Todo ▸ · Command ▸ ── */}
           {step === "root" && (
-            <div className="flex flex-col py-1">
+            <div className="flex flex-col p-1">
               <Row
                 icon={<PlusIcon />}
-                tint="text-emerald-400"
                 title="Attach"
-                sub="a screenshot → the message"
                 onClick={() => {
                   onAttach();
                   close();
@@ -154,9 +152,7 @@ export default function ComposeMenu({
               />
               <Row
                 icon={<TodoIcon />}
-                tint="text-amber-400"
                 title="Todo"
-                sub="add this message, or pull one in"
                 chevron
                 onClick={() => {
                   setStep("todo-get");
@@ -165,9 +161,7 @@ export default function ComposeMenu({
               />
               <Row
                 icon={<CommandIcon />}
-                tint="text-violet-300"
                 title="Command"
-                sub="drop a slash command into the box"
                 chevron
                 onClick={() => setStep("command")}
               />
@@ -264,7 +258,9 @@ export default function ComposeMenu({
                       title={`drop /${c.name} into the message box`}
                       className={`flex w-full items-start gap-2 px-2.5 py-2 text-left transition-colors hover:bg-zinc-900 ${i > 0 ? "border-t border-zinc-800/70" : ""}`}
                     >
-                      <span className="mt-1 size-1.5 shrink-0 rounded-full bg-violet-400/70" />
+                      <span className={`mt-1 shrink-0 text-[10px] leading-none ${cmdDot(c.source)}`} aria-hidden>
+                        ●
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline gap-1.5">
                           <span className="truncate font-mono text-[11px] text-violet-200">/{c.name}</span>
@@ -285,20 +281,21 @@ export default function ComposeMenu({
 }
 
 // ── shared bits ───────────────────────────────────────────────────────────────
-function Row({ icon, tint, title, sub, chevron, divider, onClick }: { icon: React.ReactNode; tint: string; title: string; sub: string; chevron?: boolean; divider?: boolean; onClick: () => void }) {
+// Matches the shared dropdown row (terminal-nav-menu / session kebab): monochrome
+// icon, text-xs label (not mono), no subtext, inset rounded hover. No per-item hue.
+function Row({ icon, title, chevron, onClick }: { icon: React.ReactNode; title: string; chevron?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-zinc-900 ${divider ? "border-t border-zinc-800" : ""}`}
+      className="flex w-full items-center justify-between gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
     >
-      <span className={`shrink-0 ${tint}`}>{icon}</span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="font-mono text-[11px] text-zinc-200">{title}</span>
-        <span className="truncate font-mono text-[10px] text-zinc-600">{sub}</span>
+      <span className="flex items-center gap-2.5">
+        <span className="shrink-0">{icon}</span>
+        {title}
       </span>
       {chevron && (
-        <svg className="shrink-0 text-zinc-600" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg className="shrink-0 text-zinc-600" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="m9 18 6-6-6-6" />
         </svg>
       )}
@@ -340,6 +337,16 @@ function BackButton({ onBack }: { onBack: () => void }) {
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="px-2.5 py-3 font-mono text-[10px] text-zinc-600">{children}</p>;
 }
+
+// Command dot color, keyed to source — identical to the Commands panel cards.
+const cmdDot = (source?: string) =>
+  source === "user"
+    ? "text-blue-500"
+    : source === "builtin"
+      ? "text-zinc-500"
+      : source === "mcp"
+        ? "text-purple-400"
+        : "text-emerald-500";
 
 const PlusIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
