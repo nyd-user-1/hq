@@ -6,7 +6,7 @@
 // metrics drops into an existing shape, never a new component. Everything here is
 // real, read straight off disk via the existing lib readers — no synthetic data.
 import { getUsageStates, getSpend, tokensByDay } from "@/lib/usage";
-import { getSessions, type SessionInfo } from "@/lib/sessions";
+import { getSessions, lifetimeByProject, type SessionInfo } from "@/lib/sessions";
 import { getTodos } from "@/lib/todo";
 import { timelineFor } from "@/lib/transcript";
 
@@ -14,11 +14,14 @@ const CONTEXT_LIMIT = 1_000_000; // the Opus 1M window; 200k = the price cliff
 const CLIFF = 200_000;
 
 // ── the shape vocabulary ─────────────────────────────────────────────────────
-export type Stat = { label: string; value: string; sub?: string };
+// Semantic accent — green=healthy/cheap · amber=premium/warning · red=critical ·
+// orange=burn (hq's Claude accent) · blue=usage/volume. Defaults to neutral zinc.
+export type Tone = "blue" | "orange" | "green" | "amber" | "red" | "zinc";
+export type Stat = { label: string; value: string; sub?: string; tone?: Tone };
 export type Shape =
-  | { kind: "series"; title: string; points: number[]; capL: string; capR: string }
-  | { kind: "ranking"; title: string; rows: { name: string; pct: number; value: string }[] }
-  | { kind: "distribution"; title: string; bins: { h: number; hot: boolean }[]; xL: string; xR: string };
+  | { kind: "series"; title: string; points: number[]; capL: string; capR: string; tone?: Tone }
+  | { kind: "ranking"; title: string; rows: { name: string; pct: number; value: string }[]; tone?: Tone }
+  | { kind: "distribution"; title: string; bins: { h: number; hot: boolean }[]; xL: string; xR: string; tone?: Tone };
 
 export type FleetMetrics = {
   scope: { level: "fleet" | "session"; id: string | null; label: string };
@@ -37,6 +40,7 @@ const fmtTok = (n: number): string =>
         ? Math.round(n / 1e3) + "k"
         : String(Math.round(n));
 const fmtUsd = (n: number): string => "$" + (n >= 100 ? String(Math.round(n)) : n.toFixed(n >= 10 ? 1 : 2));
+const fmtUsdK = (n: number): string => (n >= 1000 ? "$" + (n / 1000).toFixed(1) + "k" : fmtUsd(n));
 const fmtDur = (ms: number): string => {
   const s = ms / 1000;
   if (s < 60) return Math.round(s) + "s";
@@ -69,11 +73,11 @@ function fleetScope(now: number): FleetMetrics {
   const todos = getTodos();
   const pending = todos.filter((t) => !t.done).length;
 
-  // ranking — weighted tokens by project (top 5)
-  const byProject = new Map<string, number>();
-  for (const s of set) byProject.set(s.project, (byProject.get(s.project) ?? 0) + s.weightedTokens);
-  const ranked = [...byProject.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const topTok = ranked[0]?.[1] || 1;
+  // ranking — weighted tokens by project, ALL-TIME (every transcript on disk, not
+  // the 7-day working set), top 10. Cached + incremental in lib/sessions.
+  const life = lifetimeByProject();
+  const ranked = life.slice(0, 10);
+  const topTok = ranked[0]?.weighted || 1;
 
   // distribution — sessions by current context size, cliff at 200k
   const ctxBins = bucket(
@@ -92,22 +96,23 @@ function fleetScope(now: number): FleetMetrics {
   return {
     scope: { level: "fleet", id: null, label: "all sessions · 14d" },
     kpis: [
-      { label: "sessions", value: String(active7d.length), sub: `${set.length} recent` },
-      { label: "tokens · wk", value: fmtTok(week?.rawTokens ?? 0), sub: fmtUsd(spend.week) + " spend" },
-      { label: "turns · wk", value: String(week?.messages ?? 0) },
-      { label: "projects", value: String(byProject.size) },
-      { label: "todos", value: String(todos.length), sub: `${pending} pending` },
-      { label: "ctx · over cliff", value: `${set.filter((s) => s.contextTokens > CLIFF).length}`, sub: "past 200k" },
+      { label: "sessions", value: String(active7d.length), sub: "recent", tone: "green" },
+      { label: "tokens", value: fmtTok(week?.rawTokens ?? 0), sub: fmtUsdK(spend.week) + " wk", tone: "blue" },
+      { label: "turns", value: String(week?.messages ?? 0), sub: "wk" },
+      { label: "projects", value: String(life.length), sub: "all-time" },
+      { label: "todos", value: String(pending), sub: "pending", tone: pending ? "amber" : "zinc" },
+      { label: "ctx cliff", value: `${set.filter((s) => s.contextTokens > CLIFF).length}`, sub: "past 200k", tone: "amber" },
     ],
     shapes: [
-      { kind: "series", title: "Tokens / day", points: series.map((d) => d.weighted), capL: series[0]?.day ?? "", capR: "today" },
+      { kind: "series", title: "Tokens / day", points: series.map((d) => d.weighted), capL: series[0]?.day ?? "", capR: "today", tone: "blue" },
       {
         kind: "ranking",
-        title: "Tokens by project",
-        rows: ranked.map(([name, tok]) => ({ name, pct: Math.round((tok / topTok) * 100), value: fmtTok(tok) })),
+        title: "Tokens by project · all-time",
+        rows: ranked.map((p) => ({ name: p.project, pct: Math.round((p.weighted / topTok) * 100), value: fmtTok(p.weighted) })),
+        tone: "blue",
       },
-      { kind: "distribution", title: "Sessions by context · 200k cliff", bins: ctxBins, xL: "<50k", xR: "400k+" },
-      { kind: "ranking", title: "Model usage · wk", rows: modelRows },
+      { kind: "distribution", title: "Sessions by context · 200k cliff", bins: ctxBins, xL: "<50k", xR: "400k+", tone: "blue" },
+      { kind: "ranking", title: "Model usage · wk", rows: modelRows, tone: "orange" },
     ],
     generatedAt: now,
   };
@@ -121,6 +126,7 @@ function sessionScope(id: string, now: number): FleetMetrics {
   const claudeN = turns.filter((t) => t.role === "assistant").length;
   const ctx = tl.contextTokens;
   const ctxLeft = Math.max(0, Math.round((1 - ctx / CONTEXT_LIMIT) * 100));
+  const ctxTone: Tone = ctxLeft > 25 ? "green" : ctxLeft > 10 ? "amber" : "red"; // mirrors the runway
 
   // timestamps → session span + per-turn durations
   const stamps = turns.map((t) => Date.parse(t.at)).filter((n) => !Number.isNaN(n));
@@ -162,24 +168,26 @@ function sessionScope(id: string, now: number): FleetMetrics {
     scope: { level: "session", id, label: `${tl.project} · ${id.slice(0, 8)}` },
     kpis: [
       { label: "turns", value: String(turns.length), sub: `${userN} you · ${claudeN} claude` },
-      { label: "ctx left", value: `${ctxLeft}%`, sub: ctx > CLIFF ? "past cliff" : fmtTok(ctx) },
+      { label: "ctx left", value: `${ctxLeft}%`, sub: ctx > CLIFF ? "past cliff" : fmtTok(ctx), tone: ctxTone },
       { label: "tok / turn", value: fmtTok(claudeN ? ctx / claudeN : 0), sub: "avg" },
-      { label: "to 200k", value: to200 >= 0 ? `turn ${to200 + 1}` : "—", sub: to200 >= 0 ? "" : "under cliff" },
+      { label: "to 200k", value: to200 >= 0 ? `turn ${to200 + 1}` : "—", sub: to200 >= 0 ? "" : "under cliff", tone: to200 >= 0 ? "amber" : "zinc" },
       { label: "session", value: spanMs ? fmtDur(spanMs) : "—", sub: tl.model || "" },
       { label: "tools", value: String([...toolCounts.values()].reduce((a, b) => a + b, 0)), sub: `${toolCounts.size} kinds` },
     ],
     shapes: [
-      { kind: "series", title: "Context burn · this session", points: burn, capL: "start", capR: fmtTok(ctx) },
+      { kind: "series", title: "Context burn · this session", points: burn, capL: "start", capR: fmtTok(ctx), tone: "orange" },
       {
         kind: "ranking",
         title: "Tokens by turn · top",
         rows: heavy.map((t) => ({ name: `turn ${t.i + 1}`, pct: Math.round((t.tok / topTurn) * 100), value: fmtTok(t.tok) })),
+        tone: "blue",
       },
-      { kind: "distribution", title: "Time per turn", bins: timeBins, xL: "<5s", xR: "5m+" },
+      { kind: "distribution", title: "Time per turn", bins: timeBins, xL: "<5s", xR: "5m+", tone: "blue" },
       {
         kind: "ranking",
         title: "Tools used · this session",
         rows: tools.map(([name, n]) => ({ name, pct: Math.round((n / topTool) * 100), value: `${n}` })),
+        tone: "blue",
       },
     ],
     generatedAt: now,

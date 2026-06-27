@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { getUsage, perFileTotals, weighted } from "./usage";
+import { getUsage, perFileTotals, weighted, lifetimePerFileTotals } from "./usage";
 import { baseCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
 import { projectsRoot } from "./config";
@@ -622,4 +622,47 @@ export function getSessions(limit = 12): SessionInfo[] {
       snippet: snippet.slice(0, 120),
     };
   });
+}
+
+// ── lifetime tokens by project ───────────────────────────────────────────────
+// Weighted tokens per project across EVERY transcript on disk — not the 7-day,
+// limit-capped working set getSessions() sees. Built on the meter's incremental
+// lifetime cache (lifetimePerFileTotals): the heavy part is project derivation
+// (a head read per file), so each file's project is memoized by path — a file's
+// project never changes (a sidecar re-home is rare; a restart re-derives it).
+// Result is throttled (30s): lifetime barely moves, so the 8s Fleet poll mostly
+// returns a warm list. Sorted desc by weighted tokens.
+export type ProjectTokens = { project: string; weighted: number; sessions: number };
+
+let lifetimeAt = 0;
+let lifetimeCache: ProjectTokens[] = [];
+const projectOfFile = new Map<string, string>(); // path → project ("" = a filtered sdk run)
+
+export function lifetimeByProject(): ProjectTokens[] {
+  const now = Date.now();
+  if (lifetimeCache.length && now - lifetimeAt < 30_000) return lifetimeCache;
+  lifetimeAt = now;
+  const totals = lifetimePerFileTotals();
+  const meta = getSessionsMeta();
+  const driven = hqDrivenIds();
+  const byProject = new Map<string, { weighted: number; sessions: number }>();
+  for (const [file, t] of totals) {
+    if (!t.messages) continue; // no usage records (empty / non-conversation file)
+    let project = projectOfFile.get(file);
+    if (project === undefined) {
+      const m = sessionMeta(file, 0, meta); // canonical derivation + sidecar override
+      // mirror the lists: drop stray sdk-cli runs hq didn't drive
+      project = m.entrypoint === "sdk-cli" && !driven.has(m.id) ? "" : m.project;
+      projectOfFile.set(file, project);
+    }
+    if (!project) continue;
+    const acc = byProject.get(project) ?? { weighted: 0, sessions: 0 };
+    acc.weighted += weighted(t);
+    acc.sessions += 1;
+    byProject.set(project, acc);
+  }
+  lifetimeCache = [...byProject.entries()]
+    .map(([project, v]) => ({ project, weighted: v.weighted, sessions: v.sessions }))
+    .sort((a, b) => b.weighted - a.weighted);
+  return lifetimeCache;
 }

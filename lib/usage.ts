@@ -188,6 +188,32 @@ function refreshCache(): void {
   }
 }
 
+// Lifetime variant of refreshCache: walk EVERY transcript (no 7-day window) into
+// the SAME incremental byte-offset cache. The first call pays a full read of all
+// files; after that only appended bytes are parsed, exactly like refreshCache. The
+// week-windowed consumers all filter by record timestamp, so the extra older files
+// in the cache never affect them — they just enable lifetime aggregates. Throttled
+// hard (lifetime barely moves) so a frequent caller (the 8s Fleet poll) doesn't
+// re-walk every dir each tick.
+let lifetimeRefreshAt = 0;
+function refreshAllCache(): void {
+  const nowMs = Date.now();
+  if (nowMs - lifetimeRefreshAt < 30_000) return;
+  lifetimeRefreshAt = nowMs;
+  for (const file of transcriptFiles(Infinity)) {
+    let cache = fileCache.get(file);
+    if (!cache) {
+      cache = { offset: 0, recs: new Map() };
+      fileCache.set(file, cache);
+    }
+    try {
+      parseNewLines(file, cache);
+    } catch {
+      // unreadable — skip
+    }
+  }
+}
+
 function* allRecs(): Generator<Rec> {
   for (const { recs } of fileCache.values()) {
     for (const r of recs.values()) yield r;
@@ -408,6 +434,15 @@ export function perFileTotals(): Map<string, Totals> {
     m.set(file, sum);
   }
   return m;
+}
+
+// Per-transcript deduped LIFETIME totals — every file on disk, not just the 7-day
+// working set perFileTotals() sees. Warms the full cache first (throttled), then
+// reuses the same per-file tally. Powers the Fleet dashboard's all-time
+// tokens-by-project ranking.
+export function lifetimePerFileTotals(): Map<string, Totals> {
+  refreshAllCache();
+  return perFileTotals();
 }
 
 export type Forecast = {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { slotOf, getTerminals, wallIds, MAX_TERMINALS } from "@/app/ui/terminals";
 
 // Hover menu on the terminal header's session id: a search + auto-scroll dropdown
 // over your PAST sessions, newest→oldest (same TodoMenu "Get Todo" drawer shape).
@@ -29,7 +30,19 @@ function ago(ms: number): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export default function SessionMenu({ currentId, children }: { currentId: string | null; children: React.ReactNode }) {
+// onPick (optional): when present, picking a session calls onPick(id) instead of
+// navigating the terminal — and the list grows an "All sessions" row (onPick(null)).
+// This is how the Fleet dashboard reuses the picker to SCOPE its board rather than
+// switch the terminal. Omitted ⇒ the original router-nav behavior (the terminal).
+export default function SessionMenu({
+  currentId,
+  children,
+  onPick,
+}: {
+  currentId: string | null;
+  children: React.ReactNode;
+  onPick?: (id: string | null) => void;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -37,7 +50,7 @@ export default function SessionMenu({ currentId, children }: { currentId: string
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const currentRef = useRef<HTMLButtonElement>(null);
+  const currentRef = useRef<HTMLDivElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Open on HOVER with a grace period on leave (cross to the menu), like the kebab.
@@ -77,11 +90,25 @@ export default function SessionMenu({ currentId, children }: { currentId: string
   }, []);
 
   const switchTo = (id: string) => {
+    if (onPick) {
+      onPick(id); // scope a consumer (Fleet board), don't touch the terminal
+      close();
+      return;
+    }
     if (id !== currentId) {
       const sp = new URLSearchParams(params.toString());
       sp.set("session", id); // keep ?pair etc., just swap the session
       router.push(`?${sp.toString()}`, { scroll: false });
     }
+    close();
+  };
+
+  // ↗ — open this session as the NEXT terminal pane (append to ?wall), leaving
+  // terminal 1 where it is. Shown only when there's room (< MAX_TERMINALS).
+  const openAsTerminal = (id: string) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("wall", [...wallIds(params), id].join(","));
+    router.push(`?${sp.toString()}`, { scroll: false });
     close();
   };
 
@@ -115,38 +142,80 @@ export default function SessionMenu({ currentId, children }: { currentId: string
           </div>
 
           <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto">
+            {onPick && !q && (
+              <button
+                type="button"
+                onClick={() => {
+                  onPick(null);
+                  close();
+                }}
+                title="dashboard-wide — all sessions"
+                className={`flex w-full items-center gap-2 border-b border-zinc-800/70 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-zinc-900 ${
+                  currentId ? "text-zinc-300" : "text-green-400"
+                }`}
+              >
+                <span className={`size-1.5 shrink-0 rounded-full ${currentId ? "bg-zinc-600" : "bg-green-400"}`} />
+                All sessions · dashboard-wide
+              </button>
+            )}
             {sessions === null ? (
               <p className="px-2.5 py-3 font-mono text-[10px] text-zinc-600">loading…</p>
             ) : matches.length === 0 ? (
               <p className="px-2.5 py-3 font-mono text-[10px] text-zinc-600">{q ? "no matches" : "no sessions"}</p>
             ) : (
               matches.map((s, i) => {
-                const isCurrent = s.id === currentId;
+                const slot = slotOf(params, s.id); // which terminal it's open in (0 = none)
+                const open = slot > 0;
+                const canAdd = !onPick && !open && getTerminals(params).length < MAX_TERMINALS;
                 const dot = s.live ? "bg-green-400 animate-pulse" : s.active ? "bg-green-400" : "bg-zinc-600";
                 return (
-                  <button
+                  <div
                     key={s.id}
-                    ref={isCurrent ? currentRef : undefined}
-                    type="button"
-                    onClick={() => switchTo(s.id)}
-                    title={isCurrent ? "current session" : `switch to ${s.id.slice(0, 8)}`}
-                    className={`flex w-full items-start gap-2 px-2.5 py-2 text-left transition-colors hover:bg-zinc-900 ${
-                      i > 0 ? "border-t border-zinc-800/70" : ""
-                    } ${isCurrent ? "bg-zinc-900/60" : ""}`}
+                    ref={slot === 1 ? currentRef : undefined}
+                    className={`group relative ${i > 0 ? "border-t border-zinc-800/70" : ""} ${open ? "bg-zinc-900/60" : ""}`}
                   >
-                    <span className={`mt-1 size-1.5 shrink-0 rounded-full ${dot}`} />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline gap-1.5">
-                        <span className={`min-w-0 flex-1 truncate text-[11px] ${isCurrent ? "text-zinc-100" : "text-zinc-300"}`}>
-                          {s.customTitle || s.title}
+                    <button
+                      type="button"
+                      onClick={() => switchTo(s.id)}
+                      title={onPick ? `scope dashboard to ${s.id.slice(0, 8)}` : open ? `in terminal ${slot}` : `switch terminal 1 to ${s.id.slice(0, 8)}`}
+                      className="flex w-full items-start gap-2 px-2.5 py-2 text-left transition-colors hover:bg-zinc-900"
+                    >
+                      <span className={`mt-1 size-1.5 shrink-0 rounded-full ${dot}`} />
+                      {/* cap the title on hover so the ↗ has room */}
+                      <span className={`min-w-0 flex-1 ${canAdd ? "group-hover:pr-6" : ""}`}>
+                        <span className="flex items-baseline gap-1.5">
+                          <span className={`min-w-0 flex-1 truncate text-[11px] ${open ? "text-zinc-100" : "text-zinc-300"}`}>
+                            {s.customTitle || s.title}
+                          </span>
+                          {open && (
+                            <span
+                              className="shrink-0 font-mono text-[11px] tabular-nums text-green-400"
+                              title={`open in terminal ${slot}`}
+                            >
+                              {slot}
+                            </span>
+                          )}
                         </span>
-                        {isCurrent && <span className="shrink-0 font-mono text-[9px] uppercase tracking-wide text-green-500/80">current</span>}
+                        <span className="mt-0.5 block truncate font-mono text-[10px] text-zinc-600">
+                          {[s.project, s.id.slice(0, 8), ago(s.lastActive)].filter(Boolean).join(" · ")}
+                        </span>
                       </span>
-                      <span className="mt-0.5 block truncate font-mono text-[10px] text-zinc-600">
-                        {[s.project, s.id.slice(0, 8), ago(s.lastActive)].filter(Boolean).join(" · ")}
-                      </span>
-                    </span>
-                  </button>
+                    </button>
+                    {canAdd && (
+                      <button
+                        type="button"
+                        onClick={() => openAsTerminal(s.id)}
+                        title="open as a new terminal"
+                        aria-label="open as a new terminal"
+                        className="absolute right-2 top-2 hidden rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 group-hover:block"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M7 17 17 7" />
+                          <path d="M7 7h10v10" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 );
               })
             )}
