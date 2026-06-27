@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type Todo = { id: string; text: string; done: boolean; body?: string };
 type Cmd = { name: string; description: string; sourceLabel: string };
-type Step = "root" | "todo" | "todo-get" | "command";
+type Step = "root" | "todo-get" | "command";
 
 export default function ComposeMenu({
   draft,
@@ -95,10 +95,11 @@ export default function ComposeMenu({
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (step === "todo-get") setStep("todo");
-      else if (step === "todo" || step === "command") setStep("root");
-      else close();
-      setQuery("");
+      if (step === "root") close();
+      else {
+        setStep("root"); // any sub-step backs straight to root (one level now)
+        setQuery("");
+      }
     };
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
@@ -137,7 +138,7 @@ export default function ComposeMenu({
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 z-30 mb-1.5 flex max-h-[360px] w-72 flex-col overflow-hidden rounded-md border border-zinc-700 bg-zinc-950 shadow-xl">
+        <div className="absolute bottom-full left-0 z-30 mb-1.5 flex max-h-[340px] w-72 flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
           {/* ── ROOT — Attach · Todo ▸ · Command ▸ ── */}
           {step === "root" && (
             <div className="flex flex-col py-1">
@@ -157,8 +158,10 @@ export default function ComposeMenu({
                 title="Todo"
                 sub="add this message, or pull one in"
                 chevron
-                divider
-                onClick={() => setStep("todo")}
+                onClick={() => {
+                  setStep("todo-get");
+                  setQuery("");
+                }}
               />
               <Row
                 icon={<CommandIcon />}
@@ -166,44 +169,12 @@ export default function ComposeMenu({
                 title="Command"
                 sub="drop a slash command into the box"
                 chevron
-                divider
                 onClick={() => setStep("command")}
               />
             </div>
           )}
 
-          {/* ── TODO sub-menu — Add Todo / Get Todo ▸ ── */}
-          {step === "todo" && (
-            <div className="flex flex-col py-1">
-              <DrawerHeader onBack={() => setStep("root")} label="To-dos" />
-              {canAdd && (
-                <Row
-                  icon={<PlusIcon />}
-                  tint="text-emerald-400"
-                  title="Add Todo"
-                  sub="this message → your to-do list"
-                  onClick={() => {
-                    onAddDraft();
-                    close();
-                  }}
-                />
-              )}
-              <Row
-                icon={<TodoIcon />}
-                tint="text-zinc-500"
-                title="Get Todo"
-                sub="pull one into the message box"
-                chevron
-                divider={canAdd}
-                onClick={() => {
-                  setStep("todo-get");
-                  setQuery("");
-                }}
-              />
-            </div>
-          )}
-
-          {/* ── TODO list ── */}
+          {/* ── TODO list (Todo → straight here; "add this message" pins on top) ── */}
           {step === "todo-get" && (
             <>
               <SearchHeader
@@ -211,11 +182,29 @@ export default function ComposeMenu({
                 value={query}
                 onChange={setQuery}
                 onBack={() => {
-                  setStep("todo");
+                  setStep("root");
                   setQuery("");
                 }}
                 placeholder="Search to-dos…"
               />
+              {canAdd && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddDraft();
+                    close();
+                  }}
+                  className="flex w-full shrink-0 items-center gap-2 border-b border-zinc-800 px-2.5 py-2 text-left transition-colors hover:bg-zinc-900"
+                >
+                  <span className="shrink-0 text-emerald-400">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                  </span>
+                  <span className="font-mono text-[11px] text-zinc-200">Add this message as a to-do</span>
+                </button>
+              )}
               <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto">
                 {todos === null ? (
                   <Empty>loading…</Empty>
@@ -314,15 +303,6 @@ function Row({ icon, tint, title, sub, chevron, divider, onClick }: { icon: Reac
         </svg>
       )}
     </button>
-  );
-}
-
-function DrawerHeader({ onBack, label }: { onBack: () => void; label: string }) {
-  return (
-    <div className="flex items-center gap-2 px-2.5 pb-1 pt-0.5">
-      <BackButton onBack={onBack} />
-      <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">{label}</span>
-    </div>
   );
 }
 

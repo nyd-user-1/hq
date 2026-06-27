@@ -13,6 +13,7 @@ import SendBoxSearch from "@/app/ui/send-box-search";
 import Tooltip from "@/app/ui/tooltip";
 import { useRepl } from "@/app/ui/use-repl";
 import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
+import SessionMenu from "@/app/ui/session-menu";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
@@ -2646,16 +2647,15 @@ export default function Terminal({
         </div>
       )}
       {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
-      <div className="mb-2 border-b border-zinc-800 pb-3">
+      <div className={`mb-2 ${centered ? "mx-auto w-full max-w-3xl px-4" : ""}`}>
         {/* The whole header row — session metadata (dot · project · id · search ·
             lineage) AND the layout toggle — rides the SAME centered column as the
             message stream when FOCUSED (the colWrap: mx-auto max-w-3xl px-4), so
-            they all move together; full-width left in WIDE screen. */}
-        <div
-          className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${
-            centered ? "mx-auto w-full max-w-3xl px-4" : ""
-          }`}
-        >
+            they all move together; full-width left in WIDE screen. The border-b
+            divider lives on this INNER row (not the outer box) so it narrows + pads
+            WITH the column in focus mode — aligning with the message blocks — and
+            spans full width again on wide screen. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800 pb-3">
         <span className="flex items-center gap-1.5 text-xs">
           {/* Activity dot, same vocabulary as the session cards: blinking =
               writing right now, solid = active within the cache window (5 min),
@@ -2680,27 +2680,31 @@ export default function Terminal({
             {staged ? "new session" : project || "session"}
           </span>
         </span>
-        {resolvedId ? (
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(resolvedId);
-              setIdCopied(true);
-              setTimeout(() => setIdCopied(false), 1200);
-            }}
-            title={
-              idCopied ? "copied" : `copy session id · ${resolvedId.slice(0, 8)}`
-            }
-            className={`cursor-pointer rounded px-1 py-0.5 font-mono text-[11px] transition-colors ${
-              idCopied
-                ? "bg-emerald-500/15 text-emerald-300"
-                : "text-green-400 hover:text-green-300"
-            }`}
-          >
-            {customTitle || resolvedId.slice(0, 8)}
-          </button>
-        ) : (
-          <span className="font-mono text-[11px] text-zinc-600">—</span>
-        )}
+        {/* hover the id → SessionMenu (search + auto-scroll list of past sessions,
+            newest→oldest; pick one to switch the terminal to it). Click still copies. */}
+        <SessionMenu currentId={resolvedId}>
+          {resolvedId ? (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(resolvedId);
+                setIdCopied(true);
+                setTimeout(() => setIdCopied(false), 1200);
+              }}
+              title={
+                idCopied ? "copied" : `copy session id · ${resolvedId.slice(0, 8)}`
+              }
+              className={`cursor-pointer rounded px-1 py-0.5 font-mono text-[11px] transition-colors ${
+                idCopied
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : "text-green-400 hover:text-green-300"
+              }`}
+            >
+              {customTitle || resolvedId.slice(0, 8)}
+            </button>
+          ) : (
+            <span className="font-mono text-[11px] text-zinc-600">—</span>
+          )}
+        </SessionMenu>
         {/* Panels — the message-turn ⋮ kebab after the session id opens the nav menu
             (Activity · Console · Search · Metrics, each a flyout). */}
         <TerminalNavMenu project={staged ? "" : project} sessionId={resolvedId} />
