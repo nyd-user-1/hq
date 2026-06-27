@@ -16,6 +16,7 @@ import { useHooks } from "@/app/ui/hooks-state";
 import { useMcp } from "@/app/ui/mcp-state";
 import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
+import { usePermissions } from "@/app/ui/permissions-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 type Leaf = NavLeaf | { title: string; href: string };
@@ -27,6 +28,7 @@ type Leaf = NavLeaf | { title: string; href: string };
 const ROW = "flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
 const IP = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 const ActivityIcon = () => (<svg {...IP}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>);
+const ConfigIcon = () => (<svg {...IP}><line x1="21" y1="4" x2="14" y2="4" /><line x1="10" y1="4" x2="3" y2="4" /><line x1="21" y1="12" x2="12" y2="12" /><line x1="8" y1="12" x2="3" y2="12" /><line x1="21" y1="20" x2="16" y2="20" /><line x1="12" y1="20" x2="3" y2="20" /><line x1="14" y1="2" x2="14" y2="6" /><line x1="8" y1="10" x2="8" y2="14" /><line x1="16" y1="18" x2="16" y2="22" /></svg>);
 const ConsoleIcon = () => (<svg {...IP}><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>);
 const SearchIcon = () => (<svg {...IP}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>);
 const MetricsIcon = () => (<svg {...IP}><line x1="18" x2="18" y1="20" y2="10" /><line x1="12" x2="12" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="14" /></svg>);
@@ -42,6 +44,7 @@ const SEARCH_SCOPES: Leaf[] = [
 ];
 const ITEMS = [
   { key: "Activity", Icon: ActivityIcon },
+  { key: "Config", Icon: ConfigIcon },
   { key: "Console", Icon: ConsoleIcon },
   { key: "Search", Icon: SearchIcon },
   { key: "Metrics", Icon: MetricsIcon },
@@ -68,6 +71,7 @@ export default function TerminalNavMenu({
     mcp: useMcp(),
     agents: useAgents(),
     outputStyles: useOutputStyles(),
+    permissions: usePermissions(),
   };
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";

@@ -74,7 +74,8 @@ export type ToggleKey =
   | "hooks"
   | "mcp"
   | "agents"
-  | "outputStyles";
+  | "outputStyles"
+  | "permissions";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey }
@@ -94,6 +95,17 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Text", toggle: "text" },
       { title: "Tree", href: "/tree" },
       { title: "Preview", toggle: "preview" },
+    ],
+  },
+  {
+    title: "Config",
+    // the machine's configuration surfaces — control, don't just inherit. Permissions
+    // is live; the rest are the roadmap (settings.json, env, trusted folders).
+    items: [
+      { title: "Permissions", toggle: "permissions" },
+      { title: "Settings", soon: true },
+      { title: "Environment", soon: true },
+      { title: "Trusted Folders", soon: true },
     ],
   },
   {

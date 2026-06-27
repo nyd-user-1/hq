@@ -9,7 +9,6 @@ import Terminal from "@/app/ui/terminal";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import TerminalRow from "@/app/ui/terminal-row";
 import FilesOverlay from "@/app/ui/files-overlay";
-import FleetOverlay from "@/app/ui/fleet-overlay";
 import { PlannerProvider } from "@/app/ui/planner-state";
 import PlannerPanel from "@/app/ui/planner-panel";
 import { ApiProvider } from "@/app/ui/api-state";
@@ -28,6 +27,8 @@ import { AgentsProvider } from "@/app/ui/agents-state";
 import AgentsPanel from "@/app/ui/agents-panel";
 import { OutputStylesProvider } from "@/app/ui/output-styles-state";
 import OutputStylesPanel from "@/app/ui/output-styles-panel";
+import { PermissionsProvider } from "@/app/ui/permissions-state";
+import PermissionsPanel from "@/app/ui/permissions-panel";
 import { PreviewProvider } from "@/app/ui/preview-state";
 import PreviewPanel from "@/app/ui/preview-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
@@ -69,6 +70,7 @@ export default async function Shell({
       <McpProvider>
       <AgentsProvider>
       <OutputStylesProvider>
+      <PermissionsProvider>
       <PreviewProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
@@ -102,7 +104,6 @@ export default async function Shell({
                 stays mounted + live behind it. Suspense for useSearchParams. */}
             <Suspense fallback={null}>
               <FilesOverlay />
-              <FleetOverlay />
             </Suspense>
           </div>
 
@@ -129,6 +130,8 @@ export default async function Shell({
           <div id="mcp-panel-root" className="flex h-full min-w-0" />
           <div id="agents-panel-root" className="flex h-full min-w-0" />
           <div id="output-styles-panel-root" className="flex h-full min-w-0" />
+          {/* Config group — Permissions (control the allow/ask/deny rules). */}
+          <div id="permissions-panel-root" className="flex h-full min-w-0" />
           {/* The independent Preview panel's own portal root — the in-app live
               view of a project's dev server, open alongside everything else. */}
           <div id="preview-panel-root" className="flex h-full min-w-0" />
@@ -148,10 +151,12 @@ export default async function Shell({
       <McpPanel />
       <AgentsPanel />
       <OutputStylesPanel />
+      <PermissionsPanel />
       <PreviewPanel />
       <TextEditor />
       </TextEditorProvider>
       </PreviewProvider>
+      </PermissionsProvider>
       </OutputStylesProvider>
       </AgentsProvider>
       </McpProvider>

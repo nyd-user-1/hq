@@ -16,6 +16,7 @@ import { useHooks } from "@/app/ui/hooks-state";
 import { useMcp } from "@/app/ui/mcp-state";
 import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
+import { usePermissions } from "@/app/ui/permissions-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -39,6 +40,7 @@ export default function PanelNav() {
     mcp: useMcp(),
     agents: useAgents(),
     outputStyles: useOutputStyles(),
+    permissions: usePermissions(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">
