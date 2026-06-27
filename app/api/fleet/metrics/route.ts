@@ -3,12 +3,15 @@ import { fleetMetrics } from "@/lib/fleet";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/fleet/metrics            → fleet-grain dashboard (all sessions)
-// GET /api/fleet/metrics?session=ID → session-grain (one transcript)
-// The "monitor" feed for the Fleet deck's canvas; the live roster + runway come
-// from /api/terminal/repl/list. Polled slower than the roster (~8s) since it
-// aggregates; re-fetched immediately on a scope change.
+// GET /api/fleet/metrics                    → fleet grain, the default metric set
+// GET /api/fleet/metrics?session=ID         → session grain (one transcript)
+// GET /api/fleet/metrics?ids=a,b,c          → only those placed metrics
+// Returns { scope, items, catalog }. The catalog feeds the kpi-panel library; the
+// items feed the board. Polled ~8s; re-fetched immediately on a scope/placed change.
 export function GET(req: Request) {
-  const id = new URL(req.url).searchParams.get("session");
-  return NextResponse.json(fleetMetrics(id || null));
+  const u = new URL(req.url).searchParams;
+  const id = u.get("session");
+  const idsParam = u.get("ids");
+  const ids = idsParam ? idsParam.split(",").filter(Boolean) : undefined;
+  return NextResponse.json(fleetMetrics(id || null, ids));
 }

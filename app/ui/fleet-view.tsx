@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FleetMetrics, Shape, Stat, Tone } from "@/lib/fleet";
+import type { FleetMetrics, MetricDef, Shape, Stat, Tone } from "@/lib/fleet";
 import FleetGrid from "@/app/ui/fleet-grid";
 import SessionMenu from "@/app/ui/session-menu";
+import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
+import KpiPanel, { DRAG_TYPE } from "@/app/ui/kpi-panel";
 
 // THE FLEET — hq's command deck, ported onto the terminal.tsx shell. Same stack
-// as a terminal: a HEADER row (● project · session-id · ⤢) over a BODY — except
-// the body is the dashboard GRID, not a chat stream + send-box. Hover the session
-// id → SessionMenu (the exact terminal picker); pick one to SCOPE the board to
-// that session, "All" to go fleet-wide (the default). The grid is the draggable
-// canvas (FleetGrid): a KPI band + chart SHAPES (series / ranking / distribution)
-// that re-scope on selection. The strip-board roster is gone — the picker owns
-// scoping now. Canvas polls /api/fleet/metrics (~8s, re-fetched on scope change).
+// as a terminal: a HEADER row (● project · session-id · ⋮ panels · ⤢) over a BODY
+// — except the body is the dashboard GRID, not a chat stream + send-box. Hover the
+// session id → SessionMenu (the terminal picker); pick one to SCOPE the board to
+// that session, "All" to go fleet-wide (the default). The board is a user-COMPOSED
+// set of metric cards: open the "+ metric" library (kpi-panel) and drag a card onto
+// the grid; each metric fits a chart SHAPE (stat / series / ranking / distribution).
+// Placed set persists (localStorage hq-fleet-placed); polls /api/fleet/metrics ~8s.
 
 // ── shape renderers — the fixed chart vocabulary, SEMANTIC ink (matches hq's
 // data panels): green=healthy · amber=premium · red=critical · orange=burn ·
@@ -122,20 +124,53 @@ function KpiTile({ k }: { k: Stat }) {
   );
 }
 
+const STORE = "hq-fleet-placed";
+
 export default function FleetView() {
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
+  const [catalog, setCatalog] = useState<MetricDef[]>([]);
   const [scopeId, setScopeId] = useState<string | null>(null); // null = fleet/all grain
   const [wide, setWide] = useState(true); // ⤢ widescreen ⇆ focus width (acts on the grid)
+  const [libOpen, setLibOpen] = useState(false);
+  const [placed, setPlaced] = useState<string[] | null>(null); // null = not bootstrapped yet
 
-  // canvas metrics — re-fetch on scope change, then ~8s
+  // load the saved placed set once
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE) || "null");
+      if (Array.isArray(saved)) setPlaced(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const writePlaced = (ids: string[]) => {
+    setPlaced(ids);
+    try {
+      localStorage.setItem(STORE, JSON.stringify(ids));
+    } catch {
+      /* ignore */
+    }
+  };
+  const addMetric = (id: string) => setPlaced((p) => { const cur = p ?? []; if (cur.includes(id)) return cur; const next = [...cur, id]; try { localStorage.setItem(STORE, JSON.stringify(next)); } catch {} return next; });
+  const removeMetric = (id: string) => setPlaced((p) => { const next = (p ?? []).filter((x) => x !== id); try { localStorage.setItem(STORE, JSON.stringify(next)); } catch {} return next; });
+
+  // metrics — re-fetch on scope or placed change, then ~8s
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const q = scopeId ? `?session=${encodeURIComponent(scopeId)}` : "";
+    const qs = new URLSearchParams();
+    if (scopeId) qs.set("session", scopeId);
+    if (placed && placed.length) qs.set("ids", placed.join(","));
+    const url = `/api/fleet/metrics${qs.toString() ? `?${qs}` : ""}`;
     const load = async () => {
       try {
-        const d = await fetch(`/api/fleet/metrics${q}`, { cache: "no-store" }).then((r) => r.json());
-        if (alive) setMetrics(d);
+        const d: FleetMetrics = await fetch(url, { cache: "no-store" }).then((r) => r.json());
+        if (!alive) return;
+        setMetrics(d);
+        if (Array.isArray(d?.catalog)) setCatalog(d.catalog);
+        // first load with no saved set → adopt the server default as the placed set
+        if (placed === null && Array.isArray(d?.items)) writePlaced(d.items.map((i) => i.id));
       } catch {
         /* keep last canvas on a blip */
       } finally {
@@ -147,16 +182,45 @@ export default function FleetView() {
       alive = false;
       if (timer) clearTimeout(timer);
     };
-  }, [scopeId]);
+  }, [scopeId, placed]);
 
   const scoped = metrics?.scope.level === "session";
   const project = scoped ? metrics!.scope.label.split(" · ")[0] : "all sessions";
   const idShort = scopeId ? scopeId.slice(0, 8) : null;
   const colWrap = wide ? "" : "mx-auto w-full max-w-5xl";
 
+  const gridItems = (metrics?.items ?? []).map((it) => {
+    const stat = it.kind === "stat";
+    return {
+      id: it.id,
+      w: stat ? 2 : 6,
+      h: stat ? 3 : 8,
+      minW: stat ? 1 : 2,
+      node: (
+        <div className="relative h-full">
+          {stat && it.stat ? <KpiTile k={it.stat} /> : it.shape ? <ShapeCard shape={it.shape} /> : null}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              removeMetric(it.id);
+            }}
+            title="remove from board"
+            className="absolute left-1 top-1 z-30 rounded p-0.5 text-zinc-500 opacity-0 transition hover:bg-zinc-800 hover:text-red-300 group-hover/w:opacity-100"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ),
+    };
+  });
+
   return (
     <div className="relative flex h-full min-h-0 flex-col gap-3 font-mono">
-      {/* header — the terminal.tsx shell: ● project · session-id (hover → picker) · ⤢ */}
+      {/* header — the terminal.tsx shell: ● project · session-id (hover → picker) · ⋮ · ⤢ */}
       <div className={`mb-1 ${colWrap}`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800 pb-3">
           <span className="flex items-center gap-1.5 text-xs">
@@ -174,6 +238,8 @@ export default function FleetView() {
               {idShort ?? "all"}
             </span>
           </SessionMenu>
+          {/* ⋮ panels nav — Activity · Config · Console · Search · Metrics flyouts */}
+          <TerminalNavMenu project={scoped ? project : ""} sessionId={scopeId} />
           {scopeId && (
             <button
               type="button"
@@ -185,6 +251,16 @@ export default function FleetView() {
             </button>
           )}
           <span className="ml-auto flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setLibOpen((v) => !v)}
+              title="metric library — add charts to the board"
+              className={`rounded-md px-2 py-1 text-[10px] transition-colors ${
+                libOpen ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              }`}
+            >
+              + metric
+            </button>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event("hq:fleet-grid-reset"))}
@@ -215,17 +291,42 @@ export default function FleetView() {
         </div>
       </div>
 
-      {/* body — the dashboard grid, where the chat stream + send-box used to be */}
-      <div className={`scrollbar-none min-h-0 flex-1 overflow-y-auto ${colWrap}`}>
-        {!metrics ? (
-          <p className="text-[10px] text-zinc-600">loading metrics…</p>
-        ) : (
-          <FleetGrid
-            storageKey="hq-fleet-grid"
-            items={[
-              ...metrics.kpis.map((k, i) => ({ id: `kpi${i}`, w: 2, h: 3, minW: 1, node: <KpiTile k={k} /> })),
-              ...metrics.shapes.map((s, i) => ({ id: `shape${i}`, w: 6, h: 8, minW: 2, node: <ShapeCard shape={s} /> })),
-            ]}
+      {/* body — the board (drop target) + the metric-library drawer */}
+      <div className="flex min-h-0 flex-1 gap-3">
+        <div
+          className={`scrollbar-none min-h-0 flex-1 overflow-y-auto ${colWrap}`}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes(DRAG_TYPE)) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDrop={(e) => {
+            const id = e.dataTransfer.getData(DRAG_TYPE) || e.dataTransfer.getData("text/plain");
+            if (id) {
+              e.preventDefault();
+              addMetric(id);
+            }
+          }}
+        >
+          {!metrics ? (
+            <p className="text-[10px] text-zinc-600">loading metrics…</p>
+          ) : gridItems.length === 0 ? (
+            <p className="text-[11px] text-zinc-500">
+              Empty board — open <b className="font-medium text-zinc-300">+ metric</b> and drag a card here.
+            </p>
+          ) : (
+            <FleetGrid storageKey="hq-fleet-grid" items={gridItems} />
+          )}
+        </div>
+
+        {libOpen && (
+          <KpiPanel
+            catalog={catalog}
+            placed={placed ?? []}
+            onAdd={addMetric}
+            onRemove={removeMetric}
+            onClose={() => setLibOpen(false)}
           />
         )}
       </div>

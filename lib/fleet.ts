@@ -1,10 +1,12 @@
-// THE FLEET DASHBOARD reader — the "monitor" half of the Fleet view (the "watch"
-// half is the live roster, served by /api/terminal/repl/list). One scope-aware
-// payload: a band of KPI scalars + four chart "shapes" (series / ranking /
-// distribution), at either FLEET grain (everything, last 7–14d) or SESSION grain
-// (one transcript). The shapes are a fixed vocabulary so a growing universe of
-// metrics drops into an existing shape, never a new component. Everything here is
-// real, read straight off disk via the existing lib readers — no synthetic data.
+// THE FLEET DASHBOARD reader. A METRIC REGISTRY: a catalog of named metrics, each
+// tagged with a chart SHAPE (stat / series / ranking / distribution) and the scopes
+// it supports (fleet = everything · session = one transcript). The board renders a
+// user-chosen subset (drag from the kpi-panel library); this file computes the data
+// for whatever ids it's asked for, at the requested scope. Everything is real, read
+// straight off disk via the existing lib readers — no synthetic data.
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { getUsageStates, getSpend, tokensByDay } from "@/lib/usage";
 import { getSessions, lifetimeByProject, type SessionInfo } from "@/lib/sessions";
 import { getTodos } from "@/lib/todo";
@@ -12,6 +14,9 @@ import { timelineFor } from "@/lib/transcript";
 
 const CONTEXT_LIMIT = 1_000_000; // the Opus 1M window; 200k = the price cliff
 const CLIFF = 200_000;
+const HALF = CONTEXT_LIMIT / 2; // the "50% of window" mark
+const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ── the shape vocabulary ─────────────────────────────────────────────────────
 // Semantic accent — green=healthy/cheap · amber=premium/warning · red=critical ·
@@ -23,10 +28,33 @@ export type Shape =
   | { kind: "ranking"; title: string; rows: { name: string; pct: number; value: string }[]; tone?: Tone }
   | { kind: "distribution"; title: string; bins: { h: number; hot: boolean }[]; xL: string; xR: string; tone?: Tone };
 
+export type MetricKind = "stat" | "series" | "ranking" | "distribution";
+export type MetricScope = "fleet" | "session";
+
+// A catalog entry — what the kpi-panel library lists + drags onto the board.
+export type MetricDef = {
+  id: string;
+  label: string;
+  group: string;
+  kind: MetricKind;
+  scopes: MetricScope[]; // which scopes can compute it
+  desc?: string;
+};
+
+// A resolved metric: the def + its computed payload (a Stat for kind "stat",
+// otherwise a Shape). `na` ⇒ the metric can't compute at the current scope.
+export type MetricItem = {
+  id: string;
+  label: string;
+  kind: MetricKind;
+  stat?: Stat;
+  shape?: Shape;
+};
+
 export type FleetMetrics = {
   scope: { level: "fleet" | "session"; id: string | null; label: string };
-  kpis: Stat[];
-  shapes: Shape[]; // exactly four cards
+  items: MetricItem[];
+  catalog: MetricDef[];
   generatedAt: number;
 };
 
@@ -63,82 +91,132 @@ function bucket(values: number[], edges: number[], hotFrom: number): { h: number
   return counts.map((c, i) => ({ h: Math.round((c / max) * 100), hot: i >= hotFrom }));
 }
 
-// ── FLEET grain — everything, this week ──────────────────────────────────────
-function fleetScope(now: number): FleetMetrics {
+const ranking = (title: string, rows: { name: string; pct: number; value: string }[], tone?: Tone): Shape => ({
+  kind: "ranking",
+  title,
+  rows,
+  tone,
+});
+const series = (title: string, points: number[], capL: string, capR: string, tone?: Tone): Shape => ({
+  kind: "series",
+  title,
+  points,
+  capL,
+  capR,
+  tone,
+});
+
+// All transcript mtimes (a cheap stat-only dir walk) — powers the sessions/day &
+// /week series without head-reading any file.
+function sessionMtimes(): number[] {
+  const out: number[] = [];
+  let dirs: fs.Dirent[];
+  try {
+    dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const dir of dirs) {
+    if (!dir.isDirectory()) continue;
+    const dirPath = path.join(PROJECTS_ROOT, dir.name);
+    let names: string[];
+    try {
+      names = fs.readdirSync(dirPath);
+    } catch {
+      continue;
+    }
+    for (const f of names) {
+      if (!f.endsWith(".jsonl")) continue;
+      try {
+        const st = fs.statSync(path.join(dirPath, f));
+        if (st.size > 0) out.push(st.mtimeMs);
+      } catch {
+        /* vanished */
+      }
+    }
+  }
+  return out;
+}
+
+// Count entries in a ~/.claude subdir whose mtime is older than `days` (a proxy
+// for "untouched / unused"). Best-effort: missing dir ⇒ 0.
+function idleCount(sub: string, days: number): { idle: number; total: number } {
+  const root = path.join(os.homedir(), ".claude", sub);
+  const cutoff = Date.now() - days * DAY_MS;
+  let idle = 0;
+  let total = 0;
+  try {
+    for (const d of fs.readdirSync(root, { withFileTypes: true })) {
+      if (!d.isDirectory() || d.name.startsWith(".")) continue;
+      total++;
+      try {
+        if (fs.statSync(path.join(root, d.name)).mtimeMs < cutoff) idle++;
+      } catch {
+        /* skip */
+      }
+    }
+  } catch {
+    /* no dir */
+  }
+  return { idle, total };
+}
+
+// ── fleet context — everything, computed once per request ────────────────────
+type FleetCtx = ReturnType<typeof fleetCtx>;
+function fleetCtx() {
+  const now = Date.now();
   const states = getUsageStates();
   const week = states.meters.find((m) => m.key === "weekAll");
   const spend = getSpend();
-  const set = getSessions(150); // recent working set — bounded, incremental-cached
-  const active7d = set.filter((s) => now - s.lastActive < 7 * 864e5);
+  const set = getSessions(150);
+  const active7d = set.filter((s) => now - s.lastActive < 7 * DAY_MS);
   const todos = getTodos();
-  const pending = todos.filter((t) => !t.done).length;
-
-  // ranking — weighted tokens by project, ALL-TIME (every transcript on disk, not
-  // the 7-day working set), top 10. Cached + incremental in lib/sessions.
   const life = lifetimeByProject();
-  const ranked = life.slice(0, 10);
-  const topTok = ranked[0]?.weighted || 1;
+  const dayTok = tokensByDay(14);
 
-  // distribution — sessions by current context size, cliff at 200k
-  const ctxBins = bucket(
-    set.map((s) => s.contextTokens),
-    [50_000, 100_000, CLIFF, 400_000],
-    2, // bins at/after the 200k edge are "hot" (premium zone)
-  );
+  // weekly token series — 8 weeks from the daily series
+  const dayTok56 = tokensByDay(56);
+  const weekTok: number[] = [];
+  for (let w = 0; w < 8; w++) {
+    let sum = 0;
+    for (let d = 0; d < 7; d++) sum += dayTok56[w * 7 + d]?.weighted ?? 0;
+    weekTok.push(sum);
+  }
 
-  // model usage — the weekly weighted mix
-  const modelRows = states.byModel
-    .slice(0, 5)
-    .map((m) => ({ name: m.tier, pct: Math.round(m.pct), value: Math.round(m.pct) + "%" }));
+  // sessions per day / week from transcript mtimes
+  const mtimes = sessionMtimes();
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const day0 = dayStart.getTime() - 13 * DAY_MS;
+  const sessDay = new Array<number>(14).fill(0);
+  const sessWeek = new Array<number>(8).fill(0);
+  const week0 = dayStart.getTime() - 55 * DAY_MS;
+  for (const t of mtimes) {
+    const di = Math.floor((t - day0) / DAY_MS);
+    if (di >= 0 && di < 14) sessDay[di]++;
+    const wi = Math.floor((t - week0) / (7 * DAY_MS));
+    if (wi >= 0 && wi < 8) sessWeek[wi]++;
+  }
 
-  const series = tokensByDay(14);
-
-  return {
-    scope: { level: "fleet", id: null, label: "all sessions · 14d" },
-    kpis: [
-      { label: "sessions", value: String(active7d.length), sub: "recent", tone: "green" },
-      { label: "tokens", value: fmtTok(week?.rawTokens ?? 0), sub: fmtUsdK(spend.week) + " wk", tone: "blue" },
-      { label: "turns", value: String(week?.messages ?? 0), sub: "wk" },
-      { label: "projects", value: String(life.length), sub: "all-time" },
-      { label: "todos", value: String(pending), sub: "pending", tone: pending ? "amber" : "zinc" },
-      { label: "ctx cliff", value: `${set.filter((s) => s.contextTokens > CLIFF).length}`, sub: "past 200k", tone: "amber" },
-    ],
-    shapes: [
-      { kind: "series", title: "Tokens / day", points: series.map((d) => d.weighted), capL: series[0]?.day ?? "", capR: "today", tone: "blue" },
-      {
-        kind: "ranking",
-        title: "Tokens by project · all-time",
-        rows: ranked.map((p) => ({ name: p.project, pct: Math.round((p.weighted / topTok) * 100), value: fmtTok(p.weighted) })),
-        tone: "blue",
-      },
-      { kind: "distribution", title: "Sessions by context · 200k cliff", bins: ctxBins, xL: "<50k", xR: "400k+", tone: "blue" },
-      { kind: "ranking", title: "Model usage · wk", rows: modelRows, tone: "orange" },
-    ],
-    generatedAt: now,
-  };
+  return { now, states, week, spend, set, active7d, todos, life, dayTok, weekTok, sessDay, sessWeek };
 }
 
-// ── SESSION grain — one transcript ───────────────────────────────────────────
-function sessionScope(id: string, now: number): FleetMetrics {
+// ── session context — one transcript ─────────────────────────────────────────
+type SessionCtx = ReturnType<typeof sessionCtx>;
+function sessionCtx(id: string) {
   const tl = timelineFor(id, 100_000, true);
   const turns = tl.items.filter((i): i is Extract<typeof i, { kind: "turn" }> => i.kind === "turn");
   const userN = turns.filter((t) => t.role === "user").length;
   const claudeN = turns.filter((t) => t.role === "assistant").length;
   const ctx = tl.contextTokens;
   const ctxLeft = Math.max(0, Math.round((1 - ctx / CONTEXT_LIMIT) * 100));
-  const ctxTone: Tone = ctxLeft > 25 ? "green" : ctxLeft > 10 ? "amber" : "red"; // mirrors the runway
 
-  // timestamps → session span + per-turn durations
   const stamps = turns.map((t) => Date.parse(t.at)).filter((n) => !Number.isNaN(n));
   const spanMs = stamps.length > 1 ? stamps[stamps.length - 1] - stamps[0] : 0;
   const gaps: number[] = [];
   for (let i = 1; i < stamps.length; i++) gaps.push(stamps[i] - stamps[i - 1]);
 
-  // burn curve — the per-turn token SHAPE scaled so its endpoint is the session's
-  // REAL context size. contextTokens is the only ground truth (cumulative
-  // turnTokens ≠ context, since cache reads bloat the window), so we keep the
-  // turnTokens shape but pin the end to ctx — that way the curve, the 200k-cliff
-  // crossing, and the "ctx left" KPI never disagree. Linear ramp if no turnTokens.
+  // burn curve pinned to the real context size (see the long note kept from v1).
   let cum = 0;
   const rawCum = turns.map((t) => (cum += t.turnTokens ?? 0));
   const total = rawCum[rawCum.length - 1] || 0;
@@ -147,57 +225,320 @@ function sessionScope(id: string, now: number): FleetMetrics {
       ? rawCum.map((v) => Math.round((v / total) * ctx))
       : turns.map((_, i) => Math.round((ctx * (i + 1)) / Math.max(1, turns.length)));
   const to200 = burn.findIndex((b) => b >= CLIFF);
+  const turnsAbove200 = burn.filter((b) => b >= CLIFF).length;
+  const timeTo200 = to200 >= 0 && stamps.length > to200 ? stamps[to200] - stamps[0] : -1;
+  const preloaded = burn[0] ?? 0; // turn-1 context = what was loaded before real work
 
-  // tokens by turn — heaviest turns
   const heavy = turns
     .map((t, i) => ({ i, tok: t.turnTokens ?? 0 }))
     .filter((t) => t.tok > 0)
     .sort((a, b) => b.tok - a.tok)
     .slice(0, 6);
-  const topTurn = heavy[0]?.tok || 1;
 
-  // tools used — count by tool name
   const toolCounts = new Map<string, number>();
   for (const it of tl.items) if (it.kind === "tool") toolCounts.set(it.tool, (toolCounts.get(it.tool) ?? 0) + 1);
   const tools = [...toolCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const topTool = tools[0]?.[1] || 1;
-
-  const timeBins = bucket(gaps, [5_000, 15_000, 30_000, 60_000, 120_000, 300_000], 4);
 
   return {
-    scope: { level: "session", id, label: `${tl.project} · ${id.slice(0, 8)}` },
-    kpis: [
-      { label: "turns", value: String(turns.length), sub: `${userN} you · ${claudeN} claude` },
-      { label: "ctx left", value: `${ctxLeft}%`, sub: ctx > CLIFF ? "past cliff" : fmtTok(ctx), tone: ctxTone },
-      { label: "tok / turn", value: fmtTok(claudeN ? ctx / claudeN : 0), sub: "avg" },
-      { label: "to 200k", value: to200 >= 0 ? `turn ${to200 + 1}` : "—", sub: to200 >= 0 ? "" : "under cliff", tone: to200 >= 0 ? "amber" : "zinc" },
-      { label: "session", value: spanMs ? fmtDur(spanMs) : "—", sub: tl.model || "" },
-      { label: "tools", value: String([...toolCounts.values()].reduce((a, b) => a + b, 0)), sub: `${toolCounts.size} kinds` },
-    ],
-    shapes: [
-      { kind: "series", title: "Context burn · this session", points: burn, capL: "start", capR: fmtTok(ctx), tone: "orange" },
-      {
-        kind: "ranking",
-        title: "Tokens by turn · top",
-        rows: heavy.map((t) => ({ name: `turn ${t.i + 1}`, pct: Math.round((t.tok / topTurn) * 100), value: fmtTok(t.tok) })),
-        tone: "blue",
-      },
-      { kind: "distribution", title: "Time per turn", bins: timeBins, xL: "<5s", xR: "5m+", tone: "blue" },
-      {
-        kind: "ranking",
-        title: "Tools used · this session",
-        rows: tools.map(([name, n]) => ({ name, pct: Math.round((n / topTool) * 100), value: `${n}` })),
-        tone: "blue",
-      },
-    ],
-    generatedAt: now,
+    tl,
+    turns,
+    userN,
+    claudeN,
+    ctx,
+    ctxLeft,
+    spanMs,
+    gaps,
+    burn,
+    to200,
+    turnsAbove200,
+    timeTo200,
+    preloaded,
+    heavy,
+    tools,
+    toolCounts,
   };
 }
 
-// Scope-aware entry point. `id` present ⇒ session grain; absent ⇒ fleet grain.
-export function fleetMetrics(id: string | null): FleetMetrics {
+// ── the registry — def + per-scope compute ───────────────────────────────────
+type Compute = {
+  def: MetricDef;
+  fleet?: (c: FleetCtx) => Stat | Shape;
+  session?: (c: SessionCtx, id: string) => Stat | Shape;
+};
+
+const ctxTone = (left: number): Tone => (left > 25 ? "green" : left > 10 ? "amber" : "red");
+
+const REGISTRY: Compute[] = [
+  // ── Overview (fleet stats) ──
+  {
+    def: { id: "f_sessions", label: "Sessions", group: "Overview", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "sessions", value: String(c.active7d.length), sub: "recent", tone: "green" }),
+  },
+  {
+    def: { id: "f_tokens", label: "Tokens · week", group: "Overview", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "tokens", value: fmtTok(c.week?.rawTokens ?? 0), sub: fmtUsdK(c.spend.week) + " wk", tone: "blue" }),
+  },
+  {
+    def: { id: "f_turns", label: "Turns · week", group: "Overview", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "turns", value: String(c.week?.messages ?? 0), sub: "wk" }),
+  },
+  {
+    def: { id: "f_projects", label: "Projects", group: "Overview", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "projects", value: String(c.life.length), sub: "all-time" }),
+  },
+  {
+    def: { id: "f_spend", label: "Spend · week", group: "Overview", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "spend", value: fmtUsdK(c.spend.week), sub: fmtUsd(c.spend.today) + " today", tone: "orange" }),
+  },
+  {
+    def: { id: "f_cliff", label: "Past 200k cliff", group: "Overview", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "ctx cliff", value: String(c.set.filter((s) => s.contextTokens > CLIFF).length), sub: "past 200k", tone: "amber" }),
+  },
+
+  // ── Tokens ──
+  {
+    def: { id: "tokens_day", label: "Tokens / day", group: "Tokens", kind: "series", scopes: ["fleet"] },
+    fleet: (c) => series("Tokens / day", c.dayTok.map((d) => d.weighted), c.dayTok[0]?.day ?? "", "today", "blue"),
+  },
+  {
+    def: { id: "tokens_week", label: "Tokens / week", group: "Tokens", kind: "series", scopes: ["fleet"] },
+    fleet: (c) => series("Tokens / week · 8wk", c.weekTok, "8wk ago", "this wk", "blue"),
+  },
+  {
+    def: { id: "tokens_by_project", label: "Tokens by project", group: "Tokens", kind: "ranking", scopes: ["fleet"] },
+    fleet: (c) => {
+      const top = c.life.slice(0, 10);
+      const max = top[0]?.weighted || 1;
+      return ranking("Tokens by project · all-time", top.map((p) => ({ name: p.project, pct: Math.round((p.weighted / max) * 100), value: fmtTok(p.weighted) })), "blue");
+    },
+  },
+  {
+    def: { id: "tokens_per_session", label: "Tokens by session", group: "Tokens", kind: "ranking", scopes: ["fleet"] },
+    fleet: (c) => {
+      const top = [...c.set].sort((a, b) => b.weightedTokens - a.weightedTokens).slice(0, 10);
+      const max = top[0]?.weightedTokens || 1;
+      return ranking("Tokens by session · top", top.map((s) => ({ name: s.id.slice(0, 8), pct: Math.round((s.weightedTokens / max) * 100), value: fmtTok(s.weightedTokens) })), "blue");
+    },
+  },
+
+  // ── Sessions ──
+  {
+    def: { id: "sessions_day", label: "Sessions / day", group: "Sessions", kind: "series", scopes: ["fleet"] },
+    fleet: (c) => series("Sessions / day · 14d", c.sessDay, "14d ago", "today", "green"),
+  },
+  {
+    def: { id: "sessions_week", label: "Sessions / week", group: "Sessions", kind: "series", scopes: ["fleet"] },
+    fleet: (c) => series("Sessions / week · 8wk", c.sessWeek, "8wk ago", "this wk", "green"),
+  },
+  {
+    def: { id: "sessions_by_context", label: "Sessions by context", group: "Sessions", kind: "distribution", scopes: ["fleet"] },
+    fleet: (c) => ({
+      kind: "distribution",
+      title: "Sessions by context · 200k cliff",
+      bins: bucket(c.set.map((s) => s.contextTokens), [50_000, 100_000, CLIFF, 400_000], 2),
+      xL: "<50k",
+      xR: "400k+",
+      tone: "blue",
+    }),
+  },
+  {
+    def: { id: "sessions_per_project", label: "Sessions by project", group: "Sessions", kind: "ranking", scopes: ["fleet"] },
+    fleet: (c) => {
+      const top = [...c.life].sort((a, b) => b.sessions - a.sessions).slice(0, 10);
+      const max = top[0]?.sessions || 1;
+      return ranking("Sessions by project · all-time", top.map((p) => ({ name: p.project, pct: Math.round((p.sessions / max) * 100), value: String(p.sessions) })), "green");
+    },
+  },
+  {
+    def: { id: "model_usage", label: "Model usage", group: "Sessions", kind: "ranking", scopes: ["fleet", "session"] },
+    fleet: (c) => {
+      const rows = c.states.byModel.slice(0, 5).map((m) => ({ name: m.tier, pct: Math.round(m.pct), value: Math.round(m.pct) + "%" }));
+      return ranking("Model usage · wk", rows, "orange");
+    },
+    session: (c) => ranking("Model · this session", [{ name: c.tl.model || "—", pct: 100, value: "100%" }], "orange"),
+  },
+
+  // ── Session detail (one transcript) ──
+  {
+    def: { id: "s_turns", label: "Turns", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "turns", value: String(c.turns.length), sub: `${c.userN} you · ${c.claudeN} claude` }),
+  },
+  {
+    def: { id: "s_user", label: "User inputs", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "user inputs", value: String(c.userN), sub: "you" }),
+  },
+  {
+    def: { id: "s_claude", label: "Claude outputs", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "claude outputs", value: String(c.claudeN), sub: "replies" }),
+  },
+  {
+    def: { id: "s_ctx_left", label: "Context left", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "ctx left", value: `${c.ctxLeft}%`, sub: c.ctx > CLIFF ? "past cliff" : fmtTok(c.ctx), tone: ctxTone(c.ctxLeft) }),
+  },
+  {
+    def: { id: "s_tok_per_turn", label: "Tokens / turn", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "tok / turn", value: fmtTok(c.claudeN ? c.ctx / c.claudeN : 0), sub: "avg" }),
+  },
+  {
+    def: { id: "s_total_time", label: "Total session time", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "session", value: c.spanMs ? fmtDur(c.spanMs) : "—", sub: c.tl.model || "" }),
+  },
+  {
+    def: { id: "s_to200_turn", label: "Turns to 200k", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "to 200k", value: c.to200 >= 0 ? `turn ${c.to200 + 1}` : "—", sub: c.to200 >= 0 ? "" : "under cliff", tone: c.to200 >= 0 ? "amber" : "zinc" }),
+  },
+  {
+    def: { id: "s_time_to_200", label: "Time to 200k", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "time to 200k", value: c.timeTo200 >= 0 ? fmtDur(c.timeTo200) : "—", sub: c.timeTo200 >= 0 ? "" : "under cliff", tone: c.timeTo200 >= 0 ? "amber" : "zinc" }),
+  },
+  {
+    def: { id: "s_turns_above_200", label: "Turns above 200k", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "turns >200k", value: String(c.turnsAbove200), sub: "premium zone", tone: c.turnsAbove200 ? "amber" : "zinc" }),
+  },
+  {
+    def: { id: "s_ctx_50", label: "Context vs 50%", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "ctx vs 50%", value: fmtTok(c.ctx), sub: c.ctx > HALF ? "above 50%" : "below 50%", tone: c.ctx > HALF ? "amber" : "green" }),
+  },
+  {
+    def: { id: "s_preloaded", label: "Pre-loaded context", group: "Session", kind: "stat", scopes: ["session"] },
+    session: (c) => ({ label: "preloaded ctx", value: fmtTok(c.preloaded), sub: "turn 1 cold load" }),
+  },
+  {
+    def: { id: "context_burn", label: "Context burn", group: "Session", kind: "series", scopes: ["session"] },
+    session: (c) => series("Context burn · this session", c.burn, "start", fmtTok(c.ctx), "orange"),
+  },
+  {
+    def: { id: "tokens_by_turn", label: "Tokens by turn", group: "Session", kind: "ranking", scopes: ["session"] },
+    session: (c) => {
+      const max = c.heavy[0]?.tok || 1;
+      return ranking("Tokens by turn · top", c.heavy.map((t) => ({ name: `turn ${t.i + 1}`, pct: Math.round((t.tok / max) * 100), value: fmtTok(t.tok) })), "blue");
+    },
+  },
+  {
+    def: { id: "time_per_turn", label: "Time per turn", group: "Session", kind: "distribution", scopes: ["session"] },
+    session: (c) => ({
+      kind: "distribution",
+      title: "Time per turn",
+      bins: bucket(c.gaps, [5_000, 15_000, 30_000, 60_000, 120_000, 300_000], 4),
+      xL: "<5s",
+      xR: "5m+",
+      tone: "blue",
+    }),
+  },
+  {
+    def: { id: "tools_used", label: "Tools used", group: "Session", kind: "ranking", scopes: ["session"] },
+    session: (c) => {
+      const max = c.tools[0]?.[1] || 1;
+      return ranking("Tools used · this session", c.tools.map(([name, n]) => ({ name, pct: Math.round((n / max) * 100), value: String(n) })), "blue");
+    },
+  },
+
+  // ── Todos ──
+  {
+    def: { id: "todos_total", label: "Todos · total", group: "Todos", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "todos", value: String(c.todos.length), sub: "total" }),
+  },
+  {
+    def: { id: "todos_pending", label: "Todos · pending", group: "Todos", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => {
+      const p = c.todos.filter((t) => !t.done).length;
+      return { label: "todos", value: String(p), sub: "pending", tone: p ? "amber" : "zinc" };
+    },
+  },
+  {
+    def: { id: "todos_done", label: "Todos · completed", group: "Todos", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => ({ label: "todos done", value: String(c.todos.filter((t) => t.done).length), sub: "completed", tone: "green" }),
+  },
+  {
+    def: { id: "todos_avg_age", label: "Todos · avg age", group: "Todos", kind: "stat", scopes: ["fleet"] },
+    fleet: (c) => {
+      const pend = c.todos.filter((t) => !t.done && t.createdAt);
+      const avg = pend.length ? pend.reduce((a, t) => a + (c.now - t.createdAt), 0) / pend.length : 0;
+      return { label: "todo avg age", value: avg ? fmtDur(avg) : "—", sub: "pending" };
+    },
+  },
+
+  // ── Hygiene (idle = untouched >30d, a proxy for unused) ──
+  {
+    def: { id: "skills_idle", label: "Skills idle >30d", group: "Hygiene", kind: "stat", scopes: ["fleet"] },
+    fleet: () => {
+      const { idle, total } = idleCount("skills", 30);
+      return { label: "skills idle", value: String(idle), sub: `of ${total} · >30d`, tone: idle ? "amber" : "zinc" };
+    },
+  },
+  {
+    def: { id: "plugins_idle", label: "Plugins idle >30d", group: "Hygiene", kind: "stat", scopes: ["fleet"] },
+    fleet: () => {
+      const { idle, total } = idleCount(path.join("plugins", "cache"), 30);
+      return { label: "plugins idle", value: String(idle), sub: `of ${total} · >30d`, tone: idle ? "amber" : "zinc" };
+    },
+  },
+];
+
+const BY_ID = new Map(REGISTRY.map((r) => [r.def.id, r]));
+export const METRIC_CATALOG: MetricDef[] = REGISTRY.map((r) => r.def);
+
+// The board's first-run set — mirrors the original fixed dashboard so nothing
+// regresses on a cold open (no saved layout yet).
+export const DEFAULT_METRICS: string[] = [
+  "f_sessions", "f_tokens", "f_turns", "f_projects", "todos_pending", "f_cliff",
+  "tokens_day", "tokens_by_project", "sessions_by_context", "model_usage",
+];
+
+const na = (def: MetricDef, why: string): MetricItem =>
+  def.kind === "stat"
+    ? { id: def.id, label: def.label, kind: "stat", stat: { label: def.label.toLowerCase(), value: "—", sub: why, tone: "zinc" } }
+    : { id: def.id, label: def.label, kind: def.kind, shape: ranking(def.label, [], "zinc") as Shape };
+
+function pack(def: MetricDef, payload: Stat | Shape): MetricItem {
+  return def.kind === "stat"
+    ? { id: def.id, label: def.label, kind: "stat", stat: payload as Stat }
+    : { id: def.id, label: def.label, kind: def.kind, shape: payload as Shape };
+}
+
+// ── scope-aware entry point ──────────────────────────────────────────────────
+// `id` present ⇒ session grain; absent ⇒ fleet grain. `ids` = the placed metrics
+// to compute (defaults to DEFAULT_METRICS). Fleet-scope metrics still compute
+// fleet-wide when a session is selected (they're global); session-only metrics
+// read "—" until a session is picked.
+export function fleetMetrics(id: string | null, ids?: string[]): FleetMetrics {
   const now = Date.now();
-  return id ? sessionScope(id, now) : fleetScope(now);
+  const want = (ids && ids.length ? ids : DEFAULT_METRICS).filter((m) => BY_ID.has(m));
+
+  // build only the ctx we need
+  const needFleet = want.some((m) => {
+    const r = BY_ID.get(m)!;
+    return !(id && r.session); // anything not served by the session compute uses fleet ctx
+  });
+  const fc = needFleet ? fleetCtx() : null;
+  let sc: SessionCtx | null = null;
+  if (id) {
+    try {
+      sc = sessionCtx(id);
+    } catch {
+      sc = null;
+    }
+  }
+
+  const items: MetricItem[] = want.map((m) => {
+    const r = BY_ID.get(m)!;
+    if (id && r.session && sc) return pack(r.def, r.session(sc, id));
+    if (r.fleet && fc) return pack(r.def, r.fleet(fc));
+    if (id && r.session && !sc) return na(r.def, "no transcript");
+    return na(r.def, "pick a session");
+  });
+
+  let label = "all sessions · 14d";
+  let level: "fleet" | "session" = "fleet";
+  if (id && sc) {
+    level = "session";
+    label = `${sc.tl.project} · ${id.slice(0, 8)}`;
+  } else if (id) {
+    level = "session";
+    label = id.slice(0, 8);
+  }
+
+  return { scope: { level, id: id || null, label }, items, catalog: METRIC_CATALOG, generatedAt: now };
 }
 
 export type { SessionInfo };
