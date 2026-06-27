@@ -7,7 +7,7 @@ import Markdown from "@/app/ui/md";
 import BlockMenu from "@/app/ui/block-menu";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
-import TodoMenu from "@/app/ui/todo-menu";
+import ComposeMenu from "@/app/ui/compose-menu";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import SendBoxSearch from "@/app/ui/send-box-search";
 import Tooltip from "@/app/ui/tooltip";
@@ -953,6 +953,7 @@ export default function Terminal({
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null); // send box — for auto-grow
+  const cmdOverlayRef = useRef<HTMLDivElement>(null); // command-color overlay (scroll-synced to the textarea)
   const [savedNotes, setSavedNotes] = useState<Set<string>>(new Set()); // blocks saved as notes (keyed by text)
   // Per-block view state (favorite / hidden / 👍👎), keyed by the block's stable
   // id (jsonl uuid, falling back to its timestamp). Hydrated from the block-meta
@@ -997,6 +998,7 @@ export default function Terminal({
   const [escArmed, setEscArmed] = useState(false); // first Esc pressed, waiting for the second
   const [escNote, setEscNote] = useState<string | null>(null); // why Esc couldn't interrupt
   const escTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const escArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // separate timer for the "esc again to clear" hint
   const [status, setStatus] = useState<Status>(null); // live "working" status from the transcript
   // channel-in: a live push-channel is open for this session (from the turns poll).
   // When true the session is fork-free (push, not --resume), so it is NEVER `locked`
@@ -1092,6 +1094,10 @@ export default function Terminal({
   workingRef.current = working;
   const escArmedRef = useRef(escArmed);
   escArmedRef.current = escArmed;
+  const draftRef = useRef(draft); // the once-bound Esc handler reads the latest draft without rebinding
+  draftRef.current = draft;
+  const lastEscRef = useRef(0); // ts of the last Esc — detects the Esc-Esc double-tap
+  const clearedDraftRef = useRef(""); // Esc-Esc stashes the cleared text here so ↑ recalls it (CC parity)
   const stopSendRef = useRef<() => void>(() => {});
 
   // Live REPL — the send box ALWAYS routes here now (both terminals, any real
@@ -1127,6 +1133,7 @@ export default function Terminal({
   // also diverged. Same-session polls don't change `pinned`, so the latch holds.
   useEffect(() => {
     setDiverged(null);
+    stoppedRef.current = false; // a freshly-switched session isn't "stopped" — let its working status show
   }, [pinned]);
   // Optimistic in-flight (`sending`/`busyRef`) is set synchronously in doSend so
   // the stop button + flash morph instantly; the REPL's own `busy` lags the SSE
@@ -1388,7 +1395,10 @@ export default function Terminal({
           router.replace(`${pathnameRef.current ?? "/"}?${sp.toString()}`, { scroll: false });
         }
       }
-      setStatus(d.status ?? null);
+      // A user stop suppresses "working" until the next send: an interrupted turn
+      // never writes a `result`, so the transcript still reads "working" and would
+      // re-lock the box. stoppedRef resets on the next doSend / a session switch.
+      setStatus(stoppedRef.current ? null : (d.status ?? null));
       // OUTSIDE the busyRef gate (above) on purpose: the fork-lock exemption needs
       // this fresh DURING an in-flight send (exactly when `locked` is read), and a
       // channel push to a busy session keeps it true across the working-tick.
@@ -1755,30 +1765,50 @@ export default function Terminal({
     }
   });
 
-  // Esc parity with the real CLI: first Esc arms ("press esc again to
-  // interrupt"), second Esc within 2s interrupts. HQ can only kill runs it
-  // spawned — for an external turn the second Esc says so instead of lying.
+  // Esc parity with the real Claude Code CLI:
+  //   single Esc  → interrupt an active generation (no-op when idle, per CC).
+  //   Esc Esc     → with text: clear the box (stash for ↑ recall); empty: CC opens
+  //                 the rewind/checkpoint menu, which HQ doesn't have yet.
+  // ALWAYS preventDefault — otherwise the browser / macOS eats Esc and exits
+  // fullscreen / minimizes the window instead of driving the session.
   // CODE-REVIEW FE-5: bound ONCE ([] deps) — the handler reads sending/working/
-  // escArmed/stopSend from refs (synced each render above) so it stays fresh
-  // without rebinding the listener on every 1s tick / keystroke.
+  // draft/stopSend from refs (synced each render above) so it stays fresh without
+  // rebinding the listener on every 1s tick / keystroke.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "Escape") return;
-      if (!sendingRef.current && !workingRef.current) return;
-      if (escTimer.current) clearTimeout(escTimer.current);
-      if (!escArmedRef.current) {
-        setEscArmed(true);
-        escTimer.current = setTimeout(() => setEscArmed(false), 2000);
+      e.preventDefault(); // Esc drives the session — never the window chrome
+      const now = Date.now();
+      const isDouble = now - lastEscRef.current < 500;
+      lastEscRef.current = isDouble ? 0 : now; // reset after a double so a 3rd Esc starts fresh
+
+      if (isDouble) {
+        if (escArmTimer.current) clearTimeout(escArmTimer.current);
+        setEscArmed(false);
+        if (draftRef.current.trim()) {
+          clearedDraftRef.current = draftRef.current; // ↑ recalls it
+          setDraft("");
+        } else {
+          if (escTimer.current) clearTimeout(escTimer.current);
+          setEscNote("esc-esc on an empty box opens rewind in Claude Code (checkpointing) — not in HQ yet");
+          escTimer.current = setTimeout(() => setEscNote(null), 3500);
+        }
         return;
       }
-      setEscArmed(false);
+
+      // single Esc — interrupt a run HQ owns; for an external (TUI) turn, say so.
       if (sendingRef.current) {
         stopSendRef.current();
-      } else {
-        setEscNote(
-          "this turn is running in its own terminal — HQ can only interrupt runs it started"
-        );
+      } else if (workingRef.current) {
+        if (escTimer.current) clearTimeout(escTimer.current);
+        setEscNote("this turn is running in its own terminal — HQ can only interrupt runs it started");
         escTimer.current = setTimeout(() => setEscNote(null), 4000);
+      }
+      // hint that a second Esc clears, when there's text to lose
+      if (draftRef.current.trim()) {
+        if (escArmTimer.current) clearTimeout(escArmTimer.current);
+        setEscArmed(true);
+        escArmTimer.current = setTimeout(() => setEscArmed(false), 2000);
       }
     }
     window.addEventListener("keydown", onKey);
@@ -2422,6 +2452,9 @@ export default function Terminal({
     ]);
     setSending(false);
     busyRef.current = false;
+    setStatus(null); // clear the "working" animation NOW — a killed turn writes no
+    // `result` to the transcript, so the status poll (gated by stoppedRef below)
+    // would otherwise keep `working` true forever, locking the send box.
     try {
       await repl.stop(); // {action:'stop'} → stopRepl (releases the warm process)
       setLive(false);
@@ -3336,7 +3369,7 @@ export default function Terminal({
       ) : null}
       {escArmed && (
         <p className="font-mono text-[11px] text-zinc-500">
-          press esc again to interrupt
+          press esc again to clear · ↑ to recall
         </p>
       )}
       {escNote && (
@@ -3402,7 +3435,13 @@ export default function Terminal({
             scrolls), a full-width toolbar row beneath. Bottom-anchored, so growth
             pushes the top up into the message area. */}
         <div
-          className="relative z-10 flex flex-col gap-2 rounded-md border border-zinc-700 bg-zinc-950 p-2 transition-colors focus-within:border-zinc-500"
+          className={`relative z-10 flex flex-col gap-2 rounded-md border bg-zinc-950 p-2 transition-colors ${
+            // a leading "/command" tints the box border the same violet as the
+            // text — the whole box reads "↵ runs this"
+            /^\/[a-zA-Z][\w-]*/.test(draft.trimStart())
+              ? "border-violet-400"
+              : "border-zinc-700 focus-within:border-zinc-500"
+          }`}
         >
           {/* The send box's own boundary chip — top-right of its SOLID 1px border
               (everything else uses the dashed Boundary). Anticipatory name
@@ -3467,45 +3506,81 @@ export default function Terminal({
               ))}
             </div>
           )}
-          <textarea
-            ref={taRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onPaste={(e) => {
-              const files = Array.from(e.clipboardData.items)
-                .filter(
-                  (it) => it.kind === "file" && it.type.startsWith("image/")
-                )
-                .map((it) => it.getAsFile())
-                .filter((f): f is File => !!f);
-              if (files.length) {
-                e.preventDefault();
-                addFiles(files);
-              }
-            }}
-            onKeyDown={(e) => {
-              // Enter sends — or, in the new-session view, STARTS the session
-              // (doSend → birthAndDrive in the home dir). ⇧↵ is a newline.
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                doSend();
-              }
-            }}
-            rows={1}
-            disabled={notConnected || locked}
-            placeholder={
-              notConnected
-                ? "run HQ locally and open a session to chat here"
-                : locked
-                  ? "🔒 locked while active"
-                  : staged
-                    ? selectedTarget
-                      ? `message ${selectedTarget.name} — ↵ launches it`
-                      : "write your first message — ↵ launches in ~/hq (or pick a project)"
-                    : "↵ send · ⇧↵ newline"
-            }
-            className="scrollbar-slim max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
-          />
+          {(() => {
+            // A leading "/command" reads violet, the args/message after it stay
+            // white — like the terminal. A textarea can't color a substring, so an
+            // aria-hidden overlay (scroll-synced) paints the colored text while the
+            // textarea's own text goes transparent (caret + selection still work).
+            // Only engaged in command mode, so normal typing has no overlay.
+            const m = draft.match(/^(\s*)(\/[a-zA-Z][\w-]*)([\s\S]*)$/);
+            return (
+              <div className="relative w-full">
+                {m && (
+                  <div
+                    ref={cmdOverlayRef}
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words px-1 py-0.5 font-mono text-xs"
+                  >
+                    <span className="text-zinc-200">{m[1]}</span>
+                    <span className="text-violet-300">{m[2]}</span>
+                    <span className="text-zinc-200">{m[3]}</span>
+                  </div>
+                )}
+                <textarea
+                  ref={taRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onScroll={(e) => {
+                    if (cmdOverlayRef.current)
+                      cmdOverlayRef.current.scrollTop = e.currentTarget.scrollTop;
+                  }}
+                  onPaste={(e) => {
+                    const files = Array.from(e.clipboardData.items)
+                      .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+                      .map((it) => it.getAsFile())
+                      .filter((f): f is File => !!f);
+                    if (files.length) {
+                      e.preventDefault();
+                      addFiles(files);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Enter sends — or, in the new-session view, STARTS the session
+                    // (doSend → birthAndDrive in the home dir). ⇧↵ is a newline.
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      doSend();
+                      return;
+                    }
+                    // CC parity: ↑ on an empty box recalls the last Esc-Esc-cleared draft.
+                    if (e.key === "ArrowUp" && !draft && clearedDraftRef.current) {
+                      e.preventDefault();
+                      setDraft(clearedDraftRef.current);
+                      clearedDraftRef.current = "";
+                    }
+                  }}
+                  rows={1}
+                  disabled={notConnected || locked}
+                  placeholder={
+                    notConnected
+                      ? "run HQ locally and open a session to chat here"
+                      : locked
+                        ? "🔒 locked while active"
+                        : staged
+                          ? selectedTarget
+                            ? `message ${selectedTarget.name} — ↵ launches it`
+                            : "write your first message — ↵ launches in ~/hq (or pick a project)"
+                          : "↵ send · ⇧↵ newline"
+                  }
+                  className={`scrollbar-slim relative max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs placeholder:text-zinc-600 focus:outline-none ${
+                    // command mode → text transparent so the colored overlay shows
+                    // through; caret stays visible. Otherwise plain white text.
+                    m ? "text-transparent caret-zinc-200" : "text-zinc-200"
+                  }`}
+                />
+              </div>
+            );
+          })()}
           <input
             ref={fileInputRef}
             type="file"
@@ -3518,29 +3593,22 @@ export default function Terminal({
             }}
           />
           <div className="flex w-full items-center gap-2">
-            {/* attach — the Projects panel's bare-icon (+) button, reused for a
-                consistent design; keeps its attach-a-screenshot function. */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach"
-              title="attach a screenshot — pasting or dropping an image works too"
-              className="flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-            </button>
+            {/* the "+" menu — attach a screenshot, add/get a to-do, or drop a
+                slash command into the box. Replaces the separate attach + to-do
+                buttons (search stays its own button — it's session-contextual). */}
+            <ComposeMenu
+              draft={draft}
+              onAttach={() => fileInputRef.current?.click()}
+              onAddDraft={todoDraft}
+              onPick={(text) => {
+                setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text));
+                taRef.current?.focus();
+              }}
+              onPickCommand={(text) => {
+                setDraft(text); // a command leads the message — replace, don't append
+                taRef.current?.focus();
+              }}
+            />
             {/* search this session — the magnifier next to "+" flips the box into
                 search mode (reuses the header's in-transcript highlighter). */}
             {!notConnected && !!resolvedId && (
@@ -3566,19 +3634,6 @@ export default function Terminal({
                 </svg>
               </button>
             )}
-            {/* todos — grouped with attach + search on the left. A search +
-                scrollable-rows dropdown over the HQ To Do store: pick a row to
-                drop it into the box, or add the current message as a new to-do. */}
-            <TodoMenu
-              draft={draft}
-              onAddDraft={todoDraft}
-              onPick={(text) => {
-                setDraft((d) =>
-                  d.trim() ? `${d.replace(/\s+$/, "")}\n${text}` : text
-                );
-                taRef.current?.focus();
-              }}
-            />
             {/* right cluster, bottom-right: cache + model + send. */}
             <div className="ml-auto flex items-center gap-2">
               {/* ctx % then cache meter — they live here in the send-box toolbar

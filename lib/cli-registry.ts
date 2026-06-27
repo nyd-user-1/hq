@@ -8,13 +8,15 @@
 // home. A few entries the docs omit but a live `/help` shows (design-sync, hq,
 // update-config, design-login) are appended and tagged from their `/help` label.
 
-export type CliKind = "command" | "skill";
+export type CliKind = "command" | "skill" | "workflow";
 
 export type CliEntry = {
   name: string; // the slash command, without the leading "/"
-  kind: CliKind; // "skill" = a bundled Skill/Workflow; "command" = CLI behavior
+  kind: CliKind; // "skill" = bundled Skill · "workflow" = bundled Workflow (fans
+  // out subagents) · "command" = built-in CLI behavior
   args?: string; // argument hint, e.g. "<path>" or "[name]"
   desc: string;
+  aliases?: string[]; // other slash names that resolve here (e.g. /bg → background)
 };
 
 export const CLI_REGISTRY: CliEntry[] = [
@@ -22,30 +24,30 @@ export const CLI_REGISTRY: CliEntry[] = [
   { name: "advisor", kind: "command", args: "[model|off]", desc: "Enable/disable the advisor — a second model consulted for guidance at key moments." },
   { name: "agents", kind: "command", desc: "Manage agent (subagent) configurations." },
   { name: "autofix-pr", kind: "command", args: "[prompt]", desc: "Spawn a web session that watches the branch's PR and pushes fixes on CI failures or review comments." },
-  { name: "background", kind: "command", args: "[prompt]", desc: "Detach the session to run as a background agent and free this terminal. Alias: /bg." },
+  { name: "background", kind: "command", args: "[prompt]", desc: "Detach the session to run as a background agent and free this terminal. Alias: /bg.", aliases: ["bg"] },
   { name: "batch", kind: "skill", args: "<instruction>", desc: "Decompose a large-scale change into 5–30 independent units and run each in its own worktree." },
   { name: "branch", kind: "command", args: "[name]", desc: "Branch the conversation at this point to try a different direction without losing the original." },
   { name: "btw", kind: "command", args: "<question>", desc: "Ask a quick side question without adding to the conversation." },
   { name: "cd", kind: "command", args: "<path>", desc: "Move this session to a new working directory, preserving the prompt cache." },
   { name: "chrome", kind: "command", desc: "Configure Claude in Chrome settings." },
   { name: "claude-api", kind: "skill", args: "[migrate|managed-agents-onboard]", desc: "Load Claude API / SDK reference for your language; can migrate existing API code to a newer model." },
-  { name: "clear", kind: "command", args: "[name]", desc: "Start a new conversation with empty context. The previous one stays in /resume. Aliases: /reset, /new." },
+  { name: "clear", kind: "command", args: "[name]", desc: "Start a new conversation with empty context. The previous one stays in /resume. Aliases: /reset, /new.", aliases: ["reset","new"] },
   { name: "code-review", kind: "skill", args: "[level] [--fix] [--comment] [target]", desc: "Review the current diff for correctness bugs and reuse/simplification/efficiency cleanups." },
   { name: "color", kind: "command", args: "[color|default]", desc: "Set the prompt bar color for the current session." },
   { name: "compact", kind: "command", args: "[instructions]", desc: "Free up context by summarizing the conversation so far." },
-  { name: "config", kind: "command", args: "[key=value ...]", desc: "Open Settings, or set a key directly (e.g. /config theme=dark). Alias: /settings." },
+  { name: "config", kind: "command", args: "[key=value ...]", desc: "Open Settings, or set a key directly (e.g. /config theme=dark). Alias: /settings.", aliases: ["settings"] },
   { name: "context", kind: "command", args: "[all]", desc: "Visualize current context usage as a colored grid with optimization suggestions." },
   { name: "copy", kind: "command", args: "[N]", desc: "Copy the last assistant response to the clipboard (/copy N for the Nth-latest)." },
   { name: "debug", kind: "skill", args: "[description]", desc: "Enable debug logging for the session and diagnose issues from the debug log." },
-  { name: "deep-research", kind: "skill", args: "<question>", desc: "Workflow: fan out web searches, cross-check sources, and synthesize a cited report." },
-  { name: "desktop", kind: "command", desc: "Continue the current session in the Claude Code Desktop app. Alias: /app." },
+  { name: "deep-research", kind: "workflow", args: "<question>", desc: "Fan out web searches, cross-check sources, and synthesize a cited report." },
+  { name: "desktop", kind: "command", desc: "Continue the current session in the Claude Code Desktop app. Alias: /app.", aliases: ["app"] },
   { name: "diff", kind: "command", desc: "Open an interactive diff viewer for uncommitted changes and per-turn diffs." },
   { name: "doctor", kind: "command", desc: "Diagnose and verify your Claude Code installation and settings." },
   { name: "effort", kind: "command", args: "[level|auto]", desc: "Set the model effort level (low/medium/high/xhigh/max/ultracode)." },
-  { name: "exit", kind: "command", desc: "Exit the CLI. In an attached background session, detaches and keeps it running. Alias: /quit." },
+  { name: "exit", kind: "command", desc: "Exit the CLI. In an attached background session, detaches and keeps it running. Alias: /quit.", aliases: ["quit"] },
   { name: "export", kind: "command", args: "[filename]", desc: "Export the current conversation as plain text to a file or the clipboard." },
   { name: "fast", kind: "command", args: "[on|off]", desc: "Toggle fast mode on or off." },
-  { name: "feedback", kind: "command", args: "[report]", desc: "Submit feedback, report a bug, or share your conversation. Aliases: /bug, /share." },
+  { name: "feedback", kind: "command", args: "[report]", desc: "Submit feedback, report a bug, or share your conversation. Aliases: /bug, /share.", aliases: ["bug","share"] },
   { name: "fewer-permission-prompts", kind: "skill", desc: "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to reduce permission prompts." },
   { name: "focus", kind: "command", desc: "Toggle the focus view: your last prompt, a one-line tool summary, and the final response." },
   { name: "fork", kind: "command", args: "<directive>", desc: "Spawn a forked subagent that inherits the full conversation and works in the background." },
@@ -61,13 +63,13 @@ export const CLI_REGISTRY: CliEntry[] = [
   { name: "keybindings", kind: "command", desc: "Open your keyboard shortcuts file." },
   { name: "login", kind: "command", desc: "Sign in to your Anthropic account." },
   { name: "logout", kind: "command", desc: "Sign out from your Anthropic account." },
-  { name: "loop", kind: "skill", args: "[interval] [prompt]", desc: "Run a prompt repeatedly while the session stays open; omit the interval to self-pace. Alias: /proactive." },
+  { name: "loop", kind: "skill", args: "[interval] [prompt]", desc: "Run a prompt repeatedly while the session stays open; omit the interval to self-pace. Alias: /proactive.", aliases: ["proactive"] },
   { name: "mcp", kind: "command", args: "[reconnect|enable|disable ...]", desc: "Manage MCP server connections and OAuth authentication." },
   { name: "memory", kind: "command", desc: "Edit CLAUDE.md memory files, toggle auto-memory, and view auto-memory entries." },
-  { name: "mobile", kind: "command", desc: "Show a QR code to download the Claude mobile app. Aliases: /ios, /android." },
+  { name: "mobile", kind: "command", desc: "Show a QR code to download the Claude mobile app. Aliases: /ios, /android.", aliases: ["ios","android"] },
   { name: "model", kind: "command", args: "[model]", desc: "Switch the AI model and save it as your default for new sessions." },
   { name: "passes", kind: "command", desc: "Share a free week of Claude Code with friends (if your account is eligible)." },
-  { name: "permissions", kind: "command", desc: "Manage allow / ask / deny rules for tool permissions. Alias: /allowed-tools." },
+  { name: "permissions", kind: "command", desc: "Manage allow / ask / deny rules for tool permissions. Alias: /allowed-tools.", aliases: ["allowed-tools"] },
   { name: "plan", kind: "command", args: "[description]", desc: "Enter plan mode directly from the prompt." },
   { name: "plugin", kind: "command", args: "[subcommand]", desc: "Manage Claude Code plugins (list, install, enable, disable)." },
   { name: "powerup", kind: "command", desc: "Discover Claude Code features through quick interactive lessons." },
@@ -77,16 +79,16 @@ export const CLI_REGISTRY: CliEntry[] = [
   { name: "release-notes", kind: "command", desc: "View the changelog in an interactive version picker." },
   { name: "reload-plugins", kind: "command", args: "[--force]", desc: "Reload active plugins to apply pending changes without restarting." },
   { name: "reload-skills", kind: "command", desc: "Re-scan skill and command directories so on-disk changes become available mid-session." },
-  { name: "remote-control", kind: "command", desc: "Make this session available for remote control from claude.ai. Alias: /rc." },
+  { name: "remote-control", kind: "command", desc: "Make this session available for remote control from claude.ai. Alias: /rc.", aliases: ["rc"] },
   { name: "remote-env", kind: "command", desc: "Choose the default environment for cloud agents." },
   { name: "rename", kind: "command", args: "[name]", desc: "Rename the current session; auto-generates a name from history if omitted." },
-  { name: "resume", kind: "command", args: "[session]", desc: "Resume a conversation by ID or name, or open the session picker. Alias: /continue." },
+  { name: "resume", kind: "command", args: "[session]", desc: "Resume a conversation by ID or name, or open the session picker. Alias: /continue.", aliases: ["continue"] },
   { name: "review", kind: "command", args: "[PR]", desc: "Review a GitHub pull request, using the same review engine as /code-review." },
-  { name: "rewind", kind: "command", desc: "Rewind the conversation and/or code to a previous checkpoint. Aliases: /checkpoint, /undo." },
+  { name: "rewind", kind: "command", desc: "Rewind the conversation and/or code to a previous checkpoint. Aliases: /checkpoint, /undo.", aliases: ["checkpoint","undo"] },
   { name: "run", kind: "skill", desc: "Launch and drive your project's app to see a change working in the running app, not just tests." },
   { name: "run-skill-generator", kind: "skill", desc: "Teach /run and /verify how to build, launch, and drive your project's app via a per-project skill." },
   { name: "sandbox", kind: "command", desc: "Toggle sandbox mode (supported platforms only)." },
-  { name: "schedule", kind: "command", args: "[description]", desc: "Create, update, list, or run routines that execute on cloud infrastructure. Alias: /routines." },
+  { name: "schedule", kind: "command", args: "[description]", desc: "Create, update, list, or run routines that execute on cloud infrastructure. Alias: /routines.", aliases: ["routines"] },
   { name: "scroll-speed", kind: "command", desc: "Adjust mouse wheel scroll speed (fullscreen rendering only)." },
   { name: "security-review", kind: "command", desc: "Analyze pending branch changes for security vulnerabilities (injection, auth, data exposure)." },
   { name: "setup-bedrock", kind: "command", desc: "Configure Amazon Bedrock auth, region, and model pins (when CLAUDE_CODE_USE_BEDROCK=1)." },
@@ -97,16 +99,16 @@ export const CLI_REGISTRY: CliEntry[] = [
   { name: "statusline", kind: "command", desc: "Configure Claude Code's status line — describe what you want or auto-configure." },
   { name: "stickers", kind: "command", desc: "Order Claude Code stickers." },
   { name: "stop", kind: "command", desc: "Stop the current background session (only while attached)." },
-  { name: "tasks", kind: "command", desc: "View and manage everything running in the background. Also /bashes." },
+  { name: "tasks", kind: "command", desc: "View and manage everything running in the background. Also /bashes.", aliases: ["bashes"] },
   { name: "team-onboarding", kind: "command", desc: "Generate a team onboarding guide from your Claude Code usage history." },
-  { name: "teleport", kind: "command", desc: "Pull a Claude Code on the web session into this terminal. Also /tp." },
+  { name: "teleport", kind: "command", desc: "Pull a Claude Code on the web session into this terminal. Also /tp.", aliases: ["tp"] },
   { name: "terminal-setup", kind: "command", desc: "Configure terminal keybindings for Shift+Enter and other shortcuts." },
   { name: "theme", kind: "command", desc: "Change the color theme (auto / light / dark / colorblind / ANSI / custom)." },
   { name: "tui", kind: "command", args: "[default|fullscreen]", desc: "Set the terminal UI renderer and relaunch into it with your conversation intact." },
   { name: "ultraplan", kind: "command", args: "<prompt>", desc: "Draft a plan in an ultraplan session, review it in the browser, then execute remotely or locally." },
   { name: "ultrareview", kind: "command", args: "[PR]", desc: "Run a deep multi-agent cloud review. Preferred form is now /code-review ultra." },
   { name: "upgrade", kind: "command", desc: "Open the upgrade page to switch to a higher plan tier." },
-  { name: "usage", kind: "command", desc: "Show session cost, plan usage limits, and activity stats. Aliases: /cost, /stats." },
+  { name: "usage", kind: "command", desc: "Show session cost, plan usage limits, and activity stats. Aliases: /cost, /stats.", aliases: ["cost","stats"] },
   { name: "usage-credits", kind: "command", desc: "Configure usage credits to keep working when you hit a limit. Previously /extra-usage." },
   { name: "verify", kind: "skill", desc: "Confirm a change works by building and running your app and observing the result." },
   { name: "voice", kind: "command", args: "[hold|tap|off]", desc: "Toggle voice dictation, or enable it in a specific mode." },
@@ -120,4 +122,8 @@ export const CLI_REGISTRY: CliEntry[] = [
 ];
 
 export const CLI_COMMANDS = CLI_REGISTRY.filter((e) => e.kind === "command");
-export const CLI_SKILLS = CLI_REGISTRY.filter((e) => e.kind === "skill");
+// Bundled Skills AND Workflows both live in the Skills panel — the panel tags
+// workflows with a badge; they're not their own category/route.
+export const CLI_SKILLS = CLI_REGISTRY.filter(
+  (e) => e.kind === "skill" || e.kind === "workflow",
+);

@@ -27,6 +27,7 @@ export type LibrarySkill = {
   argHint?: string;
   source: SkillSource;
   sourceLabel: string; // "You" · the plugin name · "Built-in"
+  workflow?: boolean; // a bundled Workflow (fans out subagents) vs a plain skill
   pluginRef?: string;
   path?: string; // SKILL.md path (user/plugin); built-ins have no file on disk
 };
@@ -124,6 +125,7 @@ export function getSkillsLibrary(): LibrarySkill[] {
     argHint: b.args,
     source: "builtin",
     sourceLabel: "Built-in",
+    workflow: b.kind === "workflow",
   }));
 
   return [...user, ...plugin, ...builtin];

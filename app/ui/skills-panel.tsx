@@ -212,9 +212,20 @@ function SkillMeta({ s }: { s: LibrarySkill }) {
   return <span className="font-mono text-[10px] text-zinc-600">~{fmt(s.tokens)} tok</span>;
 }
 
-// The list card: /name + source-led meta. The whole card drills into the detail.
+// The list card: /name + Run, with the source/tok beneath. The card body drills
+// into the detail; the Run button stages "/name " into the send box.
 function SkillCard({ s, onOpen }: { s: LibrarySkill; onOpen: (s: LibrarySkill) => void }) {
+  const [staged, setStaged] = useState(false);
   const dot = s.source === "user" ? "text-blue-500" : s.source === "builtin" ? "text-orange-500" : "text-emerald-500";
+  const run = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    prefill(`/${s.name} `);
+    setStaged(true);
+    setTimeout(() => setStaged(false), 1200);
+  };
+  // tok card → show its tok (the source label there just repeated the name);
+  // built-ins (no file) keep their source ("Built-in").
+  const subLabel = s.tokens > 0 ? `~${fmt(s.tokens)} tok` : s.sourceLabel;
   return (
     <div
       role="button"
@@ -232,13 +243,23 @@ function SkillCard({ s, onOpen }: { s: LibrarySkill; onOpen: (s: LibrarySkill) =
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
           <span className={`shrink-0 text-[10px] leading-none ${dot}`} aria-hidden>●</span>
           <span className="truncate font-mono text-[13px] text-zinc-200">/{s.name}</span>
+          {s.workflow && (
+            <span className="shrink-0 rounded bg-fuchsia-500/15 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-fuchsia-300">
+              workflow
+            </span>
+          )}
         </span>
-        <span className="shrink-0">
-          <SkillMeta s={s} />
-        </span>
+        <button
+          type="button"
+          onClick={run}
+          title={`Stage /${s.name} in the send box`}
+          className="shrink-0 rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          {staged ? "Staged ↵" : "Run"}
+        </button>
       </div>
 
-      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{s.sourceLabel}</div>
+      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{subLabel}</div>
 
       {s.description && (
         <p className="mt-3 line-clamp-2 text-[11px] leading-snug text-zinc-500">{s.description}</p>

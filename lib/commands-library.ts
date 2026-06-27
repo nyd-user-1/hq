@@ -4,6 +4,7 @@ import path from "node:path";
 import { installPathFor } from "@/lib/plugin-detail";
 import { CLI_COMMANDS } from "@/lib/cli-registry";
 import { parseFrontmatter } from "@/lib/frontmatter";
+import { MCP_PROMPT_COMMANDS } from "@/lib/mcp-prompts";
 
 // The Commands LIBRARY — sibling of the Skills library. One list of every slash
 // command, from three sources: (1) the harness BUILT-INS (the CLI registry —
@@ -15,7 +16,7 @@ const HOME = os.homedir();
 const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR || path.join(HOME, ".claude");
 const USER_COMMANDS = path.join(CLAUDE_DIR, "commands");
 
-export type CommandSource = "user" | "plugin" | "builtin";
+export type CommandSource = "user" | "plugin" | "builtin" | "mcp";
 
 export type LibraryCommand = {
   id: string;
@@ -24,7 +25,8 @@ export type LibraryCommand = {
   argHint?: string;
   tokens: number; // ~4 chars/token; 0 for built-ins (no file)
   source: CommandSource;
-  sourceLabel: string; // "You" · the plugin name · "Built-in"
+  sourceLabel: string; // "You" · the plugin name · "Built-in" · the MCP server
+  aliases?: string[]; // other names that resolve here (e.g. /cost → usage)
   pluginRef?: string;
   path?: string; // .md/.toml file (user/plugin); built-ins have no file
 };
@@ -104,9 +106,10 @@ export function getCommandsLibrary(): LibraryCommand[] {
     tokens: 0,
     source: "builtin",
     sourceLabel: "Built-in",
+    aliases: c.aliases,
   }));
 
-  return [...user, ...plugin, ...builtin];
+  return [...user, ...plugin, ...builtin, ...MCP_PROMPT_COMMANDS];
 }
 
 // A command file's body for the drill-down (user/plugin only). Guarded to .md/.toml

@@ -17,7 +17,7 @@ export const KIND_TAG: Record<SearchKind, string> = {
   note: "bg-blue-500/15 text-blue-300",
   script: "bg-amber-500/15 text-amber-300",
   skill: "bg-rose-500/15 text-rose-300",
-  doc: "bg-indigo-500/15 text-indigo-300",
+  doc: "bg-[#d97757]/15 text-[#d97757]", // Claude brand clay — marks Claude Code docs
 };
 
 // The Filter menu, in display order: every scope with its label + chip color.
@@ -37,7 +37,7 @@ export const SCOPE_TAGS: { value: SearchScope; label: string; chip: string }[] =
   { value: "memory", label: "Memory", chip: KIND_TAG.memory },
   { value: "scripts", label: "Scripts", chip: KIND_TAG.script },
   { value: "skills", label: "Skills", chip: KIND_TAG.skill },
-  { value: "docs", label: "Docs", chip: KIND_TAG.doc },
+  { value: "docs", label: "Claude", chip: KIND_TAG.doc }, // the Claude Code docs mirror
 ];
 
 // The Filter button face: "Filter" at rest (scope=all), else the active label.

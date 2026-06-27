@@ -48,7 +48,8 @@ export default function CommandsPanel() {
       !query ||
       c.name.toLowerCase().includes(query) ||
       c.description.toLowerCase().includes(query) ||
-      c.sourceLabel.toLowerCase().includes(query),
+      c.sourceLabel.toLowerCase().includes(query) ||
+      (c.aliases?.some((a) => a.toLowerCase().includes(query)) ?? false),
     [query],
   );
 
@@ -156,7 +157,7 @@ export default function CommandsPanel() {
 
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
           {selected
-            ? "Copy loads /name to your clipboard — paste it into the terminal to run."
+            ? "Run stages /name in the send box (in command color) — hit ↵ to run it."
             : `${commands.length} commands · built-in, yours, and plugin-shipped. Click one to open it.`}
         </footer>
       </Boundary>
@@ -198,7 +199,28 @@ function CommandMeta({ c }: { c: LibraryCommand }) {
 }
 
 function CommandCard({ c, onOpen }: { c: LibraryCommand; onOpen: (c: LibraryCommand) => void }) {
-  const dot = c.source === "user" ? "text-blue-500" : c.source === "builtin" ? "text-zinc-500" : "text-emerald-500";
+  const [staged, setStaged] = useState(false);
+  const dot =
+    c.source === "user"
+      ? "text-blue-500"
+      : c.source === "builtin"
+        ? "text-zinc-500"
+        : c.source === "mcp"
+          ? "text-purple-400"
+          : "text-emerald-500";
+  // Stage into the send box (not copy, not auto-run); stop the click from also
+  // opening the card's detail view.
+  const run = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.dispatchEvent(
+      new CustomEvent("hq:compose", { detail: { text: `/${c.name} `, replace: true, focus: true } }),
+    );
+    setStaged(true);
+    setTimeout(() => setStaged(false), 1200);
+  };
+  // Under-name line: a token card shows its tok (the source label there just
+  // repeated the command name); the rest show their source ("Built-in", a server).
+  const subLabel = c.tokens > 0 ? `~${fmt(c.tokens)} tok` : c.sourceLabel;
   return (
     <div
       role="button"
@@ -217,12 +239,22 @@ function CommandCard({ c, onOpen }: { c: LibraryCommand; onOpen: (c: LibraryComm
           <span className={`shrink-0 text-[10px] leading-none ${dot}`} aria-hidden>●</span>
           <span className="truncate font-mono text-[13px] text-zinc-200">/{c.name}</span>
         </span>
-        <span className="shrink-0">
-          <CommandMeta c={c} />
-        </span>
+        <button
+          type="button"
+          onClick={run}
+          title={`Stage /${c.name} in the send box`}
+          className="shrink-0 rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          {staged ? "Staged ↵" : "Run"}
+        </button>
       </div>
 
-      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{c.sourceLabel}</div>
+      <div className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[10px] text-zinc-500">
+        <span className="truncate">{subLabel}</span>
+        {c.aliases?.length ? (
+          <span className="shrink-0 text-zinc-600">/{c.aliases.join(" /")}</span>
+        ) : null}
+      </div>
 
       {c.description && (
         <p className="mt-3 line-clamp-2 text-[11px] leading-snug text-zinc-500">{c.description}</p>
@@ -260,14 +292,15 @@ function CommandDetailView({ cmd: c }: { cmd: LibraryCommand }) {
     };
   }, [c.path]);
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(`/${c.name}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {
-      /* clipboard blocked */
-    }
+  // Stage the command into the send box — NOT copy, NOT auto-run. It lands in
+  // the terminal composer (rendered in command color), so Enter runs it. Mirrors
+  // the Skills panel's Run.
+  const run = () => {
+    window.dispatchEvent(
+      new CustomEvent("hq:compose", { detail: { text: `/${c.name} `, replace: true, focus: true } }),
+    );
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
   };
 
   return (
@@ -280,11 +313,11 @@ function CommandDetailView({ cmd: c }: { cmd: LibraryCommand }) {
         </div>
         <button
           type="button"
-          onClick={copy}
-          title={`Copy /${c.name}`}
+          onClick={run}
+          title={`Stage /${c.name} in the send box`}
           className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
         >
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Staged ↵" : "Run"}
         </button>
       </div>
 
