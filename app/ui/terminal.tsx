@@ -11,8 +11,8 @@ import ComposeMenu from "@/app/ui/compose-menu";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import SendBoxSearch from "@/app/ui/send-box-search";
 import Tooltip from "@/app/ui/tooltip";
-import PanelNav from "@/app/ui/panel-nav-bar";
 import { useRepl } from "@/app/ui/use-repl";
+import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
 import { OnboardingConversation } from "@/app/ui/landing-install";
 import { CONTEXT_LIMIT, PRICING_CLIFF } from "@/lib/limits";
 import type { TimelineItem } from "@/lib/transcript";
@@ -901,6 +901,7 @@ function RecentSessions({
 export default function Terminal({
   paramKey = "session",
   initialFocus = true,
+  sessionId,
 }: {
   // Which URL param this terminal reads/writes for its session. Terminal 1 (the
   // shell's always-mounted heart) uses "session"; Terminal 2 (the pair pane)
@@ -910,14 +911,24 @@ export default function Terminal({
   // Seeds focus mode from the `hq-focus` cookie (server-read in shell.tsx → no
   // flash). Focus is the DEFAULT (true); toggling to wide writes "0".
   initialFocus?: boolean;
+  // CONTROLLED MODE (the terminal grid / fleet wall): when set, this terminal
+  // drives THIS session directly and NEVER reads or writes the URL — the parent
+  // grid owns placement, so N terminals coexist without the 2-param (session/pair)
+  // scheme. Every URL-coupled bit below short-circuits on `controlled`, so the
+  // existing T1/T2 path (sessionId absent) stays byte-for-byte unchanged.
+  sessionId?: string;
 } = {}) {
+  const controlled = sessionId != null && sessionId !== "";
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const sessionParam = params.get(paramKey);
+  const sessionParam = controlled ? sessionId : params.get(paramKey);
   // the OTHER terminal's param — preserved whenever this one re-points, so
-  // opening a session in one pane never closes the other.
-  const sibling = params.get(paramKey === "session" ? "pair" : "session");
+  // opening a session in one pane never closes the other. (None in controlled mode.)
+  const sibling = controlled ? null : params.get(paramKey === "session" ? "pair" : "session");
+  // the wall panes (Terminal 2–4) — preserved whenever Terminal 1 re-points, so
+  // opening a session in T1 never closes the wall. (None in controlled mode.)
+  const wallParam = controlled ? null : params.get("wall");
   // session id → href that re-points THIS terminal. Terminal 1 pins on the home
   // route (the /sessions panel was removed — the sidebar owns session selection
   // now); Terminal 2 sets ?pair on the current path while preserving T1's ?session.
@@ -925,7 +936,8 @@ export default function Terminal({
     const sp = new URLSearchParams();
     if (paramKey === "session") {
       sp.set("session", id);
-      if (sibling) sp.set("pair", sibling); // keep terminal 2 open
+      if (sibling) sp.set("pair", sibling); // keep terminal 2 open (legacy)
+      if (wallParam) sp.set("wall", wallParam); // keep the wall panes open
       return `/?${sp.toString()}`; // pin T1 on home (no panel)
     }
     if (sibling) sp.set("session", sibling); // keep terminal 1
@@ -939,8 +951,9 @@ export default function Terminal({
   // or T1-while-a-pair-is-open, still follows the newest session.) stagedAtRef is
   // stamped when `staged` flips true, so the picker never auto-flips to an existing
   // session — only to one BORN after you landed here.
-  const staged =
-    sessionParam === "new" || (paramKey === "session" && !sessionParam && !sibling);
+  const staged = controlled
+    ? false // a grid pane always drives a concrete session — never the home picker
+    : sessionParam === "new" || (paramKey === "session" && !sessionParam && !sibling && !wallParam);
   const pinned = staged ? null : sessionParam; // null = newest session
   // ?install=1 = preview the deployed install card locally (the empty-state the
   // terminal shows when there's no session — i.e. on a Vercel deploy).
@@ -1160,8 +1173,11 @@ export default function Terminal({
   const q = appliedQuery.trim().toLowerCase();
   // The highlight engine lights up when the send-box search mode has a query.
   const searchActive = searchMode && q.length > 0;
-  const hlName = `hq-search-${paramKey}`;
-  const hlActiveName = `hq-search-active-${paramKey}`;
+  // Unique per pane: in the grid every pane shares paramKey="session", so key the
+  // highlight registry by session id instead to avoid cross-pane collisions.
+  const hlKey = controlled ? sessionId : paramKey;
+  const hlName = `hq-search-${hlKey}`;
+  const hlActiveName = `hq-search-active-${hlKey}`;
   // Exit the send-box search mode → back to compose (clears the query so the
   // highlights drop too).
   const closeSendSearch = useCallback(() => {
@@ -1359,6 +1375,7 @@ export default function Terminal({
         setProjects(d.projects ?? []);
         setNow(Date.now());
         if (
+          !controlled &&
           d.id &&
           d.id === drivenSessionRef.current &&
           (d.bornAt ?? 0) > stagedAtRef.current
@@ -1387,11 +1404,12 @@ export default function Terminal({
         // Sticky: an unpinned terminal pins itself to the session it just
         // resolved, so it STAYS there — clicking a Recents row is the only thing
         // that moves it, instead of live-chasing whatever session is newest.
-        if (!pinned && d.id) {
+        if (!controlled && !pinned && d.id) {
           const sp = new URLSearchParams();
           sp.set(paramKey, d.id);
           const sibKey = paramKey === "session" ? "pair" : "session";
           if (sibling) sp.set(sibKey, sibling);
+          if (wallParam) sp.set("wall", wallParam); // keep the wall when T1 self-pins
           router.replace(`${pathnameRef.current ?? "/"}?${sp.toString()}`, { scroll: false });
         }
       }
@@ -1430,7 +1448,7 @@ export default function Terminal({
           load();
         }, 2000);
     }
-  }, [pinned, staged, router, sibling, paramKey]);
+  }, [pinned, staged, router, sibling, paramKey, controlled, wallParam]);
 
   // Lazy scrollback: at the top, load the FULL transcript once and prepend it.
   // anchorRef (set here, applied in the layout effect below) keeps your reading
@@ -1601,10 +1619,10 @@ export default function Terminal({
   useEffect(
     () => () => {
       const api = highlightApi();
-      api?.reg.delete(`hq-search-${paramKey}`);
-      api?.reg.delete(`hq-search-active-${paramKey}`);
+      api?.reg.delete(`hq-search-${hlKey}`);
+      api?.reg.delete(`hq-search-active-${hlKey}`);
     },
-    [paramKey],
+    [hlKey],
   );
 
   // Entering the staging view: clear the display (nothing is being shown) and
@@ -2683,6 +2701,9 @@ export default function Terminal({
         ) : (
           <span className="font-mono text-[11px] text-zinc-600">—</span>
         )}
+        {/* Panels — the message-turn ⋮ kebab after the session id opens the nav menu
+            (Activity · Console · Search · Metrics, each a flyout). */}
+        <TerminalNavMenu project={staged ? "" : project} sessionId={resolvedId} />
         {/* EXPERIMENTAL channel-in marker. Shown ONLY when the global channel toggle
             is ON (account menu). Its presence = "you are NOT in the plain warm-REPL
             MVP": channel-aware sessions get driven via the live push channel. Absent
@@ -2700,10 +2721,8 @@ export default function Terminal({
             </svg>
           </span>
         )}
-        {/* Panel nav — a horizontal row of headers (Activity ▾ · API · Console ▾ ·
-            Metrics ▾ · Plugins) replacing the old layout-grid dropdown. Lives here
-            in the header (per-session search now lives only in the send box). */}
-        <PanelNav />
+        {/* Panel nav moved to the "terminal" boundary chip (hover → TerminalNavMenu:
+            Activity · Console · Metrics flyouts + Search). The header stays clean. */}
         {/* The /clear chain: this session's tied line of continuations.
             Click a row to show that session in the terminal. */}
         {lineage?.chain && (

@@ -226,7 +226,7 @@ export default function SidebarRecents() {
   const router = useRouter();
   const params = useSearchParams();
   const current = params.get("session"); // terminal 1's session
-  const pairParam = params.get("pair"); // terminal 2's session (if open)
+  const wallParam = params.get("wall"); // the wall panes 2–4 (comma-separated), if any
   const [sessions, setSessions] = useState<Recent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("date"); // default: grouped by day (claude.ai-style)
@@ -424,8 +424,8 @@ export default function SidebarRecents() {
   // (label, favorite star, live dot, kebab) and the inline rename/project editor.
   const renderRow = (s: Recent) => {
     const active = current === s.id;
-    const openHref = pairParam
-      ? `${pathname}?session=${s.id}&pair=${pairParam}`
+    const openHref = wallParam
+      ? `${pathname}?session=${s.id}&wall=${wallParam}`
       : `${pathname}?session=${s.id}`;
     // Label precedence: your rename → Claude's ai-title → the id.
     const label = s.customTitle || s.aiTitle || s.id.slice(0, 8);
@@ -699,20 +699,33 @@ export default function SidebarRecents() {
             <LinkIcon />
             Related…
           </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              const pairHref = current
-                ? `${pathname}?session=${current}&pair=${menuSession.id}`
-                : `${pathname}?pair=${menuSession.id}`;
-              router.push(pairHref, { scroll: false });
-              closeMenu();
-            }}
-            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
-          >
-            <SplitIcon />
-            Terminal 2
-          </button>
+          {(() => {
+            // Add this session to the WALL as the next pane. "Terminal 2 → 3 → 4"
+            // by how many are already up (4 panes = the cap). Hidden if this session
+            // is already a pane (Terminal 1 or on the wall).
+            const wallIds = wallParam
+              ? wallParam.split(",").map((x) => x.trim()).filter(Boolean)
+              : [];
+            const total = 1 + wallIds.length; // Terminal 1 + the wall panes
+            if (total >= 4 || menuSession.id === current || wallIds.includes(menuSession.id))
+              return null;
+            return (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  const sp = new URLSearchParams();
+                  if (current) sp.set("session", current);
+                  sp.set("wall", [...wallIds, menuSession.id].join(","));
+                  router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+                  closeMenu();
+                }}
+                className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+              >
+                <SplitIcon />
+                Terminal {total + 1}
+              </button>
+            );
+          })()}
           <button
             role="menuitem"
             onClick={() => {

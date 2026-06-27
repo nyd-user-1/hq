@@ -333,7 +333,7 @@ function openHref(h: Hit, q: string): string {
                         ? `openSkill=${e(h.ref)}`
                         : `openDoc=${e(h.ref)}`;
   const sp = new URLSearchParams(window.location.search);
-  const pins = (["session", "pair"] as const)
+  const pins = (["session", "wall"] as const)
     .map((k) => (sp.get(k) ? `${k}=${sp.get(k)}` : ""))
     .filter(Boolean)
     .join("&");

@@ -53,7 +53,7 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "Sidebar", file: "app/ui/sidebar.tsx", kind: "container", status: "review", desc: "Left rail — nameplate, new-session, Recents." },
   { name: "SidebarRecents", file: "app/ui/sidebar-recents.tsx", kind: "container", status: "review", desc: "Recent-sessions list with favorite/hide/rename kebab." },
   { name: "SidebarColumn", file: "app/ui/sidebar-column.tsx", kind: "presentational", status: "review", desc: "Collapsible width wrapper for the sidebar." },
-  { name: "PairColumn", file: "app/ui/pair-column.tsx", kind: "container", status: "review", desc: "Terminal 2 column (pair mode); has its own close button." },
+  { name: "TerminalRow", file: "app/ui/terminal-row.tsx", kind: "container", status: "review", desc: "Terminal 1 + the wall — up to 3 more panes from ?wall; each pane has its own close." },
   { name: "ComposeTray", file: "app/ui/compose-tray.tsx", kind: "container", status: "review", desc: "Compose drag-in tray; send-to-terminal." },
   { name: "SkillLauncher", file: "app/ui/skill-launcher.tsx", kind: "container", status: "review", desc: "Skill browser + command box — this panel borrows its row pattern." },
   { name: "RoutinePanel", file: "app/ui/routine-panel.tsx", kind: "container", status: "review", desc: "Routines panel." },  { name: "TokenMeter", file: "app/ui/token-meter.tsx", kind: "presentational", status: "review", desc: "Token / $ meter rendering." },

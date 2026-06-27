@@ -31,7 +31,7 @@ function openHref(r: FileRow, search: string): string {
             ? `openSkill=${e(r.ref)}`
             : `openFile=${e(r.ref)}`;
   const cur = new URLSearchParams(search);
-  const pins = (["session", "pair"] as const)
+  const pins = (["session", "wall"] as const)
     .map((k) => (cur.get(k) ? `${k}=${cur.get(k)}` : ""))
     .filter(Boolean)
     .join("&");

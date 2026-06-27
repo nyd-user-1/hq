@@ -7,7 +7,7 @@ import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import Terminal from "@/app/ui/terminal";
 import PanelWrapper from "@/app/ui/panel-wrapper";
-import PairColumn from "@/app/ui/pair-column";
+import TerminalRow from "@/app/ui/terminal-row";
 import FilesOverlay from "@/app/ui/files-overlay";
 import FleetOverlay from "@/app/ui/fleet-overlay";
 import { PlannerProvider } from "@/app/ui/planner-state";
@@ -86,7 +86,7 @@ export default async function Shell({
           <div className="relative flex min-w-[380px] flex-1 flex-col gap-4">
             {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
                 remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
-            <PairColumn initialFocus={focusDefault}>
+            <TerminalRow initialFocus={focusDefault}>
               <Boundary label="terminal.tsx" lead={<SidebarToggle />}>
                 <Suspense
                   fallback={
@@ -96,7 +96,7 @@ export default async function Shell({
                   <Terminal initialFocus={focusDefault} />
                 </Suspense>
               </Boundary>
-            </PairColumn>
+            </TerminalRow>
             {children}
             {/* Files browser — covers the center when ?center=files; the terminal
                 stays mounted + live behind it. Suspense for useSearchParams. */}
