@@ -144,6 +144,33 @@ export async function replStatus(requestedId: string): Promise<Status> {
   catch { return { running: false }; }
 }
 
+export type FleetAgent = {
+  key: string; // the daemon's Map key (the requestedId it was started under)
+  sessionId: string | null; // the real session id once the process inits
+  cwd: string;
+  running: boolean;
+  busy: boolean; // mid-turn (streaming) right now
+  startedAt: number;
+  lastActivity: number;
+  pending: number; // open permission asks awaiting an operator answer
+  subscribers: number; // attached UI clients (0 = nobody watching it)
+};
+
+// The fleet: every warm agent the daemon holds. NON-spawning on purpose — if no
+// daemon is up there are no agents, so don't resurrect one just to poll an empty
+// list. The mission-control view polls this ~1–2s; spawning each time would fight
+// the daemon's own empty-self-exit and waste a process. ping() + rawRequest()
+// both skip ensureDaemon(), unlike call().
+export async function listRepls(): Promise<FleetAgent[]> {
+  if (!(await ping())) return [];
+  try {
+    const r = await rawRequest<{ agents?: FleetAgent[] }>("GET", "/list");
+    return Array.isArray(r.agents) ? r.agents : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function sendTurn(
   requestedId: string,
   payload: { text: string; images?: { data: string; mime: string }[] },
