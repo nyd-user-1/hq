@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { FleetMetrics, Shape, Stat, Tone } from "@/lib/fleet";
+import type { FleetMetrics, MetricDef, Shape, Stat, Tone } from "@/lib/fleet";
 import FleetGrid from "@/app/ui/fleet-grid";
 import SessionMenu from "@/app/ui/session-menu";
 import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
@@ -565,17 +565,145 @@ function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: s
   );
 }
 
-// Save / load board VIEWS — a hover dropdown: name+save, recommended seeds, saved.
-function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: string; views: SavedView[]; onApply: (v: SavedView) => void; onSave: (name: string) => void; onDelete: (name: string) => void }) {
+// Save / load board VIEWS — a hover dropdown shaped like the sidebar session menu:
+// a HEADER (search over the whole catalog), a scrollable BODY (recommended + saved
+// VIEWS first, then the full metric catalog grouped, click-to-toggle), and a FOOTER
+// (the "save current as" field + button). The search filters both views and metrics.
+function SaveMenu({
+  current,
+  views,
+  onApply,
+  onSave,
+  onDelete,
+  catalog,
+  placedSet,
+  onAddMetric,
+  onRemoveMetric,
+}: {
+  current: string;
+  views: SavedView[];
+  onApply: (v: SavedView) => void;
+  onSave: (name: string) => void;
+  onDelete: (name: string) => void;
+  catalog: MetricDef[];
+  placedSet: Set<string>;
+  onAddMetric: (id: string) => void;
+  onRemoveMetric: (id: string) => void;
+}) {
   const [name, setName] = useState("");
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+
+  // VIEWS — the recommended seeds + the user's saved boards, name-filtered by search.
+  const recommended = RECOMMENDED_VIEWS.filter((v) => !query || v.name.toLowerCase().includes(query));
+  const savedViews = views.filter((v) => !query || v.name.toLowerCase().includes(query));
+
+  // METRICS — the FULL catalog grouped (no scope gate); a session-only metric added
+  // without a session renders as a "pick one session" placeholder on the board.
+  // The search filters by label / group / kind.
+  const metricGroups = useMemo(() => {
+    const ql = q.trim().toLowerCase();
+    const map = new Map<string, MetricDef[]>();
+    for (const d of catalog) {
+      if (ql && !`${d.label} ${d.group} ${d.kind}`.toLowerCase().includes(ql)) continue;
+      const arr = map.get(d.group) ?? [];
+      arr.push(d);
+      map.set(d.group, arr);
+    }
+    return [...map.entries()];
+  }, [catalog, q]);
+
+  const empty = recommended.length === 0 && savedViews.length === 0 && metricGroups.length === 0;
+
   return (
     <HoverMenu
       label={<span title="saved views" className="text-[11px]">{current}</span>}
       labelClass="cursor-pointer rounded px-1 py-0.5 lowercase text-zinc-500 transition-colors hover:text-zinc-300"
       align="left"
     >
-      <div className="flex w-60 flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl">
-        <div className="flex items-center gap-1">
+      <div className="flex max-h-[360px] w-72 flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
+        {/* HEADER — search over views + metrics (session-menu shape) */}
+        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-2.5 py-2">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-600" aria-hidden>
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={catalog.length ? `Search ${catalog.length} metrics…` : "Search metrics…"}
+            className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-zinc-200 outline-none placeholder:text-zinc-600"
+          />
+          {q && (
+            <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="shrink-0 text-zinc-600 transition-colors hover:text-zinc-300">
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* BODY — VIEWS first, then the metric catalog (scrollable) */}
+        <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5">
+          {recommended.length > 0 && (
+            <>
+              <div className="px-1 pt-0.5 text-[9px] uppercase tracking-widest text-zinc-600">Recommended</div>
+              {recommended.map((v) => (
+                <button
+                  key={v.name}
+                  type="button"
+                  onClick={() => onApply(v)}
+                  title="load this view onto the board"
+                  className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900"
+                >
+                  <span className="min-w-0 flex-1 truncate">{v.name}</span>
+                  <span className="shrink-0 text-[9px] uppercase tracking-wide text-zinc-600">{v.ids.length} cards</span>
+                </button>
+              ))}
+            </>
+          )}
+          {savedViews.length > 0 && (
+            <>
+              <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Saved</div>
+              {savedViews.map((v) => (
+                <div key={v.name} className="group flex items-center rounded hover:bg-zinc-900">
+                  <button type="button" onClick={() => onApply(v)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-[11px] text-zinc-300">
+                    <span className="min-w-0 flex-1 truncate">{v.name}</span>
+                    <span className="shrink-0 text-[9px] uppercase tracking-wide text-zinc-600">{v.ids.length} cards</span>
+                  </button>
+                  <button type="button" onClick={() => onDelete(v.name)} title="delete view" className="px-2 py-1 text-zinc-600 opacity-0 transition hover:text-red-300 group-hover:opacity-100">✕</button>
+                </div>
+              ))}
+            </>
+          )}
+          {metricGroups.map(([group, defs]) => (
+            <div key={group} className="flex flex-col">
+              <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">{group}</div>
+              {defs.map((d) => {
+                const on = placedSet.has(d.id);
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => (on ? onRemoveMetric(d.id) : onAddMetric(d.id))}
+                    title={on ? "on board — click to remove" : "click to add to the board"}
+                    className={`flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] transition-colors hover:bg-zinc-900 ${on ? "text-emerald-300" : "text-zinc-300"}`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{d.label}</span>
+                    <span className={`shrink-0 text-[9px] uppercase tracking-wide ${on ? "text-emerald-500/80" : "text-zinc-600"}`}>{on ? "on" : d.kind}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          {empty && <p className="px-2 py-3 text-center text-[10px] text-zinc-600">no matches</p>}
+        </div>
+
+        {/* FOOTER — save the current board as a named view */}
+        <div className="flex shrink-0 items-center gap-2 border-t border-zinc-800 px-2.5 py-2">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-600" aria-hidden>
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+            <path d="M17 21v-8H7v8" />
+            <path d="M7 3v5h8" />
+          </svg>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -592,26 +720,11 @@ function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: stri
             type="button"
             disabled={!name.trim()}
             onClick={() => { onSave(name); setName(""); }}
-            className="rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-200 transition-colors hover:bg-zinc-700 disabled:opacity-40"
+            className="shrink-0 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-200 transition-colors hover:bg-zinc-700 disabled:opacity-40"
           >
             save
           </button>
         </div>
-        <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Recommended</div>
-        {RECOMMENDED_VIEWS.map((v) => (
-          <button key={v.name} type="button" onClick={() => onApply(v)} className="truncate rounded px-2 py-1 text-left text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900">
-            {v.name} <span className="text-zinc-600">· {v.ids.length}</span>
-          </button>
-        ))}
-        {views.length > 0 && <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Saved</div>}
-        {views.map((v) => (
-          <div key={v.name} className="group flex items-center rounded hover:bg-zinc-900">
-            <button type="button" onClick={() => onApply(v)} className="min-w-0 flex-1 truncate px-2 py-1 text-left text-[11px] text-zinc-300">
-              {v.name} <span className="text-zinc-600">· {v.ids.length}</span>
-            </button>
-            <button type="button" onClick={() => onDelete(v.name)} title="delete view" className="px-2 py-1 text-zinc-600 opacity-0 transition hover:text-red-300 group-hover:opacity-100">✕</button>
-          </div>
-        ))}
       </div>
     </HoverMenu>
   );
@@ -620,7 +733,7 @@ function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: stri
 const STAT_KINDS = new Set(["stat"]);
 
 export default function FleetView() {
-  const { placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
+  const { placed, setPlaced, addMetric, removeMetric, catalog, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [projects, setProjects] = useState<string[]>([]);
   const [wide, setWide] = useState(false); // open in FOCUS mode by default
@@ -727,7 +840,17 @@ export default function FleetView() {
         </div>
         {/* view bar — the view name (lowercase) is the saved-views dropdown trigger */}
         <div className="mt-2 flex items-center gap-2">
-          <SaveMenu current={viewName} views={views} onApply={applyView} onSave={saveView} onDelete={deleteView} />
+          <SaveMenu
+            current={viewName}
+            views={views}
+            onApply={applyView}
+            onSave={saveView}
+            onDelete={deleteView}
+            catalog={catalog}
+            placedSet={new Set(placed ?? [])}
+            onAddMetric={addMetric}
+            onRemoveMetric={removeMetric}
+          />
         </div>
       </div>
 
@@ -755,7 +878,7 @@ export default function FleetView() {
             Empty board — open <b className="font-medium text-zinc-300">⋮ → Metrics → KPIs</b> and drag a card here, or pick a Saved view.
           </p>
         ) : (
-          <FleetGrid storageKey="hq-fleet-grid" items={gridItems} />
+          <FleetGrid storageKey={`hq-fleet-grid:${viewName}`} items={gridItems} />
         )}
       </div>
     </div>

@@ -74,36 +74,6 @@ function resolve(input: Record<string, Box>, anchorId: string): Record<string, B
   return boxes;
 }
 
-// Vertical gravity — pull every box up until it rests on the box(es) above it or
-// the top edge. Run after a card is REMOVED so the cards below snap up into the gap
-// (instead of leaving a hole the height of the removed card).
-function compact(input: Record<string, Box>, items: GridItem[]): Record<string, Box> {
-  const order = items
-    .map((i) => i.id)
-    .filter((id) => input[id])
-    .sort((a, b) => input[a].y - input[b].y || input[a].x - input[b].x);
-  const out: Record<string, Box> = {};
-  const placed: Box[] = [];
-  for (const id of order) {
-    const src = input[id];
-    let y = 0;
-    let moved = true;
-    while (moved) {
-      moved = false;
-      for (const p of placed) {
-        if (src.x < p.x + p.w && src.x + src.w > p.x && y < p.y + p.h && y + src.h > p.y) {
-          y = p.y + p.h;
-          moved = true;
-        }
-      }
-    }
-    const box = { ...src, y };
-    out[id] = box;
-    placed.push(box);
-  }
-  return out;
-}
-
 export default function FleetGrid({ items, storageKey }: { items: GridItem[]; storageKey: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [cellW, setCellW] = useState(0);
@@ -122,42 +92,26 @@ export default function FleetGrid({ items, storageKey }: { items: GridItem[]; st
     [storageKey],
   );
 
-  // load saved layout once; merge over defaults so a new widget id still places
+  // Rebuild the layout whenever the VIEW (storageKey) or its item set changes.
+  // Start from a clean shelf-pack of THIS view's items, then overlay any saved boxes
+  // for ids still present — a per-view manual arrangement. The layout is keyed per
+  // view (storageKey = `hq-fleet-grid:<view>`), so switching views never inherits the
+  // previous view's positions: a recommended view with no saved layout always renders
+  // as the balanced shelf-pack default. (Drags persist back to this view's key below.)
+  const idKey = items.map((i) => i.id).join(",");
   useEffect(() => {
+    let saved: Record<string, Box> | null = null;
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
-      if (saved && typeof saved === "object") setLayout((d) => ({ ...d, ...saved }));
+      const raw = JSON.parse(localStorage.getItem(storageKey) || "null");
+      if (raw && typeof raw === "object") saved = raw as Record<string, Box>;
     } catch {
       /* ignore */
     }
-  }, [storageKey]);
-
-  // any item missing a box (first paint / new id) gets its default
-  const idKey = items.map((i) => i.id).join(",");
-  useEffect(() => {
-    setLayout((cur) => {
-      const ids = new Set(items.map((i) => i.id));
-      const def = defaults(items);
-      let added = false;
-      let removed = false;
-      const next: Record<string, Box> = {};
-      for (const k of Object.keys(cur)) {
-        if (ids.has(k)) next[k] = cur[k];
-        else removed = true; // a card left the board → drop its box
-      }
-      for (const it of items)
-        if (!next[it.id]) {
-          next[it.id] = def[it.id];
-          added = true;
-        }
-      if (!added && !removed) return cur;
-      // on removal, snap the survivors up into the gap; persist either way.
-      const result = removed ? compact(next, items) : next;
-      persist(result);
-      return result;
-    });
+    const next = defaults(items);
+    if (saved) for (const it of items) if (saved[it.id]) next[it.id] = saved[it.id];
+    setLayout(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idKey]);
+  }, [storageKey, idKey]);
 
   // reset hook — re-subscribes per render so it always sees the live items
   useEffect(() => {

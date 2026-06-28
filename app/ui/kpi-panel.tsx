@@ -145,16 +145,15 @@ export default function KpiPanel() {
     };
   }, [open, catalog.length, setCatalog]);
 
-  // Registry shows only metrics USABLE in the current scope: with a single session
-  // selected everything applies (session metrics + global fleet ones); otherwise
-  // (all / a project / multi-session) the session-only metrics are hidden.
+  // Surface EVERY metric regardless of scope. A session-only metric dropped in a
+  // non-session scope renders as a "pick one session" placeholder card (lib/fleet
+  // na()), so there's no reason to hide it from the library — the board instructs
+  // the user to pick a session. (single still drives the subtitle copy below.)
   const single = sessions.length === 1;
   const groups = useMemo(() => {
     const query = q.trim().toLowerCase();
     const hit = catalog.filter(
-      (d) =>
-        (single || d.scopes.includes("fleet")) &&
-        (!query || `${d.label} ${d.group} ${d.kind}`.toLowerCase().includes(query)),
+      (d) => !query || `${d.label} ${d.group} ${d.kind}`.toLowerCase().includes(query),
     );
     const map = new Map<string, MetricDef[]>();
     for (const d of hit) {
@@ -163,7 +162,7 @@ export default function KpiPanel() {
       map.set(d.group, arr);
     }
     return [...map.entries()];
-  }, [catalog, q, single]);
+  }, [catalog, q]);
 
   return (
     <AppPanel rootId="kpi-panel-root" open={open} onClose={() => setOpen(false)} widthClass="sm:w-[min(360px,40vw)]">
