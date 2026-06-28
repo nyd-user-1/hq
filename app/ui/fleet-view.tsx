@@ -536,7 +536,7 @@ function HoverMenu({ label, labelClass, align = "left", children }: { label: Rea
 function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: string | null; onPick: (p: string | null) => void }) {
   // default label reads "hq" (the home project) when no filter is set, per request.
   return (
-    <HoverMenu label={value ?? "hq"} labelClass={`cursor-pointer rounded px-1 py-0.5 text-xs transition-colors ${value ? "text-zinc-200 hover:text-white" : "text-zinc-300 hover:text-white"}`}>
+    <HoverMenu label={value ?? "hq"} labelClass={`cursor-pointer font-mono text-xs transition-colors ${value ? "text-zinc-200 hover:text-white" : "text-zinc-300 hover:text-white"}`}>
       <div className="scrollbar-none flex max-h-[340px] w-56 flex-col overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
         <button type="button" onClick={() => onPick(null)} className={`rounded px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-zinc-900 ${value ? "text-zinc-300" : "text-green-400"}`}>
           All projects
@@ -682,11 +682,12 @@ export default function FleetView() {
       {/* header */}
       <div className={`mb-1 ${colWrap}`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800 pb-3">
-          <span className="flex shrink-0 items-center gap-1.5">
-            <span className="size-2 rounded-full bg-green-500/60" title="fleet dashboard — live data" />
+          {/* dot + project, grouped tight like the terminal header (no "·" between
+              project and session id) */}
+          <span className="flex shrink-0 items-center gap-1.5 text-xs">
+            <span className="size-2 rounded-full bg-green-500" title="fleet dashboard — live data" />
+            <ProjectMenu projects={projects} value={project} onPick={setProject} />
           </span>
-          <ProjectMenu projects={projects} value={project} onPick={setProject} />
-          <span className="text-zinc-700">·</span>
           <SessionMenu currentId={sessions[0] ?? null} selected={sessions} onToggle={toggleSession} onClear={() => setSessions([])}>
             <span
               title="sessions — hover to select one or many"
