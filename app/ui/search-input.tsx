@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { SPECTRUM_STOPS } from "@/app/ui/search-corpus";
 
 // Search-as-you-type. Debounced keystrokes drive router.replace so the server page
 // re-runs the search while this input (client state) keeps focus and value. The
@@ -134,7 +133,7 @@ export default function SearchInput({
             clear();
           }
         }}
-        className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2.5 pl-9 pr-9 text-[15px] text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+        className="w-full rounded-md border border-zinc-800 bg-zinc-900 py-1.5 pl-9 pr-9 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
       />
       {isPending && value && (
         <span
@@ -165,13 +164,6 @@ export default function SearchInput({
           </svg>
         </button>
       )}
-      {/* Signature: the corpus spectrum this search spans — a hairline that lights
-          on focus. The stops ARE the corpora, left→right in rail order. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-3 -bottom-px h-px opacity-30 transition-opacity duration-300 group-focus-within:opacity-90"
-        style={{ background: `linear-gradient(90deg, ${SPECTRUM_STOPS.join(", ")})` }}
-      />
     </div>
   );
 }

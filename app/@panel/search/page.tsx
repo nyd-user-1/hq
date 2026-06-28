@@ -29,8 +29,8 @@ import { getProjectSessions } from "@/lib/projects";
 import { getTodos } from "@/lib/todo";
 import { COMPONENTS, readComponentSource } from "@/lib/components";
 import { CORPORA, type Corpus } from "@/app/ui/search-corpus";
-import SearchCorpusRail from "@/app/ui/search-corpus-rail";
 import SearchResultGroup from "@/app/ui/search-result-group";
+import SearchScopeFilter from "@/app/ui/search-scope-filter";
 
 // Shared chrome for the in-panel readers (file/component/commit/todo/project/
 // skill/doc): the "← results" back link + a click-to-copy path header over a
@@ -515,7 +515,6 @@ export default async function Search({
   const PER_CORPUS = 10;
   type Group = { corpus: Corpus; hits: SearchHit[]; count: string; drill?: string };
   const groups: Group[] = [];
-  const counts: Record<string, string> = {};
   let building = false;
 
   if (!q) {
@@ -533,7 +532,6 @@ export default async function Search({
       if (!hits.length) continue;
       const capped = hits.length > PER_CORPUS;
       const label = capped ? `${PER_CORPUS}+` : String(hits.length);
-      counts[c.scope] = label;
       groups.push({
         corpus: c,
         hits: hits.slice(0, PER_CORPUS),
@@ -549,7 +547,6 @@ export default async function Search({
       const { hits, building: b } = search(q, scope, sortDir, 200);
       building = b;
       if (hits.length) {
-        counts[c.scope] = String(hits.length);
         groups.push({ corpus: c, hits, count: String(hits.length) });
       }
     }
@@ -566,6 +563,7 @@ export default async function Search({
       <div className="flex flex-col gap-2">
         <SearchInput initial={q} scope={scope} sort={sortDir} pins={tail} />
         <div className="flex items-center gap-2 px-0.5">
+          <SearchScopeFilter scope={scope} q={q} sort={sortDir} pins={tail} />
           {summary && (
             <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
               {summary}
@@ -592,39 +590,27 @@ export default async function Search({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
-        <div className="scrollbar-none shrink-0 sm:w-36 sm:overflow-y-auto">
-          <SearchCorpusRail
-            active={scope}
-            counts={counts}
-            dimEmpty={!!q && scope === "all"}
+      <div className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
+        {groups.map((g) => (
+          <SearchResultGroup
+            key={g.corpus.scope}
+            corpus={g.corpus}
+            hits={g.hits}
             q={q}
-            sort={sortDir}
-            pins={tail}
+            back={back}
+            count={g.count}
+            drillHref={g.drill}
           />
-        </div>
-        <div className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
-          {groups.map((g) => (
-            <SearchResultGroup
-              key={g.corpus.scope}
-              corpus={g.corpus}
-              hits={g.hits}
-              q={q}
-              back={back}
-              count={g.count}
-              drillHref={g.drill}
-            />
-          ))}
-          {groups.length === 0 && (
-            <p className="text-xs text-zinc-600">
-              {building
-                ? "building the search index (first time, ~10s)…"
-                : q
-                  ? "no matches"
-                  : "nothing here yet"}
-            </p>
-          )}
-        </div>
+        ))}
+        {groups.length === 0 && (
+          <p className="text-xs text-zinc-600">
+            {building
+              ? "building the search index (first time, ~10s)…"
+              : q
+                ? "no matches"
+                : "nothing here yet"}
+          </p>
+        )}
       </div>
 
       <p className="font-mono text-[10px] text-zinc-600">
