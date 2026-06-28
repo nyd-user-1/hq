@@ -570,7 +570,18 @@ function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: stri
   const [name, setName] = useState("");
   return (
     <HoverMenu
-      label={<span title="saved views" className="text-[11px]">{current}</span>}
+      label={
+        <span title="saved views" className="flex items-center gap-1.5 text-[11px]">
+          {current}
+          {/* lucide circle-ellipsis — the saved-views menu affordance */}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M17 12h.01" />
+            <path d="M12 12h.01" />
+            <path d="M7 12h.01" />
+          </svg>
+        </span>
+      }
       labelClass="cursor-pointer rounded px-1 py-0.5 lowercase text-zinc-500 transition-colors hover:text-zinc-300"
       align="left"
     >
