@@ -111,6 +111,17 @@ export default function FleetGrid({ items, storageKey }: { items: GridItem[]; st
   const [drag, setDrag] = useState<{ id: string; mode: "move" | "resize"; box: Box } | null>(null);
   const startRef = useRef<{ px: number; py: number; box: Box; minW: number } | null>(null);
 
+  const persist = useCallback(
+    (l: Record<string, Box>) => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(l));
+      } catch {
+        /* ignore */
+      }
+    },
+    [storageKey],
+  );
+
   // load saved layout once; merge over defaults so a new widget id still places
   useEffect(() => {
     try {
@@ -172,17 +183,6 @@ export default function FleetGrid({ items, storageKey }: { items: GridItem[]; st
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  const persist = useCallback(
-    (l: Record<string, Box>) => {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(l));
-      } catch {
-        /* ignore */
-      }
-    },
-    [storageKey],
-  );
 
   const onDown = (e: React.PointerEvent, id: string, mode: "move" | "resize") => {
     e.preventDefault();
