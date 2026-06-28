@@ -1,9 +1,11 @@
 // THE FLEET DASHBOARD reader. A METRIC REGISTRY: a catalog of named metrics, each
-// tagged with a chart SHAPE (stat / series / ranking / distribution) and the scopes
-// it supports (fleet = everything · session = one transcript). The board renders a
-// user-chosen subset (drag from the kpi-panel library); this file computes the data
-// for whatever ids it's asked for, at the requested scope. Everything is real, read
-// straight off disk via the existing lib readers — no synthetic data.
+// tagged with a chart SHAPE (stat / series / area / ranking / distribution /
+// scatter / heatmap / …) and the scopes it supports (fleet = everything · session =
+// one transcript). The board renders a user-chosen subset (drag from the kpi-panel
+// library); this file computes the data for whatever ids it's asked for, at the
+// requested scope. SCOPE = an optional project filter + a set of selected sessions
+// (0 = all, 1 = session grain, >1 = a multi-session aggregate). Everything is real,
+// read straight off disk via the existing lib readers — no synthetic data.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -19,30 +21,34 @@ const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ── the shape vocabulary ─────────────────────────────────────────────────────
-// Semantic accent — green=healthy/cheap · amber=premium/warning · red=critical ·
-// orange=burn (hq's Claude accent) · blue=usage/volume. Defaults to neutral zinc.
 export type Tone = "blue" | "orange" | "green" | "amber" | "red" | "zinc";
 export type Stat = { label: string; value: string; sub?: string; tone?: Tone };
 export type Shape =
-  | { kind: "series"; title: string; points: number[]; capL: string; capR: string; tone?: Tone }
+  | { kind: "series"; title: string; points: number[]; capL: string; capR: string; labels?: string[]; tone?: Tone }
+  | { kind: "area"; title: string; points: number[]; capL: string; capR: string; labels?: string[]; tone?: Tone }
   | { kind: "ranking"; title: string; rows: { name: string; pct: number; value: string }[]; tone?: Tone }
-  | { kind: "distribution"; title: string; bins: { h: number; hot: boolean }[]; xL: string; xR: string; tone?: Tone };
+  | { kind: "distribution"; title: string; bins: { h: number; hot: boolean }[]; xL: string; xR: string; tone?: Tone }
+  | { kind: "scatter"; title: string; pts: { x: number; y: number; label?: string }[]; xL: string; yL: string; tone?: Tone }
+  | { kind: "heatmap"; title: string; grid: number[][]; rows: string[]; cols: string[]; tone?: Tone };
 
-export type MetricKind = "stat" | "series" | "ranking" | "distribution";
+// Full kind superset — the catalog labels cards by these; renderers exist for the
+// implemented ones, the rest are reserved for the chart-zoo expansion.
+export type MetricKind =
+  | "stat" | "series" | "area" | "ranking" | "distribution" | "histogram"
+  | "scatter" | "heatmap" | "stacked" | "table" | "timeline" | "calendar"
+  | "box" | "sparkline";
+
 export type MetricScope = "fleet" | "session";
 
-// A catalog entry — what the kpi-panel library lists + drags onto the board.
 export type MetricDef = {
   id: string;
   label: string;
   group: string;
   kind: MetricKind;
-  scopes: MetricScope[]; // which scopes can compute it
+  scopes: MetricScope[];
   desc?: string;
 };
 
-// A resolved metric: the def + its computed payload (a Stat for kind "stat",
-// otherwise a Shape). `na` ⇒ the metric can't compute at the current scope.
 export type MetricItem = {
   id: string;
   label: string;
@@ -52,20 +58,18 @@ export type MetricItem = {
 };
 
 export type FleetMetrics = {
-  scope: { level: "fleet" | "session"; id: string | null; label: string };
+  scope: { level: "fleet" | "session"; id: string | null; label: string; project: string | null; sessions: string[] };
   items: MetricItem[];
   catalog: MetricDef[];
+  projects: string[]; // for the projects picker
   generatedAt: number;
 };
 
-// ── format helpers (server-side, so the client just paints) ──────────────────
+// ── format helpers ───────────────────────────────────────────────────────────
 const fmtTok = (n: number): string =>
-  n >= 1e9
-    ? (n / 1e9).toFixed(1) + "B"
-    : n >= 1e6
-      ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M"
-      : n >= 1e3
-        ? Math.round(n / 1e3) + "k"
+  n >= 1e9 ? (n / 1e9).toFixed(1) + "B"
+    : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M"
+      : n >= 1e3 ? Math.round(n / 1e3) + "k"
         : String(Math.round(n));
 const fmtUsd = (n: number): string => "$" + (n >= 100 ? String(Math.round(n)) : n.toFixed(n >= 10 ? 1 : 2));
 const fmtUsdK = (n: number): string => (n >= 1000 ? "$" + (n / 1000).toFixed(1) + "k" : fmtUsd(n));
@@ -78,8 +82,6 @@ const fmtDur = (ms: number): string => {
   return h < 24 ? h.toFixed(1) + "h" : Math.round(h / 24) + "d";
 };
 
-// Bucket values into fixed thresholds → distribution bars (normalized 0..100,
-// `hot` flags the over-threshold bins so the client can warm-tint them).
 function bucket(values: number[], edges: number[], hotFrom: number): { h: number; hot: boolean }[] {
   const counts = new Array<number>(edges.length + 1).fill(0);
   for (const v of values) {
@@ -91,23 +93,10 @@ function bucket(values: number[], edges: number[], hotFrom: number): { h: number
   return counts.map((c, i) => ({ h: Math.round((c / max) * 100), hot: i >= hotFrom }));
 }
 
-const ranking = (title: string, rows: { name: string; pct: number; value: string }[], tone?: Tone): Shape => ({
-  kind: "ranking",
-  title,
-  rows,
-  tone,
-});
-const series = (title: string, points: number[], capL: string, capR: string, tone?: Tone): Shape => ({
-  kind: "series",
-  title,
-  points,
-  capL,
-  capR,
-  tone,
-});
+const ranking = (title: string, rows: { name: string; pct: number; value: string }[], tone?: Tone): Shape => ({ kind: "ranking", title, rows, tone });
+const series = (title: string, points: number[], capL: string, capR: string, tone?: Tone, labels?: string[]): Shape => ({ kind: "series", title, points, capL, capR, tone, labels });
+const area = (title: string, points: number[], capL: string, capR: string, tone?: Tone, labels?: string[]): Shape => ({ kind: "area", title, points, capL, capR, tone, labels });
 
-// All transcript mtimes (a cheap stat-only dir walk) — powers the sessions/day &
-// /week series without head-reading any file.
 function sessionMtimes(): number[] {
   const out: number[] = [];
   let dirs: fs.Dirent[];
@@ -138,8 +127,6 @@ function sessionMtimes(): number[] {
   return out;
 }
 
-// Count entries in a ~/.claude subdir whose mtime is older than `days` (a proxy
-// for "untouched / unused"). Best-effort: missing dir ⇒ 0.
 function idleCount(sub: string, days: number): { idle: number; total: number } {
   const root = path.join(os.homedir(), ".claude", sub);
   const cutoff = Date.now() - days * DAY_MS;
@@ -161,20 +148,21 @@ function idleCount(sub: string, days: number): { idle: number; total: number } {
   return { idle, total };
 }
 
-// ── fleet context — everything, computed once per request ────────────────────
+// ── fleet context ────────────────────────────────────────────────────────────
 type FleetCtx = ReturnType<typeof fleetCtx>;
-function fleetCtx() {
+function fleetCtx(project: string | null) {
   const now = Date.now();
   const states = getUsageStates();
   const week = states.meters.find((m) => m.key === "weekAll");
   const spend = getSpend();
-  const set = getSessions(150);
+  const allSet = getSessions(150);
+  // project filter: the set-derived metrics scope to one project when chosen.
+  const set = project ? allSet.filter((s) => s.project === project) : allSet;
   const active7d = set.filter((s) => now - s.lastActive < 7 * DAY_MS);
   const todos = getTodos();
   const life = lifetimeByProject();
-  const dayTok = tokensByDay(14);
 
-  // weekly token series — 8 weeks from the daily series
+  const dayTok = tokensByDay(14);
   const dayTok56 = tokensByDay(56);
   const weekTok: number[] = [];
   for (let w = 0; w < 8; w++) {
@@ -183,25 +171,28 @@ function fleetCtx() {
     weekTok.push(sum);
   }
 
-  // sessions per day / week from transcript mtimes
   const mtimes = sessionMtimes();
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
   const day0 = dayStart.getTime() - 13 * DAY_MS;
+  const week0 = dayStart.getTime() - 55 * DAY_MS;
   const sessDay = new Array<number>(14).fill(0);
   const sessWeek = new Array<number>(8).fill(0);
-  const week0 = dayStart.getTime() - 55 * DAY_MS;
+  // activity heatmap — weekday (0=Sun) × hour (0..23)
+  const heat: number[][] = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
   for (const t of mtimes) {
     const di = Math.floor((t - day0) / DAY_MS);
     if (di >= 0 && di < 14) sessDay[di]++;
     const wi = Math.floor((t - week0) / (7 * DAY_MS));
     if (wi >= 0 && wi < 8) sessWeek[wi]++;
+    const d = new Date(t);
+    heat[d.getDay()][d.getHours()]++;
   }
 
-  return { now, states, week, spend, set, active7d, todos, life, dayTok, weekTok, sessDay, sessWeek };
+  return { now, states, week, spend, set, active7d, todos, life, dayTok, weekTok, sessDay, sessWeek, heat };
 }
 
-// ── session context — one transcript ─────────────────────────────────────────
+// ── session context ──────────────────────────────────────────────────────────
 type SessionCtx = ReturnType<typeof sessionCtx>;
 function sessionCtx(id: string) {
   const tl = timelineFor(id, 100_000, true);
@@ -216,7 +207,6 @@ function sessionCtx(id: string) {
   const gaps: number[] = [];
   for (let i = 1; i < stamps.length; i++) gaps.push(stamps[i] - stamps[i - 1]);
 
-  // burn curve pinned to the real context size (see the long note kept from v1).
   let cum = 0;
   const rawCum = turns.map((t) => (cum += t.turnTokens ?? 0));
   const total = rawCum[rawCum.length - 1] || 0;
@@ -227,7 +217,7 @@ function sessionCtx(id: string) {
   const to200 = burn.findIndex((b) => b >= CLIFF);
   const turnsAbove200 = burn.filter((b) => b >= CLIFF).length;
   const timeTo200 = to200 >= 0 && stamps.length > to200 ? stamps[to200] - stamps[0] : -1;
-  const preloaded = burn[0] ?? 0; // turn-1 context = what was loaded before real work
+  const preloaded = burn[0] ?? 0;
 
   const heavy = turns
     .map((t, i) => ({ i, tok: t.turnTokens ?? 0 }))
@@ -239,27 +229,10 @@ function sessionCtx(id: string) {
   for (const it of tl.items) if (it.kind === "tool") toolCounts.set(it.tool, (toolCounts.get(it.tool) ?? 0) + 1);
   const tools = [...toolCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  return {
-    tl,
-    turns,
-    userN,
-    claudeN,
-    ctx,
-    ctxLeft,
-    spanMs,
-    gaps,
-    burn,
-    to200,
-    turnsAbove200,
-    timeTo200,
-    preloaded,
-    heavy,
-    tools,
-    toolCounts,
-  };
+  return { tl, turns, userN, claudeN, ctx, ctxLeft, spanMs, gaps, burn, to200, turnsAbove200, timeTo200, preloaded, heavy, tools, toolCounts };
 }
 
-// ── the registry — def + per-scope compute ───────────────────────────────────
+// ── the registry ─────────────────────────────────────────────────────────────
 type Compute = {
   def: MetricDef;
   fleet?: (c: FleetCtx) => Stat | Shape;
@@ -269,217 +242,61 @@ type Compute = {
 const ctxTone = (left: number): Tone => (left > 25 ? "green" : left > 10 ? "amber" : "red");
 
 const REGISTRY: Compute[] = [
-  // ── Overview (fleet stats) ──
-  {
-    def: { id: "f_sessions", label: "Sessions", group: "Overview", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "sessions", value: String(c.active7d.length), sub: "recent", tone: "green" }),
-  },
-  {
-    def: { id: "f_tokens", label: "Tokens · week", group: "Overview", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "tokens", value: fmtTok(c.week?.rawTokens ?? 0), sub: fmtUsdK(c.spend.week) + " wk", tone: "blue" }),
-  },
-  {
-    def: { id: "f_turns", label: "Turns · week", group: "Overview", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "turns", value: String(c.week?.messages ?? 0), sub: "wk" }),
-  },
-  {
-    def: { id: "f_projects", label: "Projects", group: "Overview", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "projects", value: String(c.life.length), sub: "all-time" }),
-  },
-  {
-    def: { id: "f_spend", label: "Spend · week", group: "Overview", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "spend", value: fmtUsdK(c.spend.week), sub: fmtUsd(c.spend.today) + " today", tone: "orange" }),
-  },
-  {
-    def: { id: "f_cliff", label: "Past 200k cliff", group: "Overview", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "ctx cliff", value: String(c.set.filter((s) => s.contextTokens > CLIFF).length), sub: "past 200k", tone: "amber" }),
-  },
+  // ── Overview ──
+  { def: { id: "f_sessions", label: "Sessions", group: "Overview", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "sessions", value: String(c.active7d.length), sub: "recent", tone: "green" }) },
+  { def: { id: "f_tokens", label: "Tokens · week", group: "Overview", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "tokens", value: fmtTok(c.week?.rawTokens ?? 0), sub: fmtUsdK(c.spend.week) + " wk", tone: "blue" }) },
+  { def: { id: "f_turns", label: "Turns · week", group: "Overview", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "turns", value: String(c.week?.messages ?? 0), sub: "wk" }) },
+  { def: { id: "f_projects", label: "Projects", group: "Overview", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "projects", value: String(c.life.length), sub: "all-time" }) },
+  { def: { id: "f_spend", label: "Spend · week", group: "Overview", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "spend", value: fmtUsdK(c.spend.week), sub: fmtUsd(c.spend.today) + " today", tone: "orange" }) },
+  { def: { id: "f_cliff", label: "Past 200k cliff", group: "Overview", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "ctx cliff", value: String(c.set.filter((s) => s.contextTokens > CLIFF).length), sub: "past 200k", tone: "amber" }) },
 
   // ── Tokens ──
-  {
-    def: { id: "tokens_day", label: "Tokens / day", group: "Tokens", kind: "series", scopes: ["fleet"] },
-    fleet: (c) => series("Tokens / day", c.dayTok.map((d) => d.weighted), c.dayTok[0]?.day ?? "", "today", "blue"),
-  },
-  {
-    def: { id: "tokens_week", label: "Tokens / week", group: "Tokens", kind: "series", scopes: ["fleet"] },
-    fleet: (c) => series("Tokens / week · 8wk", c.weekTok, "8wk ago", "this wk", "blue"),
-  },
-  {
-    def: { id: "tokens_by_project", label: "Tokens by project", group: "Tokens", kind: "ranking", scopes: ["fleet"] },
-    fleet: (c) => {
-      const top = c.life.slice(0, 10);
-      const max = top[0]?.weighted || 1;
-      return ranking("Tokens by project · all-time", top.map((p) => ({ name: p.project, pct: Math.round((p.weighted / max) * 100), value: fmtTok(p.weighted) })), "blue");
-    },
-  },
-  {
-    def: { id: "tokens_per_session", label: "Tokens by session", group: "Tokens", kind: "ranking", scopes: ["fleet"] },
-    fleet: (c) => {
-      const top = [...c.set].sort((a, b) => b.weightedTokens - a.weightedTokens).slice(0, 10);
-      const max = top[0]?.weightedTokens || 1;
-      return ranking("Tokens by session · top", top.map((s) => ({ name: s.id.slice(0, 8), pct: Math.round((s.weightedTokens / max) * 100), value: fmtTok(s.weightedTokens) })), "blue");
-    },
-  },
+  { def: { id: "tokens_day", label: "Tokens / day", group: "Tokens", kind: "series", scopes: ["fleet"] }, fleet: (c) => series("Tokens / day", c.dayTok.map((d) => d.weighted), c.dayTok[0]?.day ?? "", "today", "blue", c.dayTok.map((d) => d.day)) },
+  { def: { id: "tokens_day_area", label: "Tokens / day (area)", group: "Tokens", kind: "area", scopes: ["fleet"] }, fleet: (c) => area("Tokens / day", c.dayTok.map((d) => d.weighted), c.dayTok[0]?.day ?? "", "today", "blue", c.dayTok.map((d) => d.day)) },
+  { def: { id: "tokens_week", label: "Tokens / week", group: "Tokens", kind: "series", scopes: ["fleet"] }, fleet: (c) => series("Tokens / week · 8wk", c.weekTok, "8wk ago", "this wk", "blue") },
+  { def: { id: "tokens_by_project", label: "Tokens by project", group: "Tokens", kind: "ranking", scopes: ["fleet"] }, fleet: (c) => { const top = c.life.slice(0, 10); const max = top[0]?.weighted || 1; return ranking("Tokens by project · all-time", top.map((p) => ({ name: p.project, pct: Math.round((p.weighted / max) * 100), value: fmtTok(p.weighted) })), "blue"); } },
+  { def: { id: "tokens_per_session", label: "Tokens by session", group: "Tokens", kind: "ranking", scopes: ["fleet"] }, fleet: (c) => { const top = [...c.set].sort((a, b) => b.weightedTokens - a.weightedTokens).slice(0, 10); const max = top[0]?.weightedTokens || 1; return ranking("Tokens by session · top", top.map((s) => ({ name: s.id.slice(0, 8), pct: Math.round((s.weightedTokens / max) * 100), value: fmtTok(s.weightedTokens) })), "blue"); } },
 
   // ── Sessions ──
-  {
-    def: { id: "sessions_day", label: "Sessions / day", group: "Sessions", kind: "series", scopes: ["fleet"] },
-    fleet: (c) => series("Sessions / day · 14d", c.sessDay, "14d ago", "today", "green"),
-  },
-  {
-    def: { id: "sessions_week", label: "Sessions / week", group: "Sessions", kind: "series", scopes: ["fleet"] },
-    fleet: (c) => series("Sessions / week · 8wk", c.sessWeek, "8wk ago", "this wk", "green"),
-  },
-  {
-    def: { id: "sessions_by_context", label: "Sessions by context", group: "Sessions", kind: "distribution", scopes: ["fleet"] },
-    fleet: (c) => ({
-      kind: "distribution",
-      title: "Sessions by context · 200k cliff",
-      bins: bucket(c.set.map((s) => s.contextTokens), [50_000, 100_000, CLIFF, 400_000], 2),
-      xL: "<50k",
-      xR: "400k+",
-      tone: "blue",
-    }),
-  },
-  {
-    def: { id: "sessions_per_project", label: "Sessions by project", group: "Sessions", kind: "ranking", scopes: ["fleet"] },
-    fleet: (c) => {
-      const top = [...c.life].sort((a, b) => b.sessions - a.sessions).slice(0, 10);
-      const max = top[0]?.sessions || 1;
-      return ranking("Sessions by project · all-time", top.map((p) => ({ name: p.project, pct: Math.round((p.sessions / max) * 100), value: String(p.sessions) })), "green");
-    },
-  },
-  {
-    def: { id: "model_usage", label: "Model usage", group: "Sessions", kind: "ranking", scopes: ["fleet", "session"] },
-    fleet: (c) => {
-      const rows = c.states.byModel.slice(0, 5).map((m) => ({ name: m.tier, pct: Math.round(m.pct), value: Math.round(m.pct) + "%" }));
-      return ranking("Model usage · wk", rows, "orange");
-    },
-    session: (c) => ranking("Model · this session", [{ name: c.tl.model || "—", pct: 100, value: "100%" }], "orange"),
-  },
+  { def: { id: "sessions_day", label: "Sessions / day", group: "Sessions", kind: "series", scopes: ["fleet"] }, fleet: (c) => series("Sessions / day · 14d", c.sessDay, "14d ago", "today", "green") },
+  { def: { id: "sessions_week", label: "Sessions / week", group: "Sessions", kind: "series", scopes: ["fleet"] }, fleet: (c) => series("Sessions / week · 8wk", c.sessWeek, "8wk ago", "this wk", "green") },
+  { def: { id: "sessions_by_context", label: "Sessions by context", group: "Sessions", kind: "distribution", scopes: ["fleet"] }, fleet: (c) => ({ kind: "distribution", title: "Sessions by context · 200k cliff", bins: bucket(c.set.map((s) => s.contextTokens), [50_000, 100_000, CLIFF, 400_000], 2), xL: "<50k", xR: "400k+", tone: "blue" }) },
+  { def: { id: "sessions_per_project", label: "Sessions by project", group: "Sessions", kind: "ranking", scopes: ["fleet"] }, fleet: (c) => { const top = [...c.life].sort((a, b) => b.sessions - a.sessions).slice(0, 10); const max = top[0]?.sessions || 1; return ranking("Sessions by project · all-time", top.map((p) => ({ name: p.project, pct: Math.round((p.sessions / max) * 100), value: String(p.sessions) })), "green"); } },
+  { def: { id: "turns_vs_tokens", label: "Turns × tokens", group: "Sessions", kind: "scatter", scopes: ["fleet"] }, fleet: (c) => ({ kind: "scatter", title: "Turns × tokens · per session", pts: c.set.slice(0, 120).map((s) => ({ x: s.messages, y: s.weightedTokens, label: s.id.slice(0, 8) })), xL: "turns", yL: "tokens", tone: "blue" }) },
+  { def: { id: "activity_heatmap", label: "Activity heatmap", group: "Sessions", kind: "heatmap", scopes: ["fleet"] }, fleet: (c) => ({ kind: "heatmap", title: "Activity · weekday × hour", grid: c.heat, rows: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], cols: Array.from({ length: 24 }, (_, h) => (h % 6 === 0 ? String(h) : "")), tone: "blue" }) },
+  { def: { id: "model_usage", label: "Model usage", group: "Sessions", kind: "ranking", scopes: ["fleet", "session"] }, fleet: (c) => ranking("Model usage · wk", c.states.byModel.slice(0, 5).map((m) => ({ name: m.tier, pct: Math.round(m.pct), value: Math.round(m.pct) + "%" })), "orange"), session: (c) => ranking("Model · this session", [{ name: c.tl.model || "—", pct: 100, value: "100%" }], "orange") },
 
-  // ── Session detail (one transcript) ──
-  {
-    def: { id: "s_turns", label: "Turns", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "turns", value: String(c.turns.length), sub: `${c.userN} you · ${c.claudeN} claude` }),
-  },
-  {
-    def: { id: "s_user", label: "User inputs", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "user inputs", value: String(c.userN), sub: "you" }),
-  },
-  {
-    def: { id: "s_claude", label: "Claude outputs", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "claude outputs", value: String(c.claudeN), sub: "replies" }),
-  },
-  {
-    def: { id: "s_ctx_left", label: "Context left", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "ctx left", value: `${c.ctxLeft}%`, sub: c.ctx > CLIFF ? "past cliff" : fmtTok(c.ctx), tone: ctxTone(c.ctxLeft) }),
-  },
-  {
-    def: { id: "s_tok_per_turn", label: "Tokens / turn", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "tok / turn", value: fmtTok(c.claudeN ? c.ctx / c.claudeN : 0), sub: "avg" }),
-  },
-  {
-    def: { id: "s_total_time", label: "Total session time", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "session", value: c.spanMs ? fmtDur(c.spanMs) : "—", sub: c.tl.model || "" }),
-  },
-  {
-    def: { id: "s_to200_turn", label: "Turns to 200k", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "to 200k", value: c.to200 >= 0 ? `turn ${c.to200 + 1}` : "—", sub: c.to200 >= 0 ? "" : "under cliff", tone: c.to200 >= 0 ? "amber" : "zinc" }),
-  },
-  {
-    def: { id: "s_time_to_200", label: "Time to 200k", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "time to 200k", value: c.timeTo200 >= 0 ? fmtDur(c.timeTo200) : "—", sub: c.timeTo200 >= 0 ? "" : "under cliff", tone: c.timeTo200 >= 0 ? "amber" : "zinc" }),
-  },
-  {
-    def: { id: "s_turns_above_200", label: "Turns above 200k", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "turns >200k", value: String(c.turnsAbove200), sub: "premium zone", tone: c.turnsAbove200 ? "amber" : "zinc" }),
-  },
-  {
-    def: { id: "s_ctx_50", label: "Context vs 50%", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "ctx vs 50%", value: fmtTok(c.ctx), sub: c.ctx > HALF ? "above 50%" : "below 50%", tone: c.ctx > HALF ? "amber" : "green" }),
-  },
-  {
-    def: { id: "s_preloaded", label: "Pre-loaded context", group: "Session", kind: "stat", scopes: ["session"] },
-    session: (c) => ({ label: "preloaded ctx", value: fmtTok(c.preloaded), sub: "turn 1 cold load" }),
-  },
-  {
-    def: { id: "context_burn", label: "Context burn", group: "Session", kind: "series", scopes: ["session"] },
-    session: (c) => series("Context burn · this session", c.burn, "start", fmtTok(c.ctx), "orange"),
-  },
-  {
-    def: { id: "tokens_by_turn", label: "Tokens by turn", group: "Session", kind: "ranking", scopes: ["session"] },
-    session: (c) => {
-      const max = c.heavy[0]?.tok || 1;
-      return ranking("Tokens by turn · top", c.heavy.map((t) => ({ name: `turn ${t.i + 1}`, pct: Math.round((t.tok / max) * 100), value: fmtTok(t.tok) })), "blue");
-    },
-  },
-  {
-    def: { id: "time_per_turn", label: "Time per turn", group: "Session", kind: "distribution", scopes: ["session"] },
-    session: (c) => ({
-      kind: "distribution",
-      title: "Time per turn",
-      bins: bucket(c.gaps, [5_000, 15_000, 30_000, 60_000, 120_000, 300_000], 4),
-      xL: "<5s",
-      xR: "5m+",
-      tone: "blue",
-    }),
-  },
-  {
-    def: { id: "tools_used", label: "Tools used", group: "Session", kind: "ranking", scopes: ["session"] },
-    session: (c) => {
-      const max = c.tools[0]?.[1] || 1;
-      return ranking("Tools used · this session", c.tools.map(([name, n]) => ({ name, pct: Math.round((n / max) * 100), value: String(n) })), "blue");
-    },
-  },
+  // ── Session detail ──
+  { def: { id: "s_turns", label: "Turns", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "turns", value: String(c.turns.length), sub: `${c.userN} you · ${c.claudeN} claude` }) },
+  { def: { id: "s_user", label: "User inputs", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "user inputs", value: String(c.userN), sub: "you" }) },
+  { def: { id: "s_claude", label: "Claude outputs", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "claude outputs", value: String(c.claudeN), sub: "replies" }) },
+  { def: { id: "s_ctx_left", label: "Context left", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "ctx left", value: `${c.ctxLeft}%`, sub: c.ctx > CLIFF ? "past cliff" : fmtTok(c.ctx), tone: ctxTone(c.ctxLeft) }) },
+  { def: { id: "s_tok_per_turn", label: "Tokens / turn", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "tok / turn", value: fmtTok(c.claudeN ? c.ctx / c.claudeN : 0), sub: "avg" }) },
+  { def: { id: "s_total_time", label: "Total session time", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "session", value: c.spanMs ? fmtDur(c.spanMs) : "—", sub: c.tl.model || "" }) },
+  { def: { id: "s_to200_turn", label: "Turns to 200k", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "to 200k", value: c.to200 >= 0 ? `turn ${c.to200 + 1}` : "—", sub: c.to200 >= 0 ? "" : "under cliff", tone: c.to200 >= 0 ? "amber" : "zinc" }) },
+  { def: { id: "s_time_to_200", label: "Time to 200k", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "time to 200k", value: c.timeTo200 >= 0 ? fmtDur(c.timeTo200) : "—", sub: c.timeTo200 >= 0 ? "" : "under cliff", tone: c.timeTo200 >= 0 ? "amber" : "zinc" }) },
+  { def: { id: "s_turns_above_200", label: "Turns above 200k", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "turns >200k", value: String(c.turnsAbove200), sub: "premium zone", tone: c.turnsAbove200 ? "amber" : "zinc" }) },
+  { def: { id: "s_ctx_50", label: "Context vs 50%", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "ctx vs 50%", value: fmtTok(c.ctx), sub: c.ctx > HALF ? "above 50%" : "below 50%", tone: c.ctx > HALF ? "amber" : "green" }) },
+  { def: { id: "s_preloaded", label: "Pre-loaded context", group: "Session", kind: "stat", scopes: ["session"] }, session: (c) => ({ label: "preloaded ctx", value: fmtTok(c.preloaded), sub: "turn 1 cold load" }) },
+  { def: { id: "context_burn", label: "Context burn", group: "Session", kind: "area", scopes: ["session"] }, session: (c) => area("Context burn · this session", c.burn, "start", fmtTok(c.ctx), "orange") },
+  { def: { id: "tokens_by_turn", label: "Tokens by turn", group: "Session", kind: "ranking", scopes: ["session"] }, session: (c) => { const max = c.heavy[0]?.tok || 1; return ranking("Tokens by turn · top", c.heavy.map((t) => ({ name: `turn ${t.i + 1}`, pct: Math.round((t.tok / max) * 100), value: fmtTok(t.tok) })), "blue"); } },
+  { def: { id: "time_per_turn", label: "Time per turn", group: "Session", kind: "distribution", scopes: ["session"] }, session: (c) => ({ kind: "distribution", title: "Time per turn", bins: bucket(c.gaps, [5_000, 15_000, 30_000, 60_000, 120_000, 300_000], 4), xL: "<5s", xR: "5m+", tone: "blue" }) },
+  { def: { id: "tools_used", label: "Tools used", group: "Session", kind: "ranking", scopes: ["session"] }, session: (c) => { const max = c.tools[0]?.[1] || 1; return ranking("Tools used · this session", c.tools.map(([name, n]) => ({ name, pct: Math.round((n / max) * 100), value: String(n) })), "blue"); } },
 
   // ── Todos ──
-  {
-    def: { id: "todos_total", label: "Todos · total", group: "Todos", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "todos", value: String(c.todos.length), sub: "total" }),
-  },
-  {
-    def: { id: "todos_pending", label: "Todos · pending", group: "Todos", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => {
-      const p = c.todos.filter((t) => !t.done).length;
-      return { label: "todos", value: String(p), sub: "pending", tone: p ? "amber" : "zinc" };
-    },
-  },
-  {
-    def: { id: "todos_done", label: "Todos · completed", group: "Todos", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => ({ label: "todos done", value: String(c.todos.filter((t) => t.done).length), sub: "completed", tone: "green" }),
-  },
-  {
-    def: { id: "todos_avg_age", label: "Todos · avg age", group: "Todos", kind: "stat", scopes: ["fleet"] },
-    fleet: (c) => {
-      const pend = c.todos.filter((t) => !t.done && t.createdAt);
-      const avg = pend.length ? pend.reduce((a, t) => a + (c.now - t.createdAt), 0) / pend.length : 0;
-      return { label: "todo avg age", value: avg ? fmtDur(avg) : "—", sub: "pending" };
-    },
-  },
+  { def: { id: "todos_total", label: "Todos · total", group: "Todos", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "todos", value: String(c.todos.length), sub: "total" }) },
+  { def: { id: "todos_pending", label: "Todos · pending", group: "Todos", kind: "stat", scopes: ["fleet"] }, fleet: (c) => { const p = c.todos.filter((t) => !t.done).length; return { label: "todos", value: String(p), sub: "pending", tone: p ? "amber" : "zinc" }; } },
+  { def: { id: "todos_done", label: "Todos · completed", group: "Todos", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "todos done", value: String(c.todos.filter((t) => t.done).length), sub: "completed", tone: "green" }) },
+  { def: { id: "todos_avg_age", label: "Todos · avg age", group: "Todos", kind: "stat", scopes: ["fleet"] }, fleet: (c) => { const pend = c.todos.filter((t) => !t.done && t.createdAt); const avg = pend.length ? pend.reduce((a, t) => a + (c.now - t.createdAt), 0) / pend.length : 0; return { label: "todo avg age", value: avg ? fmtDur(avg) : "—", sub: "pending" }; } },
 
-  // ── Hygiene (idle = untouched >30d, a proxy for unused) ──
-  {
-    def: { id: "skills_idle", label: "Skills idle >30d", group: "Hygiene", kind: "stat", scopes: ["fleet"] },
-    fleet: () => {
-      const { idle, total } = idleCount("skills", 30);
-      return { label: "skills idle", value: String(idle), sub: `of ${total} · >30d`, tone: idle ? "amber" : "zinc" };
-    },
-  },
-  {
-    def: { id: "plugins_idle", label: "Plugins idle >30d", group: "Hygiene", kind: "stat", scopes: ["fleet"] },
-    fleet: () => {
-      const { idle, total } = idleCount(path.join("plugins", "cache"), 30);
-      return { label: "plugins idle", value: String(idle), sub: `of ${total} · >30d`, tone: idle ? "amber" : "zinc" };
-    },
-  },
+  // ── Hygiene ──
+  { def: { id: "skills_idle", label: "Skills idle >30d", group: "Hygiene", kind: "stat", scopes: ["fleet"] }, fleet: () => { const { idle, total } = idleCount("skills", 30); return { label: "skills idle", value: String(idle), sub: `of ${total} · >30d`, tone: idle ? "amber" : "zinc" }; } },
+  { def: { id: "plugins_idle", label: "Plugins idle >30d", group: "Hygiene", kind: "stat", scopes: ["fleet"] }, fleet: () => { const { idle, total } = idleCount(path.join("plugins", "cache"), 30); return { label: "plugins idle", value: String(idle), sub: `of ${total} · >30d`, tone: idle ? "amber" : "zinc" }; } },
 ];
 
 const BY_ID = new Map(REGISTRY.map((r) => [r.def.id, r]));
 export const METRIC_CATALOG: MetricDef[] = REGISTRY.map((r) => r.def);
 
-// The board's first-run set — mirrors the original fixed dashboard so nothing
-// regresses on a cold open (no saved layout yet).
 export const DEFAULT_METRICS: string[] = [
   "f_sessions", "f_tokens", "f_turns", "f_projects", "todos_pending", "f_cliff",
   "tokens_day", "tokens_by_project", "sessions_by_context", "model_usage",
@@ -488,7 +305,7 @@ export const DEFAULT_METRICS: string[] = [
 const na = (def: MetricDef, why: string): MetricItem =>
   def.kind === "stat"
     ? { id: def.id, label: def.label, kind: "stat", stat: { label: def.label.toLowerCase(), value: "—", sub: why, tone: "zinc" } }
-    : { id: def.id, label: def.label, kind: def.kind, shape: ranking(def.label, [], "zinc") as Shape };
+    : { id: def.id, label: def.label, kind: def.kind, shape: ranking(def.label, []) as Shape };
 
 function pack(def: MetricDef, payload: Stat | Shape): MetricItem {
   return def.kind === "stat"
@@ -497,24 +314,22 @@ function pack(def: MetricDef, payload: Stat | Shape): MetricItem {
 }
 
 // ── scope-aware entry point ──────────────────────────────────────────────────
-// `id` present ⇒ session grain; absent ⇒ fleet grain. `ids` = the placed metrics
-// to compute (defaults to DEFAULT_METRICS). Fleet-scope metrics still compute
-// fleet-wide when a session is selected (they're global); session-only metrics
-// read "—" until a session is picked.
-export function fleetMetrics(id: string | null, ids?: string[]): FleetMetrics {
+export function fleetMetrics(opts: { project?: string | null; sessions?: string[]; ids?: string[] } = {}): FleetMetrics {
   const now = Date.now();
-  const want = (ids && ids.length ? ids : DEFAULT_METRICS).filter((m) => BY_ID.has(m));
+  const project = opts.project ?? null;
+  const sessions = (opts.sessions ?? []).filter(Boolean);
+  const single = sessions.length === 1 ? sessions[0] : null; // session grain only with exactly one
+  const want = (opts.ids && opts.ids.length ? opts.ids : DEFAULT_METRICS).filter((m) => BY_ID.has(m));
 
-  // build only the ctx we need
   const needFleet = want.some((m) => {
     const r = BY_ID.get(m)!;
-    return !(id && r.session); // anything not served by the session compute uses fleet ctx
+    return !(single && r.session);
   });
-  const fc = needFleet ? fleetCtx() : null;
+  const fc = needFleet ? fleetCtx(project) : null;
   let sc: SessionCtx | null = null;
-  if (id) {
+  if (single) {
     try {
-      sc = sessionCtx(id);
+      sc = sessionCtx(single);
     } catch {
       sc = null;
     }
@@ -522,23 +337,25 @@ export function fleetMetrics(id: string | null, ids?: string[]): FleetMetrics {
 
   const items: MetricItem[] = want.map((m) => {
     const r = BY_ID.get(m)!;
-    if (id && r.session && sc) return pack(r.def, r.session(sc, id));
+    if (single && r.session && sc) return pack(r.def, r.session(sc, single));
     if (r.fleet && fc) return pack(r.def, r.fleet(fc));
-    if (id && r.session && !sc) return na(r.def, "no transcript");
-    return na(r.def, "pick a session");
+    if (single && r.session && !sc) return na(r.def, "no transcript");
+    return na(r.def, single ? "fleet only" : "pick one session");
   });
 
-  let label = "all sessions · 14d";
+  // project list for the picker — lifetime project names, biggest first
+  const projects = lifetimeByProject().map((p) => p.project);
+
   let level: "fleet" | "session" = "fleet";
-  if (id && sc) {
+  let label = project ? project : "all projects";
+  if (single && sc) {
     level = "session";
-    label = `${sc.tl.project} · ${id.slice(0, 8)}`;
-  } else if (id) {
-    level = "session";
-    label = id.slice(0, 8);
+    label = `${sc.tl.project} · ${single.slice(0, 8)}`;
+  } else if (sessions.length > 1) {
+    label = `${sessions.length} sessions`;
   }
 
-  return { scope: { level, id: id || null, label }, items, catalog: METRIC_CATALOG, generatedAt: now };
+  return { scope: { level, id: single, label, project, sessions }, items, catalog: METRIC_CATALOG, projects, generatedAt: now };
 }
 
 export type { SessionInfo };

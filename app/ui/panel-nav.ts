@@ -75,7 +75,8 @@ export type ToggleKey =
   | "mcp"
   | "agents"
   | "outputStyles"
-  | "permissions";
+  | "permissions"
+  | "kpis";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey }
@@ -131,6 +132,7 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Guardrails", href: "/guardrails" },
       { title: "Savings", href: "/savings" },
       { title: "Memory Audit", href: "/audit" },
+      { title: "KPIs", toggle: "kpis" },
       { title: "Planner", toggle: "planner" },
       { title: "API", toggle: "api" },
       { title: "Firehose", href: "/firehose" },

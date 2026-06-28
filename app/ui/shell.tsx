@@ -18,6 +18,8 @@ import { PluginsProvider } from "@/app/ui/plugins-state";
 import PluginsPanel from "@/app/ui/plugins-panel";
 import { SkillsProvider } from "@/app/ui/skills-state";
 import SkillsPanel from "@/app/ui/skills-panel";
+import { KpiProvider } from "@/app/ui/kpi-state";
+import KpiPanel from "@/app/ui/kpi-panel";
 import { CommandsProvider } from "@/app/ui/commands-state";
 import CommandsPanel from "@/app/ui/commands-panel";
 import { HooksProvider } from "@/app/ui/hooks-state";
@@ -66,6 +68,7 @@ export default async function Shell({
       <ApiProvider>
       <PluginsProvider>
       <SkillsProvider>
+      <KpiProvider>
       <CommandsProvider>
       <HooksProvider>
       <McpProvider>
@@ -90,7 +93,7 @@ export default async function Shell({
             {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
                 remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
             <TerminalRow initialFocus={focusDefault}>
-              <Boundary label="terminal.tsx" lead={<SidebarToggle />}>
+              <Boundary label="terminal-1" copyText="app/ui/terminal.tsx" lead={<SidebarToggle />}>
                 <Suspense
                   fallback={
                     <p className="text-sm text-zinc-600">loading terminal…</p>
@@ -137,6 +140,9 @@ export default async function Shell({
           {/* The independent Preview panel's own portal root — the in-app live
               view of a project's dev server, open alongside everything else. */}
           <div id="preview-panel-root" className="flex h-full min-w-0" />
+          {/* The KPI library panel — the Fleet dashboard's metric catalog, on the
+              skills-panel push-in standard. */}
+          <div id="kpi-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -148,6 +154,7 @@ export default async function Shell({
       <ApiPanel />
       <PluginsPanel />
       <SkillsPanel />
+      <KpiPanel />
       <CommandsPanel />
       <HooksPanel />
       <McpPanel />
@@ -164,6 +171,7 @@ export default async function Shell({
       </McpProvider>
       </HooksProvider>
       </CommandsProvider>
+      </KpiProvider>
       </SkillsProvider>
       </PluginsProvider>
       </ApiProvider>

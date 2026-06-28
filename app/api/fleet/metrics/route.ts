@@ -10,8 +10,10 @@ export const dynamic = "force-dynamic";
 // items feed the board. Polled ~8s; re-fetched immediately on a scope/placed change.
 export function GET(req: Request) {
   const u = new URL(req.url).searchParams;
-  const id = u.get("session");
+  const project = u.get("project");
+  const sessionsParam = u.get("sessions") || u.get("session"); // accept the legacy singular
+  const sessions = sessionsParam ? sessionsParam.split(",").filter(Boolean) : undefined;
   const idsParam = u.get("ids");
   const ids = idsParam ? idsParam.split(",").filter(Boolean) : undefined;
-  return NextResponse.json(fleetMetrics(id || null, ids));
+  return NextResponse.json(fleetMetrics({ project: project || null, sessions, ids }));
 }

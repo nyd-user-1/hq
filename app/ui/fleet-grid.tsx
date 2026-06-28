@@ -241,9 +241,9 @@ export default function FleetGrid({ items, storageKey }: { items: GridItem[]; st
         className="pointer-events-none absolute inset-0 rounded"
         style={{
           backgroundImage:
-            "linear-gradient(to right, rgba(113,113,122,0.10) 1px, transparent 1px), linear-gradient(to bottom, rgba(113,113,122,0.07) 1px, transparent 1px)",
+            "linear-gradient(to right, rgba(113,113,122,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(113,113,122,0.11) 1px, transparent 1px)",
           backgroundSize: `${cellW}px ${ROW}px`,
-          opacity: cellW ? (drag ? 1 : 0.55) : 0,
+          opacity: cellW ? (drag ? 1 : 0.7) : 0,
         }}
       />
       {items.map((it) => {

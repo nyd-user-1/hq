@@ -11,6 +11,7 @@ import { useTextEditor } from "@/app/ui/text-editor-state";
 import { usePlugins } from "@/app/ui/plugins-state";
 import { usePreview } from "@/app/ui/preview-state";
 import { useSkills } from "@/app/ui/skills-state";
+import { useKpis } from "@/app/ui/kpi-state";
 import { useCommands } from "@/app/ui/commands-state";
 import { useHooks } from "@/app/ui/hooks-state";
 import { useMcp } from "@/app/ui/mcp-state";
@@ -41,6 +42,7 @@ export default function PanelNav() {
     agents: useAgents(),
     outputStyles: useOutputStyles(),
     permissions: usePermissions(),
+    kpis: useKpis(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">

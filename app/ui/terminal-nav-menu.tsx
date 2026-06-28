@@ -17,6 +17,7 @@ import { useMcp } from "@/app/ui/mcp-state";
 import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { usePermissions } from "@/app/ui/permissions-state";
+import { useKpis } from "@/app/ui/kpi-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 type Leaf = NavLeaf | { title: string; href: string };
@@ -72,6 +73,7 @@ export default function TerminalNavMenu({
     agents: useAgents(),
     outputStyles: useOutputStyles(),
     permissions: usePermissions(),
+    kpis: useKpis(),
   };
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";

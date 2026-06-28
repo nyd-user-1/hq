@@ -38,11 +38,20 @@ export default function SessionMenu({
   currentId,
   children,
   onPick,
+  selected,
+  onToggle,
+  onClear,
 }: {
   currentId: string | null;
   children: React.ReactNode;
   onPick?: (id: string | null) => void;
+  // multi-select mode (the Fleet board): presence of onToggle flips the menu to
+  // multi — clicking a row toggles membership, the menu stays open, "All" clears.
+  selected?: string[];
+  onToggle?: (id: string) => void;
+  onClear?: () => void;
 }) {
+  const multi = !!onToggle;
   const router = useRouter();
   const params = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -90,6 +99,10 @@ export default function SessionMenu({
   }, []);
 
   const switchTo = (id: string) => {
+    if (onToggle) {
+      onToggle(id); // multi-select: toggle membership, keep the menu open
+      return;
+    }
     if (onPick) {
       onPick(id); // scope a consumer (Fleet board), don't touch the terminal
       close();
@@ -142,20 +155,23 @@ export default function SessionMenu({
           </div>
 
           <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto">
-            {onPick && !q && (
+            {(onPick || multi) && !q && (
               <button
                 type="button"
                 onClick={() => {
-                  onPick(null);
-                  close();
+                  if (multi) onClear?.();
+                  else {
+                    onPick?.(null);
+                    close();
+                  }
                 }}
-                title="dashboard-wide — all sessions"
+                title="all sessions — dashboard-wide"
                 className={`flex w-full items-center gap-2 border-b border-zinc-800/70 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-zinc-900 ${
-                  currentId ? "text-zinc-300" : "text-green-400"
+                  (multi ? selected?.length : currentId) ? "text-zinc-300" : "text-green-400"
                 }`}
               >
-                <span className={`size-1.5 shrink-0 rounded-full ${currentId ? "bg-zinc-600" : "bg-green-400"}`} />
-                All sessions · dashboard-wide
+                <span className={`size-1.5 shrink-0 rounded-full ${(multi ? selected?.length : currentId) ? "bg-zinc-600" : "bg-green-400"}`} />
+                All sessions{multi ? " · clear" : " · dashboard-wide"}
               </button>
             )}
             {sessions === null ? (
@@ -166,18 +182,19 @@ export default function SessionMenu({
               matches.map((s, i) => {
                 const slot = slotOf(params, s.id); // which terminal it's open in (0 = none)
                 const open = slot > 0;
-                const canAdd = !onPick && !open && getTerminals(params).length < MAX_TERMINALS;
+                const picked = !!selected?.includes(s.id);
+                const canAdd = !onPick && !multi && !open && getTerminals(params).length < MAX_TERMINALS;
                 const dot = s.live ? "bg-green-400 animate-pulse" : s.active ? "bg-green-400" : "bg-zinc-600";
                 return (
                   <div
                     key={s.id}
                     ref={slot === 1 ? currentRef : undefined}
-                    className={`group relative ${i > 0 ? "border-t border-zinc-800/70" : ""} ${open ? "bg-zinc-900/60" : ""}`}
+                    className={`group relative ${i > 0 ? "border-t border-zinc-800/70" : ""} ${picked ? "bg-green-500/5" : open ? "bg-zinc-900/60" : ""}`}
                   >
                     <button
                       type="button"
                       onClick={() => switchTo(s.id)}
-                      title={onPick ? `scope dashboard to ${s.id.slice(0, 8)}` : open ? `in terminal ${slot}` : `switch terminal 1 to ${s.id.slice(0, 8)}`}
+                      title={multi ? `${picked ? "deselect" : "select"} ${s.id.slice(0, 8)}` : onPick ? `scope dashboard to ${s.id.slice(0, 8)}` : open ? `in terminal ${slot}` : `switch terminal 1 to ${s.id.slice(0, 8)}`}
                       className="flex w-full items-start gap-2 px-2.5 py-2 text-left transition-colors hover:bg-zinc-900"
                     >
                       <span className={`mt-1 size-1.5 shrink-0 rounded-full ${dot}`} />
@@ -187,6 +204,11 @@ export default function SessionMenu({
                           <span className={`min-w-0 flex-1 truncate text-[11px] ${open ? "text-zinc-100" : "text-zinc-300"}`}>
                             {s.customTitle || s.title}
                           </span>
+                          {multi && picked && (
+                            <span className="shrink-0 font-mono text-[11px] text-green-400" title="selected">
+                              ✓
+                            </span>
+                          )}
                           {open && (
                             <span
                               className="shrink-0 font-mono text-[11px] tabular-nums text-green-400"

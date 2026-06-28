@@ -1,17 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import AppPanel from "@/app/ui/app-panel";
+import Boundary from "@/app/ui/boundary";
+import { useKpis } from "@/app/ui/kpi-state";
 import type { MetricDef, MetricKind } from "@/lib/fleet";
 
-// THE KPI LIBRARY — a browsable catalog of every metric, modelled on plugins-panel
-// (search + grouped cards). Each card is tagged with its chart SHAPE and is both
-// DRAGGABLE onto the Fleet board and click-to-add. Dragging sets the metric id on
-// the dataTransfer ("application/hq-metric"); the board's drop handler places it.
-// A metric already on the board reads "on board" and the card flips to remove.
+// hq's KPI library — the metric catalog, on the skills-panel.tsx push-in STANDARD
+// (a root-level slide-in via AppPanel). Each metric is a card tagged with its chart
+// SHAPE and is DRAGGABLE onto the Fleet board (dataTransfer "application/hq-metric")
+// or click-to-add. The registry only shows metrics USABLE in the current scope
+// (session-only metrics hide unless exactly one session is selected). Card design
+// kept from the original (interior-panel.tsx); state shared via kpi-state.
 
-const DRAG_TYPE = "application/hq-metric";
+export const DRAG_TYPE = "application/hq-metric";
 
-// A tiny glyph per shape so the card reads at a glance (matches the chart kinds).
 function ShapeGlyph({ kind }: { kind: MetricKind }) {
   const common = { width: 13, height: 13, viewBox: "0 0 24 24", "aria-hidden": true } as const;
   if (kind === "series")
@@ -28,13 +31,44 @@ function ShapeGlyph({ kind }: { kind: MetricKind }) {
         <rect x="3" y="17" width="7" height="3" rx="1.5" />
       </svg>
     );
-  if (kind === "distribution")
+  if (kind === "distribution" || kind === "histogram")
     return (
       <svg {...common} fill="currentColor">
         <rect x="3" y="11" width="3.5" height="9" rx="1" />
         <rect x="8.5" y="6" width="3.5" height="14" rx="1" />
         <rect x="14" y="13" width="3.5" height="7" rx="1" />
         <rect x="19.5" y="9" width="3.5" height="11" rx="1" />
+      </svg>
+    );
+  if (kind === "area")
+    return (
+      <svg {...common} fill="currentColor" opacity="0.9">
+        <path d="M3 18l5-7 4 3 5-8 4 5v8H3z" />
+      </svg>
+    );
+  if (kind === "scatter")
+    return (
+      <svg {...common} fill="currentColor">
+        <circle cx="6" cy="16" r="1.6" /><circle cx="11" cy="9" r="1.6" /><circle cx="15" cy="14" r="1.6" /><circle cx="19" cy="6" r="1.6" /><circle cx="9" cy="18" r="1.6" />
+      </svg>
+    );
+  if (kind === "heatmap")
+    return (
+      <svg {...common} fill="currentColor">
+        {[0, 1, 2].map((r) => [0, 1, 2].map((c) => <rect key={`${r}${c}`} x={3 + c * 6.5} y={3 + r * 6.5} width="5.5" height="5.5" rx="1" opacity={0.3 + ((r + c) % 3) * 0.3} />))}
+      </svg>
+    );
+  if (kind === "stacked")
+    return (
+      <svg {...common} fill="currentColor">
+        <rect x="3" y="13" width="18" height="3.5" rx="1" opacity="0.5" />
+        <rect x="3" y="8.5" width="18" height="3.5" rx="1" opacity="0.8" />
+      </svg>
+    );
+  if (kind === "table")
+    return (
+      <svg {...common} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M9 4v16" />
       </svg>
     );
   // stat
@@ -92,25 +126,35 @@ function MetricCard({
   );
 }
 
-export default function KpiPanel({
-  catalog,
-  placed,
-  onAdd,
-  onRemove,
-  onClose,
-}: {
-  catalog: MetricDef[];
-  placed: string[];
-  onAdd: (id: string) => void;
-  onRemove: (id: string) => void;
-  onClose: () => void;
-}) {
+export default function KpiPanel() {
+  const { open, setOpen, catalog, setCatalog, placed, addMetric, removeMetric, sessions } = useKpis();
   const [q, setQ] = useState("");
-  const placedSet = useMemo(() => new Set(placed), [placed]);
+  const placedSet = useMemo(() => new Set(placed ?? []), [placed]);
 
+  // self-sufficient: if opened before the board has fetched, pull the catalog.
+  useEffect(() => {
+    if (!open || catalog.length) return;
+    let live = true;
+    fetch("/api/fleet/metrics", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => live && Array.isArray(d?.catalog) && setCatalog(d.catalog))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [open, catalog.length, setCatalog]);
+
+  // Registry shows only metrics USABLE in the current scope: with a single session
+  // selected everything applies (session metrics + global fleet ones); otherwise
+  // (all / a project / multi-session) the session-only metrics are hidden.
+  const single = sessions.length === 1;
   const groups = useMemo(() => {
     const query = q.trim().toLowerCase();
-    const hit = catalog.filter((d) => !query || `${d.label} ${d.group} ${d.kind}`.toLowerCase().includes(query));
+    const hit = catalog.filter(
+      (d) =>
+        (single || d.scopes.includes("fleet")) &&
+        (!query || `${d.label} ${d.group} ${d.kind}`.toLowerCase().includes(query)),
+    );
     const map = new Map<string, MetricDef[]>();
     for (const d of hit) {
       const arr = map.get(d.group) ?? [];
@@ -118,52 +162,39 @@ export default function KpiPanel({
       map.set(d.group, arr);
     }
     return [...map.entries()];
-  }, [catalog, q]);
+  }, [catalog, q, single]);
 
   return (
-    <div className="flex w-64 shrink-0 flex-col rounded-lg border border-zinc-800 bg-zinc-950/60">
-      <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-2.5 py-2">
-        <span className="text-[11px] uppercase tracking-widest text-zinc-300">Metrics</span>
-        <button
-          type="button"
-          onClick={onClose}
-          title="close library"
-          className="ml-auto rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <div className="shrink-0 px-2.5 py-2">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search metrics…"
-          className="w-full rounded-md bg-zinc-900 px-2.5 py-1.5 font-mono text-[11px] text-zinc-100 outline-none placeholder:text-zinc-600"
-        />
-      </div>
-      <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
-        {groups.length === 0 ? (
-          <p className="px-1 py-3 text-[10px] text-zinc-600">no matches</p>
-        ) : (
-          groups.map(([group, defs]) => (
-            <div key={group} className="mb-3">
-              <div className="mb-1.5 px-0.5 text-[9px] uppercase tracking-widest text-zinc-600">{group}</div>
-              <div className="flex flex-col gap-1.5">
-                {defs.map((d) => (
-                  <MetricCard key={d.id} def={d} on={placedSet.has(d.id)} onAdd={onAdd} onRemove={onRemove} />
-                ))}
+    <AppPanel rootId="kpi-panel-root" open={open} onClose={() => setOpen(false)} widthClass="sm:w-[min(360px,40vw)]">
+      <Boundary label="kpi-panel.tsx">
+        <div className="flex shrink-0 items-center gap-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={catalog.length ? `Search ${catalog.length} metrics…` : "Search metrics…"}
+            className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+          />
+        </div>
+        <p className="shrink-0 text-[10px] text-zinc-600">
+          {single ? "session scope" : sessions.length ? `${sessions.length} sessions` : "all / project scope"} — drag a card onto the board, or click to add.
+        </p>
+        <div className="scrollbar-none -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+          {groups.length === 0 ? (
+            <p className="px-1 py-3 text-[10px] text-zinc-600">no metrics</p>
+          ) : (
+            groups.map(([group, defs]) => (
+              <div key={group} className="mb-3">
+                <div className="mb-1.5 px-0.5 text-[9px] uppercase tracking-widest text-zinc-600">{group}</div>
+                <div className="flex flex-col gap-1.5">
+                  {defs.map((d) => (
+                    <MetricCard key={d.id} def={d} on={placedSet.has(d.id)} onAdd={addMetric} onRemove={removeMetric} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
-        )}
-      </div>
-      <div className="shrink-0 border-t border-zinc-800 px-2.5 py-1.5 text-[9px] text-zinc-600">
-        drag a card onto the board, or click to add
-      </div>
-    </div>
+            ))
+          )}
+        </div>
+      </Boundary>
+    </AppPanel>
   );
 }
-
-export { DRAG_TYPE };
