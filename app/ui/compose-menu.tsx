@@ -138,7 +138,7 @@ export default function ComposeMenu({
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 z-30 mb-1.5 flex max-h-[340px] w-[274px] flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
+        <div style={{ width: 274 }} className="absolute bottom-full left-0 z-30 mb-1.5 flex max-h-[340px] flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
           {/* ── ROOT — Attach · Todo ▸ · Command ▸ ── */}
           {step === "root" && (
             <div className="flex flex-col p-1">
