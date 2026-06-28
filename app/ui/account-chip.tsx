@@ -80,6 +80,11 @@ const IconChevronRight = () => (
     <path d="m9 18 6-6-6-6" />
   </svg>
 );
+const IconCheck = () => (
+  <svg {...SVG} width={13} height={13}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
 // lucide FlaskConical — marks the EXPERIMENTAL channel-in path (see lib/channel-mode.ts).
 const IconFlask = () => (
   <svg {...SVG}>
@@ -122,6 +127,10 @@ export default function AccountChip() {
   // proven warm-REPL "MVP" path. This menu is the ONLY way to turn it on, so it
   // can never engage by accident. Synced from /api/channel-mode when the menu opens.
   const [channelOn, setChannelOn] = useState(false);
+  // Language sub-menu: expands inline under the Language row. Selection is
+  // local-only for now (presentational, like the rest of this menu).
+  const [langOpen, setLangOpen] = useState(false);
+  const [lang, setLang] = useState("English");
   const ref = useRef<HTMLDivElement>(null);
 
   // Pull the live toggle state each time the menu opens (cheap; reflects edits made
@@ -204,7 +213,41 @@ export default function AccountChip() {
               {channelOn ? "On" : "Off"}
             </span>
           </button>
-          <MenuRow icon={<IconGlobe />} label="Language" chevron onClick={close} />
+          {/* Language expands inline into its options. The chevron rotates down
+              when open; the current pick shows on the right. Selecting one sets
+              the local state and collapses the sub-menu (menu stays open). */}
+          <button
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded={langOpen}
+            onClick={() => setLangOpen((v) => !v)}
+            className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <span className="shrink-0 text-zinc-400"><IconGlobe /></span>
+            <span className="min-w-0 flex-1 truncate">Language</span>
+            <span className="shrink-0 text-zinc-600">{lang}</span>
+            <span className={`shrink-0 text-zinc-600 transition-transform ${langOpen ? "rotate-90" : ""}`}>
+              <IconChevronRight />
+            </span>
+          </button>
+          {langOpen && (
+            <div role="menu" className="ml-[1.0625rem] border-l border-zinc-800 pl-1">
+              {["English", "Español"].map((l) => (
+                <button
+                  key={l}
+                  role="menuitemradio"
+                  aria-checked={lang === l}
+                  onClick={() => { setLang(l); setLangOpen(false); }}
+                  className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+                >
+                  <span className="shrink-0 text-emerald-400">
+                    {lang === l ? <IconCheck /> : <span className="inline-block size-[13px]" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{l}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <MenuRow icon={<IconHelp />} label="Get help" onClick={close} />
           <div className="my-1 h-px bg-zinc-800" />
           <MenuRow icon={<IconPlans />} label="View all plans" onClick={close} />
