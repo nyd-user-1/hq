@@ -11,7 +11,7 @@ export const SEARCH_ITEM: NavItem = { title: "Search", href: "/search" };
 // The "panels" dropdown. `href` = the first tab (where the panel opens);
 // `routes` = every tab under it, for active-state + the open-panel test.
 export const PANELS: { title: string; href: string; routes: string[] }[] = [
-  { title: "Activity", href: "/projects", routes: ["/projects", "/todo", "/components", "/shipped"] },
+  { title: "Activity", href: "/projects", routes: ["/projects", "/todo", "/components"] },
   { title: "Metrics", href: "/metrics", routes: ["/metrics", "/calls", "/guardrails", "/savings", "/audit"] },
   { title: "Console", href: "/tree", routes: ["/tree", "/routines", "/firehose"] },
   { title: "Compose", href: "/compose", routes: ["/compose"] },
@@ -37,7 +37,6 @@ export const NAV_TARGETS: NavTarget[] = [
   { title: "Projects", href: "/projects", group: "Activity", keywords: "repos repositories code" },
   { title: "To Do", href: "/todo", group: "Activity", keywords: "tasks todos queue" },
   { title: "Components", href: "/components", group: "Activity", keywords: "design system library ui registry" },
-  { title: "Shipped", href: "/shipped", group: "Activity", keywords: "commits git diff feed changelog" },
   // Metrics
   { title: "Usage", href: "/metrics", group: "Metrics", keywords: "tokens usage burn meter context cost rate limit" },
   { title: "Calls", href: "/calls", group: "Metrics", keywords: "ledger dollars cost spend api" },
@@ -92,7 +91,6 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Projects", href: "/projects" },
       { title: "To Do", href: "/todo" },
       { title: "Components", href: "/components" },
-      { title: "Shipped", href: "/shipped" },
       { title: "Changelog", toggle: "changelog" },
       { title: "Compose", href: "/compose" },
       { title: "Text", toggle: "text" },

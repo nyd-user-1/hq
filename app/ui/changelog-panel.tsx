@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
 import SearchField from "@/app/ui/search-field";
+import CopyText from "@/app/ui/copy-text";
 import { useChangelog } from "@/app/ui/changelog-state";
 import type { Change } from "@/lib/changelog";
 
@@ -27,6 +28,17 @@ function fmtWhen(at: number): string {
 
 type Diff = { repo: string; sha: string; text: string };
 
+// Copy glyph (HQ has no icon lib): the standard two-rectangle clipboard mark.
+// Inherits currentColor, so CopyText's emerald flash applies on copy.
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
 // Color a `git show` line by its diff role (same vocabulary as Shipped's reader).
 function DiffLine({ line }: { line: string }) {
   let cls = "text-zinc-400";
@@ -48,7 +60,7 @@ function DiffLine({ line }: { line: string }) {
 // the Plugins panel: AppPanel chrome, a live /api/changelog fetch. A card opens
 // that commit's diff IN the panel (drill-down + back), never leaving it.
 export default function ChangelogPanel() {
-  const { open, setOpen } = useChangelog();
+  const { open, setOpen, target, clearTarget } = useChangelog();
   const [items, setItems] = useState<Change[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -56,7 +68,8 @@ export default function ChangelogPanel() {
   const [repo, setRepo] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
-  const [sel, setSel] = useState<{ repo: string; sha: string } | null>(null);
+  // repo optional: a chat-reply sha (CommitLink) drills by sha alone → findCommit.
+  const [sel, setSel] = useState<{ repo?: string; sha: string } | null>(null);
   const [diff, setDiff] = useState<Diff | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
 
@@ -79,7 +92,17 @@ export default function ChangelogPanel() {
     if (open) load();
   }, [open, load]);
 
-  // Drill-down: fetch the selected commit's diff.
+  // Deep-link: a chat-reply sha (CommitLink.openAt) opens the panel AND drills
+  // straight to that commit. Consume the target once so it doesn't re-fire.
+  useEffect(() => {
+    if (open && target) {
+      setSel({ sha: target.sha, repo: target.repo });
+      clearTarget();
+    }
+  }, [open, target, clearTarget]);
+
+  // Drill-down: fetch the selected commit's diff (by repo+sha from a card, or by
+  // sha alone from a chat-reply link → findCommit resolves the repo).
   useEffect(() => {
     if (!sel) {
       setDiff(null);
@@ -88,7 +111,10 @@ export default function ChangelogPanel() {
     let cancelled = false;
     setDiffLoading(true);
     setDiff(null);
-    fetch(`/api/changelog?repo=${encodeURIComponent(sel.repo)}&commit=${encodeURIComponent(sel.sha)}`, { cache: "no-store" })
+    const qs = sel.repo
+      ? `repo=${encodeURIComponent(sel.repo)}&commit=${encodeURIComponent(sel.sha)}`
+      : `commit=${encodeURIComponent(sel.sha)}`;
+    fetch(`/api/changelog?${qs}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => !cancelled && setDiff(d.diff ?? null))
       .catch(() => !cancelled && setDiff(null))
@@ -142,8 +168,18 @@ export default function ChangelogPanel() {
                 ← changelog
               </button>
               <span className="min-w-0 truncate font-mono text-xs text-zinc-500">
-                {sel.repo} · {sel.sha}
+                {(sel.repo ?? diff?.repo) ? `${sel.repo ?? diff?.repo} · ` : ""}
+                {sel.sha}
               </span>
+              {diff && (
+                <CopyText
+                  text={diff.text}
+                  title="Copy full commit diff"
+                  className="ml-auto shrink-0 text-zinc-500 hover:text-zinc-300"
+                >
+                  <CopyIcon />
+                </CopyText>
+              )}
             </div>
             <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-2 overflow-auto border-t border-zinc-800 pt-3 font-mono text-[11px] leading-snug">
               {diffLoading ? (
