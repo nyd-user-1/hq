@@ -76,7 +76,8 @@ export type ToggleKey =
   | "agents"
   | "outputStyles"
   | "permissions"
-  | "kpis";
+  | "kpis"
+  | "changelog";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey }
@@ -92,6 +93,7 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "To Do", href: "/todo" },
       { title: "Components", href: "/components" },
       { title: "Shipped", href: "/shipped" },
+      { title: "Changelog", toggle: "changelog" },
       { title: "Compose", href: "/compose" },
       { title: "Text", toggle: "text" },
       { title: "Tree", href: "/tree" },

@@ -18,6 +18,7 @@ import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { usePermissions } from "@/app/ui/permissions-state";
 import { useKpis } from "@/app/ui/kpi-state";
+import { useChangelog } from "@/app/ui/changelog-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 type Leaf = NavLeaf | { title: string; href: string };
@@ -74,6 +75,7 @@ export default function TerminalNavMenu({
     outputStyles: useOutputStyles(),
     permissions: usePermissions(),
     kpis: useKpis(),
+    changelog: useChangelog(),
   };
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";

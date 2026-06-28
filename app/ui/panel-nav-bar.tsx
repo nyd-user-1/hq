@@ -18,6 +18,7 @@ import { useMcp } from "@/app/ui/mcp-state";
 import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { usePermissions } from "@/app/ui/permissions-state";
+import { useChangelog } from "@/app/ui/changelog-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -43,6 +44,7 @@ export default function PanelNav() {
     outputStyles: useOutputStyles(),
     permissions: usePermissions(),
     kpis: useKpis(),
+    changelog: useChangelog(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">

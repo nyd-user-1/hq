@@ -35,6 +35,8 @@ import { PermissionsProvider } from "@/app/ui/permissions-state";
 import PermissionsPanel from "@/app/ui/permissions-panel";
 import { PreviewProvider } from "@/app/ui/preview-state";
 import PreviewPanel from "@/app/ui/preview-panel";
+import { ChangelogProvider } from "@/app/ui/changelog-state";
+import ChangelogPanel from "@/app/ui/changelog-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
@@ -77,6 +79,7 @@ export default async function Shell({
       <OutputStylesProvider>
       <PermissionsProvider>
       <PreviewProvider>
+      <ChangelogProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -145,6 +148,9 @@ export default async function Shell({
           {/* The KPI library panel — the Fleet dashboard's metric catalog, on the
               skills-panel push-in standard. */}
           <div id="kpi-panel-root" className="flex h-full min-w-0" />
+          {/* The independent Changelog panel's own portal root — a peer that can
+              sit open alongside the route panel, the planner, the API, and the plugins. */}
+          <div id="changelog-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -164,8 +170,10 @@ export default async function Shell({
       <OutputStylesPanel />
       <PermissionsPanel />
       <PreviewPanel />
+      <ChangelogPanel />
       <TextEditor />
       </TextEditorProvider>
+      </ChangelogProvider>
       </PreviewProvider>
       </PermissionsProvider>
       </OutputStylesProvider>
