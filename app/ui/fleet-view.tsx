@@ -649,7 +649,9 @@ export default function FleetView() {
 
   const toggleSession = (id: string) => setSessions(sessions.includes(id) ? sessions.filter((s) => s !== id) : [...sessions, id]);
   const sessionLabel = sessions.length === 0 ? "all sessions" : sessions.length === 1 ? sessions[0].slice(0, 8) : `${sessions.length} sessions`;
-  const colWrap = wide ? "" : "mx-auto w-full max-w-5xl";
+  // focus width = the terminal's exact centered column (max-w-3xl px-4), so the
+  // dashboard's focus mode matches a session's. Applied to BOTH header and board.
+  const colWrap = wide ? "" : "mx-auto w-full max-w-3xl px-4";
 
   const gridItems = (metrics?.items ?? []).map((it) => {
     const stat = STAT_KINDS.has(it.kind);
