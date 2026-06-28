@@ -23,11 +23,25 @@ export type KpiCtx = {
   setProject: (p: string | null) => void;
   sessions: string[]; // [] = all sessions; >1 = a multi-session scope
   setSessions: (s: string[]) => void;
+  views: SavedView[]; // user-saved board compositions (persisted)
+  saveView: (name: string) => void;
+  deleteView: (name: string) => void;
 };
+
+export type SavedView = { name: string; ids: string[] };
+
+// Four recommended starting boards, seeded into the save menu + the kpi-panel.
+export const RECOMMENDED_VIEWS: SavedView[] = [
+  { name: "Overview", ids: ["f_sessions", "f_tokens", "f_turns", "f_projects", "todos_pending", "f_cliff", "tokens_day", "tokens_by_project", "sessions_by_context", "model_usage"] },
+  { name: "Cost & burn", ids: ["f_spend", "f_tokens", "f_cliff", "tokens_stacked_area", "tokens_day_area", "sessions_by_context", "tokens_per_session"] },
+  { name: "Session deep-dive", ids: ["s_turns", "s_user", "s_claude", "s_ctx_left", "s_total_time", "context_burn", "tokens_by_turn", "time_per_turn", "tools_used", "turn_time_box"] },
+  { name: "Projects & trends", ids: ["f_projects", "tokens_by_project", "sessions_per_project", "tokens_sparklines", "sessions_calendar", "sessions_gantt", "sessions_timeline"] },
+];
 
 const Ctx = createContext<KpiCtx | null>(null);
 const PLACED = "hq-fleet-placed";
 const OPEN = "hq-kpis";
+const VIEWS = "hq-fleet-views";
 
 export function KpiProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -35,16 +49,28 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
   const [catalog, setCatalog] = useState<MetricDef[]>([]);
   const [project, setProject] = useState<string | null>(null);
   const [sessions, setSessions] = useState<string[]>([]);
+  const [views, setViews] = useState<SavedView[]>([]);
 
   useEffect(() => {
     try {
       setOpen(localStorage.getItem(OPEN) === "1");
       const s = JSON.parse(localStorage.getItem(PLACED) || "null");
       if (Array.isArray(s)) setPlacedState(s);
+      const v = JSON.parse(localStorage.getItem(VIEWS) || "null");
+      if (Array.isArray(v)) setViews(v);
     } catch {
       /* no storage */
     }
   }, []);
+
+  const writeViews = (v: SavedView[]) => {
+    setViews(v);
+    try {
+      localStorage.setItem(VIEWS, JSON.stringify(v));
+    } catch {
+      /* ignore */
+    }
+  };
   useEffect(() => {
     try {
       localStorage.setItem(OPEN, open ? "1" : "0");
@@ -92,6 +118,13 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
     setProject,
     sessions,
     setSessions,
+    views,
+    saveView: (name) => {
+      const n = name.trim();
+      if (!n) return;
+      writeViews([...views.filter((v) => v.name !== n), { name: n, ids: placed ?? [] }]);
+    },
+    deleteView: (name) => writeViews(views.filter((v) => v.name !== name)),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -113,6 +146,9 @@ export function useKpis(): KpiCtx {
       setProject: () => {},
       sessions: [],
       setSessions: () => {},
+      views: [],
+      saveView: () => {},
+      deleteView: () => {},
     }
   );
 }

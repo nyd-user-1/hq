@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
-import { useKpis } from "@/app/ui/kpi-state";
+import { useKpis, RECOMMENDED_VIEWS } from "@/app/ui/kpi-state";
 import type { MetricDef, MetricKind } from "@/lib/fleet";
 
 // hq's KPI library — the metric catalog, on the skills-panel.tsx push-in STANDARD
@@ -127,7 +127,8 @@ function MetricCard({
 }
 
 export default function KpiPanel() {
-  const { open, setOpen, catalog, setCatalog, placed, addMetric, removeMetric, sessions } = useKpis();
+  const { open, setOpen, catalog, setCatalog, placed, setPlaced, addMetric, removeMetric, sessions, views } = useKpis();
+  const viewList = [...views, ...RECOMMENDED_VIEWS.filter((r) => !views.some((v) => v.name === r.name))];
   const [q, setQ] = useState("");
   const placedSet = useMemo(() => new Set(placed ?? []), [placed]);
 
@@ -179,6 +180,33 @@ export default function KpiPanel() {
           {single ? "session scope" : sessions.length ? `${sessions.length} sessions` : "all / project scope"} — drag a card onto the board, or click to add.
         </p>
         <div className="scrollbar-none -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+          {viewList.length > 0 && (
+            <div className="mb-3">
+              <div className="mb-1.5 px-0.5 text-[9px] uppercase tracking-widest text-zinc-600">Views</div>
+              <div className="flex flex-col gap-1.5">
+                {viewList.map((v) => (
+                  <button
+                    key={v.name}
+                    type="button"
+                    onClick={() => setPlaced(v.ids)}
+                    title="load this view onto the board"
+                    className="flex items-center gap-2 rounded-md border border-zinc-800/70 px-2.5 py-2 text-left transition-colors hover:border-zinc-600 hover:bg-zinc-900/60"
+                  >
+                    <span className="shrink-0 text-zinc-500">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <rect x="3" y="3" width="7" height="7" rx="1" />
+                        <rect x="14" y="3" width="7" height="7" rx="1" />
+                        <rect x="3" y="14" width="7" height="7" rx="1" />
+                        <rect x="14" y="14" width="7" height="7" rx="1" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-200">{v.name}</span>
+                    <span className="shrink-0 text-[9px] uppercase tracking-wide text-zinc-600">{v.ids.length} cards</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {groups.length === 0 ? (
             <p className="px-1 py-3 text-[10px] text-zinc-600">no metrics</p>
           ) : (

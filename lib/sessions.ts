@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { getUsage, perFileTotals, weighted, lifetimePerFileTotals } from "./usage";
+import { getUsage, perFileTotals, weighted, lifetimePerFileTotals, perFileDayWeights, fileSpans } from "./usage";
 import { baseCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
 import { projectsRoot } from "./config";
@@ -638,6 +638,18 @@ let lifetimeAt = 0;
 let lifetimeCache: ProjectTokens[] = [];
 const projectOfFile = new Map<string, string>(); // path → project ("" = a filtered sdk run)
 
+// Canonical per-file project, memoized by path (derivation head-reads; a file's
+// project never changes within a process). "" ⇒ a stray sdk-cli run to drop.
+function projectForFile(file: string, meta: SessionsMeta, driven: Set<string>): string {
+  let p = projectOfFile.get(file);
+  if (p === undefined) {
+    const m = sessionMeta(file, 0, meta);
+    p = m.entrypoint === "sdk-cli" && !driven.has(m.id) ? "" : m.project;
+    projectOfFile.set(file, p);
+  }
+  return p;
+}
+
 export function lifetimeByProject(): ProjectTokens[] {
   const now = Date.now();
   if (lifetimeCache.length && now - lifetimeAt < 30_000) return lifetimeCache;
@@ -648,13 +660,7 @@ export function lifetimeByProject(): ProjectTokens[] {
   const byProject = new Map<string, { weighted: number; sessions: number }>();
   for (const [file, t] of totals) {
     if (!t.messages) continue; // no usage records (empty / non-conversation file)
-    let project = projectOfFile.get(file);
-    if (project === undefined) {
-      const m = sessionMeta(file, 0, meta); // canonical derivation + sidecar override
-      // mirror the lists: drop stray sdk-cli runs hq didn't drive
-      project = m.entrypoint === "sdk-cli" && !driven.has(m.id) ? "" : m.project;
-      projectOfFile.set(file, project);
-    }
+    const project = projectForFile(file, meta, driven);
     if (!project) continue;
     const acc = byProject.get(project) ?? { weighted: 0, sessions: 0 };
     acc.weighted += weighted(t);
@@ -665,4 +671,41 @@ export function lifetimeByProject(): ProjectTokens[] {
     .map(([project, v]) => ({ project, weighted: v.weighted, sessions: v.sessions }))
     .sort((a, b) => b.weighted - a.weighted);
   return lifetimeCache;
+}
+
+// Per-PROJECT daily weighted tokens over the trailing window — the sparkline trends.
+// Maps each file's daily series to its project and sums; biggest total first.
+export function tokensByDayByProject(days = 14): { dayLabels: string[]; rows: { project: string; points: number[]; total: number }[] } {
+  const { dayLabels, byFile } = perFileDayWeights(days);
+  const meta = getSessionsMeta();
+  const driven = hqDrivenIds();
+  const map = new Map<string, number[]>();
+  for (const [file, arr] of byFile) {
+    const project = projectForFile(file, meta, driven);
+    if (!project) continue;
+    const acc = map.get(project) ?? new Array<number>(days).fill(0);
+    for (let i = 0; i < days; i++) acc[i] += arr[i] || 0;
+    map.set(project, acc);
+  }
+  const rows = [...map.entries()]
+    .map(([project, points]) => ({ project, points, total: points.reduce((a, b) => a + b, 0) }))
+    .sort((a, b) => b.total - a.total);
+  return { dayLabels, rows };
+}
+
+// Real session SPANS (first→last usage ts) for recent transcripts — the Gantt feed.
+export function sessionSpans(limit = 40, maxAgeMs = 14 * 24 * 60 * 60 * 1000): { id: string; project: string; start: number; end: number }[] {
+  const spans = fileSpans();
+  const meta = getSessionsMeta();
+  const driven = hqDrivenIds();
+  const rows: { id: string; project: string; start: number; end: number }[] = [];
+  for (const { file } of recentFiles(maxAgeMs)) {
+    const sp = spans.get(file);
+    if (!sp || !Number.isFinite(sp.start)) continue;
+    const project = projectForFile(file, meta, driven);
+    if (!project) continue;
+    rows.push({ id: path.basename(file, ".jsonl"), project, start: sp.start, end: sp.end });
+    if (rows.length >= limit) break;
+  }
+  return rows;
 }

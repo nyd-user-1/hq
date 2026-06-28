@@ -235,7 +235,7 @@ export default function FleetGrid({ items, storageKey }: { items: GridItem[]; st
   );
 
   return (
-    <div ref={ref} className="relative w-full" style={{ height }}>
+    <div ref={ref} className="relative w-full" style={{ height: `max(${height}px, 100%)` }}>
       {/* faint guide grid — brighter while dragging */}
       <div
         className="pointer-events-none absolute inset-0 rounded"

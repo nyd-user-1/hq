@@ -445,6 +445,75 @@ export function lifetimePerFileTotals(): Map<string, Totals> {
   return perFileTotals();
 }
 
+// trailing local-day window: the start ms of the oldest bucket + the day size.
+function dayWindow(days: number): { start: number; DAYMS: number } {
+  const DAYMS = 24 * 60 * 60 * 1000;
+  const m = new Date();
+  m.setHours(0, 0, 0, 0);
+  return { start: m.getTime() - (days - 1) * DAYMS, DAYMS };
+}
+const dayLabel = (ms: number): string => {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+};
+
+// Weighted tokens per LOCAL day split by model TIER (lifetime cache, so the full
+// window is covered). Powers the stacked-AREA-over-time chart.
+export function tokensByDayByTier(days = 14): { dayLabels: string[]; series: { tier: string; points: number[] }[] } {
+  refreshAllCache();
+  const { start, DAYMS } = dayWindow(days);
+  const map = new Map<string, number[]>();
+  for (const r of allRecs()) {
+    if (r.ts < start) continue;
+    const idx = Math.floor((r.ts - start) / DAYMS);
+    if (idx < 0 || idx >= days) continue;
+    const tier = modelTier(r.model);
+    const arr = map.get(tier) ?? new Array<number>(days).fill(0);
+    arr[idx] += shape(r.input, r.cw, r.cr, r.out) * modelWeight(r.model);
+    map.set(tier, arr);
+  }
+  const dayLabels = Array.from({ length: days }, (_, i) => dayLabel(start + i * DAYMS));
+  return { dayLabels, series: [...map.entries()].map(([tier, points]) => ({ tier, points })) };
+}
+
+// Per-transcript-file daily weighted tokens over the trailing window — the raw
+// material for the per-PROJECT sparkline trends (file→project mapped in sessions.ts).
+export function perFileDayWeights(days = 14): { dayLabels: string[]; byFile: Map<string, number[]> } {
+  refreshAllCache();
+  const { start, DAYMS } = dayWindow(days);
+  const byFile = new Map<string, number[]>();
+  for (const [file, { recs }] of fileCache) {
+    let arr: number[] | null = null;
+    for (const r of recs.values()) {
+      if (r.ts < start) continue;
+      const idx = Math.floor((r.ts - start) / DAYMS);
+      if (idx < 0 || idx >= days) continue;
+      if (!arr) arr = new Array<number>(days).fill(0);
+      arr[idx] += shape(r.input, r.cw, r.cr, r.out) * modelWeight(r.model);
+    }
+    if (arr) byFile.set(file, arr);
+  }
+  const dayLabels = Array.from({ length: days }, (_, i) => dayLabel(start + i * DAYMS));
+  return { dayLabels, byFile };
+}
+
+// First/last usage timestamp per transcript file — the real session SPANS for the
+// Gantt chart (a session's on-disk lifetime, not just its last-touch mtime).
+export function fileSpans(): Map<string, { start: number; end: number }> {
+  refreshAllCache();
+  const out = new Map<string, { start: number; end: number }>();
+  for (const [file, { recs }] of fileCache) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const r of recs.values()) {
+      if (r.ts < lo) lo = r.ts;
+      if (r.ts > hi) hi = r.ts;
+    }
+    if (hi >= 0) out.set(file, { start: lo, end: hi });
+  }
+  return out;
+}
+
 export type Forecast = {
   burnPerMin: number; // weighted tokens/min over a trailing window
   blockWeighted: number; // weighted used in the current session block

@@ -1,22 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { FleetMetrics, Shape, Stat, Tone } from "@/lib/fleet";
 import FleetGrid from "@/app/ui/fleet-grid";
 import SessionMenu from "@/app/ui/session-menu";
 import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
 import { DRAG_TYPE } from "@/app/ui/kpi-panel";
-import { useKpis } from "@/app/ui/kpi-state";
+import { useKpis, RECOMMENDED_VIEWS, type SavedView } from "@/app/ui/kpi-state";
 
-// THE FLEET — hq's command deck on the terminal.tsx shell: a HEADER row (● project
-// picker · session picker · ⋮ panels · ⤢) over the dashboard GRID (the board). The
-// metric LIBRARY is the root-level kpi-panel (open via the ⋮ Metrics→KPIs leaf);
-// drag a card onto the board. Scope = a PROJECT filter + a MULTI-SELECT of sessions
-// (0 = all, 1 = session grain, >1 = aggregate); shared via kpi-state so the panel
-// and the board agree. Charts: gradient+rounded line/area with a hover dot+tooltip,
-// ranking, distribution, scatter, heatmap. Placed set persists; polls metrics ~8s.
+// THE FLEET — hq's command deck on the terminal.tsx shell. Header (● project ·
+// sessions · ⋮ panels · ⟲ reset · 💾 views · ⤢) over the dashboard GRID. The metric
+// LIBRARY is the root kpi-panel (⋮→Metrics→KPIs); drag cards onto the board. Charts
+// carry a PORTAL tooltip (escapes the card clip) on hover. Scope = project + multi-
+// select sessions; placed set + saved views persist via kpi-state.
 
-// SEMANTIC ink + a brighter tint for hover dots (a touch more contrast).
 const INK: Record<Tone, string> = { blue: "#60a5fa", orange: "#fb923c", green: "#4ade80", amber: "#fbbf24", red: "#f87171", zinc: "#a1a1aa" };
 const BRIGHT: Record<Tone, string> = { blue: "#93c5fd", orange: "#fdba74", green: "#86efac", amber: "#fcd34d", red: "#fca5a5", zinc: "#e4e4e7" };
 const BAR: Record<Tone, string> = { blue: "bg-blue-500/60", orange: "bg-orange-500/55", green: "bg-emerald-500/55", amber: "bg-amber-500/60", red: "bg-red-500/60", zinc: "bg-zinc-600" };
@@ -33,7 +31,28 @@ const fmtDur = (ms: number): string => {
   return h < 24 ? h.toFixed(1) + "h" : Math.round(h / 24) + "d";
 };
 
-// Smooth (rounded) path — horizontal-tangent cubic between points.
+// ── the shared chart tooltip — a fixed chip portaled to <body> so it floats over
+// the card edges (the old in-card chip clipped against overflow-hidden). ──
+type Tip = { x: number; y: number; node: React.ReactNode } | null;
+function TipLayer({ tip }: { tip: Tip }) {
+  if (!tip || typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[100] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[10px] leading-tight text-zinc-200 shadow-xl"
+      style={{ left: tip.x, top: tip.y - 10 }}
+    >
+      {tip.node}
+    </div>,
+    document.body,
+  );
+}
+const tipRow = (label: React.ReactNode, value: React.ReactNode) => (
+  <>
+    <div className="text-zinc-400">{label}</div>
+    <div className="tabular-nums">{value}</div>
+  </>
+);
+
 function smoothPath(pts: [number, number][]): string {
   if (pts.length < 2) return "";
   let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
@@ -46,13 +65,12 @@ function smoothPath(pts: [number, number][]): string {
   return d;
 }
 
-// The line/area chart — gradient fill, rounded line, a hover dot + tooltip (our
-// tooltip look). `strong` = the bolder area fill (the dashboard "area" kind).
 function LineChart({ shape, strong }: { shape: Extract<Shape, { kind: "series" | "area" }>; strong: boolean }) {
   const tone = shape.tone ?? "zinc";
   const ink = INK[tone];
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
+  const [tip, setTip] = useState<Tip>(null);
   const pts = shape.points;
   const n = pts.length;
   const max = Math.max(1, ...pts);
@@ -65,14 +83,20 @@ function LineChart({ shape, strong }: { shape: Extract<Shape, { kind: "series" |
   const onMove = (e: React.MouseEvent) => {
     const r = ref.current?.getBoundingClientRect();
     if (!r || n < 2) return;
-    setHover(Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left) / r.width) * (n - 1)))));
+    const idx = Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left) / r.width) * (n - 1))));
+    setHover(idx);
+    setTip({ x: e.clientX, y: e.clientY, node: tipRow(shape.labels?.[idx] ?? `#${idx + 1}`, fmtNum(pts[idx])) });
+  };
+  const leave = () => {
+    setHover(null);
+    setTip(null);
   };
   const hx = hover != null && n > 1 ? (hover / (n - 1)) * 100 : 0;
   const hyPct = hover != null ? (xy[hover][1] / H) * 100 : 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={ref} className="relative min-h-0 w-full flex-1" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <div ref={ref} className="relative min-h-0 w-full flex-1" onMouseMove={onMove} onMouseLeave={leave}>
         <svg viewBox="0 0 300 70" preserveAspectRatio="none" className="h-full w-full" aria-hidden>
           <defs>
             <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
@@ -86,17 +110,7 @@ function LineChart({ shape, strong }: { shape: Extract<Shape, { kind: "series" |
         {hover != null && (
           <>
             <div className="pointer-events-none absolute inset-y-0 w-px bg-zinc-700/60" style={{ left: `${hx}%` }} />
-            <div
-              className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-zinc-950"
-              style={{ left: `${hx}%`, top: `${hyPct}%`, background: BRIGHT[tone] }}
-            />
-            <div
-              className="pointer-events-none absolute z-10 -translate-y-full whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[10px] text-zinc-200 shadow-xl"
-              style={{ left: `${Math.min(88, Math.max(2, hx))}%`, top: `${Math.max(14, hyPct)}%`, transform: `translate(-50%, calc(-100% - 6px))` }}
-            >
-              <div className="text-zinc-400">{shape.labels?.[hover] ?? `#${hover + 1}`}</div>
-              <div className="tabular-nums">{fmtNum(pts[hover])}</div>
-            </div>
+            <div className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-zinc-950" style={{ left: `${hx}%`, top: `${hyPct}%`, background: BRIGHT[tone] }} />
           </>
         )}
       </div>
@@ -104,16 +118,23 @@ function LineChart({ shape, strong }: { shape: Extract<Shape, { kind: "series" |
         <span>{shape.capL}</span>
         <span>{shape.capR}</span>
       </div>
+      <TipLayer tip={tip} />
     </div>
   );
 }
 
 function RankingBody({ shape }: { shape: Extract<Shape, { kind: "ranking" }> }) {
+  const [tip, setTip] = useState<Tip>(null);
   if (!shape.rows.length) return <p className="text-[10px] text-zinc-600">—</p>;
   return (
     <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
       {shape.rows.map((r) => (
-        <div key={r.name} className="grid grid-cols-[64px_1fr_48px] items-center gap-2 text-[10px]">
+        <div
+          key={r.name}
+          className="grid grid-cols-[64px_1fr_48px] items-center gap-2 text-[10px]"
+          onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: tipRow(r.name, r.value) })}
+          onMouseLeave={() => setTip(null)}
+        >
           <span className="truncate text-zinc-300">{r.name}</span>
           <span className="h-2 overflow-hidden rounded bg-zinc-800">
             <i className={`block h-full rounded ${BAR[shape.tone ?? "zinc"]}`} style={{ width: `${r.pct}%` }} />
@@ -121,28 +142,38 @@ function RankingBody({ shape }: { shape: Extract<Shape, { kind: "ranking" }> }) 
           <span className="text-right text-zinc-500">{r.value}</span>
         </div>
       ))}
+      <TipLayer tip={tip} />
     </div>
   );
 }
 
 function DistBody({ shape }: { shape: Extract<Shape, { kind: "distribution" }> }) {
+  const [tip, setTip] = useState<Tip>(null);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 items-end gap-1">
         {shape.bins.map((b, i) => (
-          <span key={i} className={`flex-1 rounded-t ${b.hot ? "bg-amber-500/70" : BAR[shape.tone ?? "zinc"]}`} style={{ height: `${Math.max(3, b.h)}%` }} />
+          <span
+            key={i}
+            className={`flex-1 rounded-t ${b.hot ? "bg-amber-500/70" : BAR[shape.tone ?? "zinc"]}`}
+            style={{ height: `${Math.max(3, b.h)}%` }}
+            onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: tipRow(`bin ${i + 1}${b.hot ? " · premium" : ""}`, `${b.h}%`) })}
+            onMouseLeave={() => setTip(null)}
+          />
         ))}
       </div>
       <div className="mt-1.5 flex justify-between text-[9px] text-zinc-600">
         <span>{shape.xL}</span>
         <span>{shape.xR}</span>
       </div>
+      <TipLayer tip={tip} />
     </div>
   );
 }
 
 function ScatterBody({ shape }: { shape: Extract<Shape, { kind: "scatter" }> }) {
   const ink = INK[shape.tone ?? "zinc"];
+  const [tip, setTip] = useState<Tip>(null);
   const maxX = Math.max(1, ...shape.pts.map((p) => p.x));
   const maxY = Math.max(1, ...shape.pts.map((p) => p.y));
   return (
@@ -153,7 +184,8 @@ function ScatterBody({ shape }: { shape: Extract<Shape, { kind: "scatter" }> }) 
             key={i}
             className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
             style={{ left: `${(p.x / maxX) * 96 + 2}%`, top: `${100 - (p.y / maxY) * 94 - 3}%`, background: ink, opacity: 0.55 }}
-            title={`${p.label ?? ""} · ${p.x} ${shape.xL} · ${fmtNum(p.y)} ${shape.yL}`}
+            onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: tipRow(p.label ?? "session", `${p.x} ${shape.xL} · ${fmtNum(p.y)} ${shape.yL}`) })}
+            onMouseLeave={() => setTip(null)}
           />
         ))}
       </div>
@@ -161,12 +193,14 @@ function ScatterBody({ shape }: { shape: Extract<Shape, { kind: "scatter" }> }) 
         <span>{shape.xL} →</span>
         <span>↑ {shape.yL}</span>
       </div>
+      <TipLayer tip={tip} />
     </div>
   );
 }
 
 function HeatBody({ shape }: { shape: Extract<Shape, { kind: "heatmap" }> }) {
   const ink = INK[shape.tone ?? "zinc"];
+  const [tip, setTip] = useState<Tip>(null);
   const max = Math.max(1, ...shape.grid.flat());
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
@@ -177,7 +211,8 @@ function HeatBody({ shape }: { shape: Extract<Shape, { kind: "heatmap" }> }) {
               key={`${r}-${c}`}
               className="rounded-[1px]"
               style={{ background: ink, opacity: v ? 0.15 + 0.85 * (v / max) : 0.04 }}
-              title={`${shape.rows[r]} ${c}:00 · ${v}`}
+              onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: tipRow(`${shape.rows[r]} ${c}:00`, `${v} sessions`) })}
+              onMouseLeave={() => setTip(null)}
             />
           )),
         )}
@@ -186,16 +221,24 @@ function HeatBody({ shape }: { shape: Extract<Shape, { kind: "heatmap" }> }) {
         <span>{shape.cols[0]}</span>
         <span>23h</span>
       </div>
+      <TipLayer tip={tip} />
     </div>
   );
 }
 
 function StackedBody({ shape }: { shape: Extract<Shape, { kind: "stacked" }> }) {
+  const [tip, setTip] = useState<Tip>(null);
   return (
     <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
       <div className="flex h-4 w-full overflow-hidden rounded bg-zinc-800">
         {shape.segs.filter((s) => s.pct > 0).map((s, i) => (
-          <span key={i} className={BAR[s.tone ?? "zinc"]} style={{ width: `${s.pct}%` }} title={`${s.name} ${s.value}`} />
+          <span
+            key={i}
+            className={BAR[s.tone ?? "zinc"]}
+            style={{ width: `${s.pct}%` }}
+            onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: tipRow(s.name, s.value) })}
+            onMouseLeave={() => setTip(null)}
+          />
         ))}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px]">
@@ -206,6 +249,96 @@ function StackedBody({ shape }: { shape: Extract<Shape, { kind: "stacked" }> }) 
           </span>
         ))}
       </div>
+      <TipLayer tip={tip} />
+    </div>
+  );
+}
+
+function StackedAreaBody({ shape }: { shape: Extract<Shape, { kind: "stackedArea" }> }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [tip, setTip] = useState<Tip>(null);
+  const days = shape.dayLabels.length;
+  const W = 300;
+  const H = 70;
+  const totals = new Array<number>(days).fill(0);
+  for (const s of shape.series) for (let i = 0; i < days; i++) totals[i] += s.points[i] || 0;
+  const max = Math.max(1, ...totals);
+  const X = (i: number) => (days > 1 ? (i / (days - 1)) * W : 0);
+  const Y = (v: number) => H - (v / max) * (H - 4) - 2;
+  const cum = new Array<number>(days).fill(0);
+  const bands = shape.series.map((s) => {
+    const lower = cum.slice();
+    const upper = cum.map((c, i) => c + (s.points[i] || 0));
+    for (let i = 0; i < days; i++) cum[i] = upper[i];
+    const top = upper.map((v, i) => [X(i), Y(v)] as [number, number]);
+    const bot = lower.map((v, i) => [X(i), Y(v)] as [number, number]).reverse();
+    const d = `${smoothPath(top)} L${bot.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" L")} Z`;
+    return { tone: s.tone ?? "zinc", name: s.name, d };
+  });
+  const onMove = (e: React.MouseEvent) => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r || days < 1) return;
+    const idx = Math.max(0, Math.min(days - 1, Math.round(((e.clientX - r.left) / r.width) * (days - 1))));
+    setTip({
+      x: e.clientX,
+      y: e.clientY,
+      node: (
+        <>
+          <div className="text-zinc-400">{shape.dayLabels[idx]}</div>
+          {shape.series.filter((s) => (s.points[idx] || 0) > 0).map((s) => (
+            <div key={s.name} className="flex items-center gap-1.5 tabular-nums">
+              <i className="size-1.5 rounded-sm" style={{ background: INK[s.tone ?? "zinc"] }} />
+              {s.name} {fmtNum(s.points[idx] || 0)}
+            </div>
+          ))}
+        </>
+      ),
+    });
+  };
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div ref={ref} className="relative min-h-0 w-full flex-1" onMouseMove={onMove} onMouseLeave={() => setTip(null)}>
+        <svg viewBox="0 0 300 70" preserveAspectRatio="none" className="h-full w-full" aria-hidden>
+          {bands.map((b, i) => (
+            <path key={i} d={b.d} fill={INK[b.tone]} fillOpacity="0.5" stroke={INK[b.tone]} strokeOpacity="0.4" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
+          ))}
+        </svg>
+      </div>
+      <div className="mt-1.5 flex justify-between text-[9px] text-zinc-600">
+        <span>{shape.capL}</span>
+        <span>{shape.capR}</span>
+      </div>
+      <TipLayer tip={tip} />
+    </div>
+  );
+}
+
+function SparkBody({ shape }: { shape: Extract<Shape, { kind: "sparkline" }> }) {
+  const [tip, setTip] = useState<Tip>(null);
+  if (!shape.rows.length) return <p className="text-[10px] text-zinc-600">—</p>;
+  return (
+    <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+      {shape.rows.map((r) => {
+        const W = 80;
+        const Hh = 16;
+        const max = Math.max(1, ...r.points);
+        const xy = r.points.map((p, i) => [r.points.length > 1 ? (i / (r.points.length - 1)) * W : 0, Hh - (p / max) * (Hh - 2) - 1] as [number, number]);
+        return (
+          <div
+            key={r.name}
+            className="grid grid-cols-[70px_1fr_48px] items-center gap-2 text-[10px]"
+            onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: tipRow(r.name, r.value) })}
+            onMouseLeave={() => setTip(null)}
+          >
+            <span className="truncate text-zinc-300">{r.name}</span>
+            <svg viewBox={`0 0 ${W} ${Hh}`} preserveAspectRatio="none" className="h-4 w-full" aria-hidden>
+              <path d={smoothPath(xy)} fill="none" stroke={INK.blue} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            </svg>
+            <span className="text-right text-zinc-500">{r.value}</span>
+          </div>
+        );
+      })}
+      <TipLayer tip={tip} />
     </div>
   );
 }
@@ -223,7 +356,7 @@ function TableBody({ shape }: { shape: Extract<Shape, { kind: "table" }> }) {
         </thead>
         <tbody>
           {shape.rows.map((r, i) => (
-            <tr key={i} className="border-t border-zinc-800/60 text-zinc-300">
+            <tr key={i} className="border-t border-zinc-800/60 text-zinc-300 transition-colors hover:bg-zinc-900/60">
               {r.map((cell, j) => (
                 <td key={j} className="truncate px-1 py-0.5 font-mono">{cell}</td>
               ))}
@@ -237,18 +370,26 @@ function TableBody({ shape }: { shape: Extract<Shape, { kind: "table" }> }) {
 
 function CalendarBody({ shape }: { shape: Extract<Shape, { kind: "calendar" }> }) {
   const ink = INK[shape.tone ?? "zinc"];
+  const [tip, setTip] = useState<Tip>(null);
   const max = Math.max(1, ...shape.cells);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
       <div className="grid min-h-0 flex-1 grid-cols-7 gap-1">
         {shape.cells.map((v, i) => (
-          <span key={i} className="rounded-sm" style={{ background: ink, opacity: v ? 0.2 + 0.8 * (v / max) : 0.05 }} title={`${v} sessions`} />
+          <span
+            key={i}
+            className="rounded-sm"
+            style={{ background: ink, opacity: v ? 0.2 + 0.8 * (v / max) : 0.05 }}
+            onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: tipRow(`day ${i + 1}`, `${v} sessions`) })}
+            onMouseLeave={() => setTip(null)}
+          />
         ))}
       </div>
       <div className="flex justify-between text-[9px] text-zinc-600">
         <span>{shape.capL}</span>
         <span>{shape.capR}</span>
       </div>
+      <TipLayer tip={tip} />
     </div>
   );
 }
@@ -259,9 +400,14 @@ function BoxBody({ shape }: { shape: Extract<Shape, { kind: "box" }> }) {
   const pct = (v: number) => (v / max) * 100;
   const tone = shape.tone ?? "zinc";
   const ink = INK[tone];
+  const [tip, setTip] = useState<Tip>(null);
   return (
     <div className="flex min-h-0 flex-1 flex-col justify-center gap-2">
-      <div className="relative h-6">
+      <div
+        className="relative h-6"
+        onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: <div className="tabular-nums">min {f(shape.min)} · q1 {f(shape.q1)} · med {f(shape.med)} · q3 {f(shape.q3)} · max {f(shape.max)}</div> })}
+        onMouseLeave={() => setTip(null)}
+      >
         <div className="absolute top-1/2 h-px -translate-y-1/2 bg-zinc-600" style={{ left: `${pct(shape.min)}%`, width: `${pct(shape.max) - pct(shape.min)}%` }} />
         <div className="absolute top-1/2 h-4 -translate-y-1/2 rounded-sm border" style={{ left: `${pct(shape.q1)}%`, width: `${Math.max(1, pct(shape.q3) - pct(shape.q1))}%`, background: `${ink}33`, borderColor: ink }} />
         <div className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2" style={{ left: `${pct(shape.med)}%`, background: BRIGHT[tone] }} />
@@ -271,12 +417,14 @@ function BoxBody({ shape }: { shape: Extract<Shape, { kind: "box" }> }) {
         <span>med {f(shape.med)}</span>
         <span>{f(shape.max)}</span>
       </div>
+      <TipLayer tip={tip} />
     </div>
   );
 }
 
 function TimelineBody({ shape }: { shape: Extract<Shape, { kind: "timeline" }> }) {
   const ink = INK[shape.tone ?? "zinc"];
+  const [tip, setTip] = useState<Tip>(null);
   const span = Math.max(1, shape.endMs - shape.startMs);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
@@ -284,13 +432,47 @@ function TimelineBody({ shape }: { shape: Extract<Shape, { kind: "timeline" }> }
         <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-zinc-800" />
         {shape.items.map((it, i) => {
           const left = Math.max(0, Math.min(100, ((it.at - shape.startMs) / span) * 100));
-          return <span key={i} className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${left}%`, top: "50%", background: ink, opacity: 0.6 }} title={it.label} />;
+          return (
+            <span
+              key={i}
+              className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{ left: `${left}%`, top: "50%", background: ink, opacity: 0.6 }}
+              onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: <div>{it.label}</div> })}
+              onMouseLeave={() => setTip(null)}
+            />
+          );
         })}
       </div>
       <div className="flex justify-between text-[9px] text-zinc-600">
         <span>{shape.capL}</span>
         <span>{shape.capR}</span>
       </div>
+      <TipLayer tip={tip} />
+    </div>
+  );
+}
+
+function GanttBody({ shape }: { shape: Extract<Shape, { kind: "gantt" }> }) {
+  const [tip, setTip] = useState<Tip>(null);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
+      <div className="scrollbar-none min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+        {shape.items.map((it, i) => (
+          <div
+            key={i}
+            className="relative h-2.5"
+            onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY, node: <div>{it.label}</div> })}
+            onMouseLeave={() => setTip(null)}
+          >
+            <div className="absolute h-full rounded-sm" style={{ left: `${it.startPct}%`, width: `${it.widthPct}%`, background: INK[it.tone ?? "blue"], opacity: 0.6 }} />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between text-[9px] text-zinc-600">
+        <span>{shape.capL}</span>
+        <span>{shape.capR}</span>
+      </div>
+      <TipLayer tip={tip} />
     </div>
   );
 }
@@ -310,10 +492,13 @@ function ShapeCard({ shape }: { shape: Shape }) {
         {shape.kind === "scatter" && <ScatterBody shape={shape} />}
         {shape.kind === "heatmap" && <HeatBody shape={shape} />}
         {shape.kind === "stacked" && <StackedBody shape={shape} />}
+        {shape.kind === "stackedArea" && <StackedAreaBody shape={shape} />}
+        {shape.kind === "sparkline" && <SparkBody shape={shape} />}
         {shape.kind === "table" && <TableBody shape={shape} />}
         {shape.kind === "calendar" && <CalendarBody shape={shape} />}
         {shape.kind === "box" && <BoxBody shape={shape} />}
         {shape.kind === "timeline" && <TimelineBody shape={shape} />}
+        {shape.kind === "gantt" && <GanttBody shape={shape} />}
       </div>
     </div>
   );
@@ -329,8 +514,7 @@ function KpiTile({ k }: { k: Stat }) {
   );
 }
 
-// A hover dropdown for the PROJECT scope (mirrors the session picker's behavior).
-function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: string | null; onPick: (p: string | null) => void }) {
+function HoverMenu({ label, labelClass, align = "left", children }: { label: React.ReactNode; labelClass?: string; align?: "left" | "right"; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enter = () => {
@@ -339,47 +523,101 @@ function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: s
   };
   const leave = () => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setOpen(false), 160);
+    timer.current = setTimeout(() => setOpen(false), 180);
   };
   return (
     <div className="relative flex shrink-0 items-center" onMouseEnter={enter} onMouseLeave={leave}>
-      <span className={`cursor-pointer rounded px-1 py-0.5 text-xs transition-colors ${value ? "text-zinc-200 hover:text-white" : "text-zinc-300 hover:text-white"}`}>
-        {value ?? "all projects"}
-      </span>
-      {open && (
-        <div className="scrollbar-none absolute left-0 top-full z-50 mt-1 flex max-h-[340px] w-56 flex-col overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+      <span className={labelClass}>{label}</span>
+      {open && <div className={`absolute top-full z-50 mt-1 ${align === "right" ? "right-0" : "left-0"}`}>{children}</div>}
+    </div>
+  );
+}
+
+function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: string | null; onPick: (p: string | null) => void }) {
+  // default label reads "hq" (the home project) when no filter is set, per request.
+  return (
+    <HoverMenu label={value ?? "hq"} labelClass={`cursor-pointer rounded px-1 py-0.5 text-xs transition-colors ${value ? "text-zinc-200 hover:text-white" : "text-zinc-300 hover:text-white"}`}>
+      <div className="scrollbar-none flex max-h-[340px] w-56 flex-col overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+        <button type="button" onClick={() => onPick(null)} className={`rounded px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-zinc-900 ${value ? "text-zinc-300" : "text-green-400"}`}>
+          All projects
+        </button>
+        {projects.map((p) => (
+          <button key={p} type="button" onClick={() => onPick(p)} className={`truncate rounded px-2 py-1.5 text-left font-mono text-[11px] transition-colors hover:bg-zinc-900 ${value === p ? "text-green-400" : "text-zinc-300"}`}>
+            {p}
+          </button>
+        ))}
+      </div>
+    </HoverMenu>
+  );
+}
+
+// Save / load board VIEWS — a hover dropdown: name+save, recommended seeds, saved.
+function SaveMenu({ views, onApply, onSave, onDelete }: { views: SavedView[]; onApply: (ids: string[]) => void; onSave: (name: string) => void; onDelete: (name: string) => void }) {
+  const [name, setName] = useState("");
+  return (
+    <HoverMenu
+      label={
+        <span title="saved views" className="flex items-center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+            <path d="M17 21v-8H7v8M7 3v5h8" />
+          </svg>
+        </span>
+      }
+      labelClass="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+      align="right"
+    >
+      <div className="flex w-60 flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl">
+        <div className="flex items-center gap-1">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && name.trim()) {
+                onSave(name);
+                setName("");
+              }
+            }}
+            placeholder="Save current as…"
+            className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1 font-mono text-[11px] text-zinc-100 outline-none placeholder:text-zinc-600"
+          />
           <button
             type="button"
-            onClick={() => { onPick(null); setOpen(false); }}
-            className={`rounded px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-zinc-900 ${value ? "text-zinc-300" : "text-green-400"}`}
+            disabled={!name.trim()}
+            onClick={() => { onSave(name); setName(""); }}
+            className="rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-200 transition-colors hover:bg-zinc-700 disabled:opacity-40"
           >
-            All projects
+            save
           </button>
-          {projects.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => { onPick(p); setOpen(false); }}
-              className={`truncate rounded px-2 py-1.5 text-left font-mono text-[11px] transition-colors hover:bg-zinc-900 ${value === p ? "text-green-400" : "text-zinc-300"}`}
-            >
-              {p}
-            </button>
-          ))}
         </div>
-      )}
-    </div>
+        <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Recommended</div>
+        {RECOMMENDED_VIEWS.map((v) => (
+          <button key={v.name} type="button" onClick={() => onApply(v.ids)} className="truncate rounded px-2 py-1 text-left text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900">
+            {v.name} <span className="text-zinc-600">· {v.ids.length}</span>
+          </button>
+        ))}
+        {views.length > 0 && <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Saved</div>}
+        {views.map((v) => (
+          <div key={v.name} className="group flex items-center rounded hover:bg-zinc-900">
+            <button type="button" onClick={() => onApply(v.ids)} className="min-w-0 flex-1 truncate px-2 py-1 text-left text-[11px] text-zinc-300">
+              {v.name} <span className="text-zinc-600">· {v.ids.length}</span>
+            </button>
+            <button type="button" onClick={() => onDelete(v.name)} title="delete view" className="px-2 py-1 text-zinc-600 opacity-0 transition hover:text-red-300 group-hover:opacity-100">✕</button>
+          </div>
+        ))}
+      </div>
+    </HoverMenu>
   );
 }
 
 const STAT_KINDS = new Set(["stat"]);
 
 export default function FleetView() {
-  const { placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions } = useKpis();
+  const { placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView } = useKpis();
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [projects, setProjects] = useState<string[]>([]);
   const [wide, setWide] = useState(true);
 
-  // metrics — re-fetch on scope or placed change, then ~8s
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -441,7 +679,7 @@ export default function FleetView() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col gap-3 font-mono">
-      {/* header — ● project picker · session picker (multi) · ⋮ panels · ⤢ */}
+      {/* header */}
       <div className={`mb-1 ${colWrap}`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800 pb-3">
           <span className="flex shrink-0 items-center gap-1.5">
@@ -449,7 +687,6 @@ export default function FleetView() {
           </span>
           <ProjectMenu projects={projects} value={project} onPick={setProject} />
           <span className="text-zinc-700">·</span>
-          {/* hover → SessionMenu in MULTI-SELECT mode; pick several to compose a scope */}
           <SessionMenu currentId={sessions[0] ?? null} selected={sessions} onToggle={toggleSession} onClear={() => setSessions([])}>
             <span
               title="sessions — hover to select one or many"
@@ -458,15 +695,16 @@ export default function FleetView() {
               {sessionLabel}
             </span>
           </SessionMenu>
-          {/* ⋮ panels nav — Metrics → KPIs opens the metric library */}
+          {/* ⋮ panels nav — Metrics → KPIs opens the library; ⟲ reset sits beside it */}
           <TerminalNavMenu project={project ?? ""} sessionId={sessions[0] ?? null} />
+          <button type="button" onClick={() => window.dispatchEvent(new Event("hq:fleet-grid-reset"))} title="reset the dashboard layout" className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </button>
           <span className="ml-auto flex items-center gap-1">
-            <button type="button" onClick={() => window.dispatchEvent(new Event("hq:fleet-grid-reset"))} title="reset the dashboard layout" className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            </button>
+            <SaveMenu views={views} onApply={setPlaced} onSave={saveView} onDelete={deleteView} />
             <button type="button" onClick={() => setWide((v) => !v)} title={wide ? "focus width" : "widescreen"} className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M15 3h6v6" />
@@ -479,7 +717,7 @@ export default function FleetView() {
         </div>
       </div>
 
-      {/* body — the board (a drop target for metric cards dragged from kpi-panel) */}
+      {/* body — the board (full-height drop target) */}
       <div
         className={`scrollbar-none min-h-0 flex-1 overflow-y-auto ${colWrap}`}
         onDragOver={(e) => {
@@ -500,7 +738,7 @@ export default function FleetView() {
           <p className="text-[10px] text-zinc-600">loading metrics…</p>
         ) : gridItems.length === 0 ? (
           <p className="text-[11px] text-zinc-500">
-            Empty board — open the <b className="font-medium text-zinc-300">⋮ → Metrics → KPIs</b> library and drag a card here.
+            Empty board — open <b className="font-medium text-zinc-300">⋮ → Metrics → KPIs</b> and drag a card here, or pick a Saved view.
           </p>
         ) : (
           <FleetGrid storageKey="hq-fleet-grid" items={gridItems} />

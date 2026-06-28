@@ -9,8 +9,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { getUsageStates, getSpend, tokensByDay } from "@/lib/usage";
-import { getSessions, lifetimeByProject, type SessionInfo } from "@/lib/sessions";
+import { getUsageStates, getSpend, tokensByDay, tokensByDayByTier } from "@/lib/usage";
+import { getSessions, lifetimeByProject, tokensByDayByProject, sessionSpans, type SessionInfo } from "@/lib/sessions";
 import { getTodos } from "@/lib/todo";
 import { timelineFor } from "@/lib/transcript";
 
@@ -34,14 +34,17 @@ export type Shape =
   | { kind: "table"; title: string; cols: string[]; rows: string[][] }
   | { kind: "calendar"; title: string; cells: number[]; capL: string; capR: string; tone?: Tone }
   | { kind: "box"; title: string; min: number; q1: number; med: number; q3: number; max: number; fmt: "dur" | "num"; tone?: Tone }
-  | { kind: "timeline"; title: string; items: { label: string; at: number }[]; startMs: number; endMs: number; capL: string; capR: string; tone?: Tone };
+  | { kind: "timeline"; title: string; items: { label: string; at: number }[]; startMs: number; endMs: number; capL: string; capR: string; tone?: Tone }
+  | { kind: "stackedArea"; title: string; dayLabels: string[]; series: { name: string; tone?: Tone; points: number[] }[]; capL: string; capR: string }
+  | { kind: "sparkline"; title: string; rows: { name: string; points: number[]; value: string }[] }
+  | { kind: "gantt"; title: string; items: { label: string; startPct: number; widthPct: number; tone?: Tone }[]; capL: string; capR: string };
 
 // Full kind superset — the catalog labels cards by these; renderers exist for the
 // implemented ones, the rest are reserved for the chart-zoo expansion.
 export type MetricKind =
   | "stat" | "series" | "area" | "ranking" | "distribution" | "histogram"
-  | "scatter" | "heatmap" | "stacked" | "table" | "timeline" | "calendar"
-  | "box" | "sparkline";
+  | "scatter" | "heatmap" | "stacked" | "stackedArea" | "table" | "timeline"
+  | "calendar" | "box" | "sparkline" | "gantt";
 
 export type MetricScope = "fleet" | "session";
 
@@ -299,6 +302,9 @@ const REGISTRY: Compute[] = [
   { def: { id: "sessions_timeline", label: "Sessions timeline", group: "Sessions", kind: "timeline", scopes: ["fleet"] }, fleet: (c) => { const end = c.now, start = end - 14 * DAY_MS; return { kind: "timeline", title: "Sessions · 14d", items: c.set.filter((s) => s.lastActive >= start).slice(0, 40).map((s) => ({ label: `${s.project} ${s.id.slice(0, 6)}`, at: s.lastActive })), startMs: start, endMs: end, capL: "14d ago", capR: "now", tone: "blue" }; } },
   { def: { id: "turn_time_box", label: "Turn time (box)", group: "Session", kind: "box", scopes: ["session"] }, session: (c) => { const g = [...c.gaps].sort((a, b) => a - b); const q = (p: number) => (g.length ? g[Math.min(g.length - 1, Math.floor(p * (g.length - 1)))] : 0); return { kind: "box", title: "Turn time · quartiles", min: q(0), q1: q(0.25), med: q(0.5), q3: q(0.75), max: q(1), fmt: "dur", tone: "blue" }; } },
   { def: { id: "ctx_burndown", label: "Context burn-down", group: "Session", kind: "area", scopes: ["session"] }, session: (c) => area("Burn-down to 200k cliff", c.burn.map((b) => Math.max(0, CLIFF - b)), "start", "cliff", "amber") },
+  { def: { id: "tokens_stacked_area", label: "Tokens by model (area)", group: "Tokens", kind: "stackedArea", scopes: ["fleet"] }, fleet: () => { const { dayLabels, series } = tokensByDayByTier(14); const tones: Record<string, Tone> = { Opus: "orange", Sonnet: "blue", Haiku: "green", Fable: "red", Mythos: "amber", Other: "zinc" }; return { kind: "stackedArea", title: "Tokens by model · 14d", dayLabels, capL: dayLabels[0] ?? "", capR: "today", series: series.map((s) => ({ name: s.tier, tone: tones[s.tier] ?? "zinc", points: s.points })) }; } },
+  { def: { id: "tokens_sparklines", label: "Project trends (sparkline)", group: "Tokens", kind: "sparkline", scopes: ["fleet"] }, fleet: () => { const { rows } = tokensByDayByProject(14); return { kind: "sparkline", title: "Project trends · 14d", rows: rows.slice(0, 8).map((p) => ({ name: p.project, points: p.points, value: fmtTok(p.total) })) }; } },
+  { def: { id: "sessions_gantt", label: "Sessions (gantt)", group: "Sessions", kind: "gantt", scopes: ["fleet"] }, fleet: (c) => { const end = c.now, start = end - 14 * DAY_MS, span = Math.max(1, end - start); const spans = sessionSpans(40).filter((s) => s.end >= start); return { kind: "gantt", title: "Sessions · 14d spans", capL: "14d ago", capR: "now", items: spans.slice(0, 30).map((s) => { const a = Math.max(start, s.start), b = Math.min(end, s.end); return { label: `${s.project} ${s.id.slice(0, 6)}`, startPct: ((a - start) / span) * 100, widthPct: Math.max(0.6, ((b - a) / span) * 100) }; }) }; } },
 
   // ── Todos ──
   { def: { id: "todos_total", label: "Todos · total", group: "Todos", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "todos", value: String(c.todos.length), sub: "total" }) },
