@@ -127,7 +127,7 @@ function MetricCard({
 }
 
 export default function KpiPanel() {
-  const { open, setOpen, catalog, setCatalog, placed, setPlaced, addMetric, removeMetric, sessions, views } = useKpis();
+  const { open, setOpen, catalog, setCatalog, placed, addMetric, removeMetric, sessions, views, applyView } = useKpis();
   const viewList = [...views, ...RECOMMENDED_VIEWS.filter((r) => !views.some((v) => v.name === r.name))];
   const [q, setQ] = useState("");
   const placedSet = useMemo(() => new Set(placed ?? []), [placed]);
@@ -188,7 +188,7 @@ export default function KpiPanel() {
                   <button
                     key={v.name}
                     type="button"
-                    onClick={() => setPlaced(v.ids)}
+                    onClick={() => applyView(v)}
                     title="load this view onto the board"
                     className="flex items-center gap-2 rounded-md border border-zinc-800/70 px-2.5 py-2 text-left transition-colors hover:border-zinc-600 hover:bg-zinc-900/60"
                   >

@@ -552,7 +552,7 @@ function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: s
 }
 
 // Save / load board VIEWS — a hover dropdown: name+save, recommended seeds, saved.
-function SaveMenu({ views, onApply, onSave, onDelete }: { views: SavedView[]; onApply: (ids: string[]) => void; onSave: (name: string) => void; onDelete: (name: string) => void }) {
+function SaveMenu({ views, onApply, onSave, onDelete }: { views: SavedView[]; onApply: (v: SavedView) => void; onSave: (name: string) => void; onDelete: (name: string) => void }) {
   const [name, setName] = useState("");
   return (
     <HoverMenu
@@ -592,14 +592,14 @@ function SaveMenu({ views, onApply, onSave, onDelete }: { views: SavedView[]; on
         </div>
         <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Recommended</div>
         {RECOMMENDED_VIEWS.map((v) => (
-          <button key={v.name} type="button" onClick={() => onApply(v.ids)} className="truncate rounded px-2 py-1 text-left text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900">
+          <button key={v.name} type="button" onClick={() => onApply(v)} className="truncate rounded px-2 py-1 text-left text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900">
             {v.name} <span className="text-zinc-600">· {v.ids.length}</span>
           </button>
         ))}
         {views.length > 0 && <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Saved</div>}
         {views.map((v) => (
           <div key={v.name} className="group flex items-center rounded hover:bg-zinc-900">
-            <button type="button" onClick={() => onApply(v.ids)} className="min-w-0 flex-1 truncate px-2 py-1 text-left text-[11px] text-zinc-300">
+            <button type="button" onClick={() => onApply(v)} className="min-w-0 flex-1 truncate px-2 py-1 text-left text-[11px] text-zinc-300">
               {v.name} <span className="text-zinc-600">· {v.ids.length}</span>
             </button>
             <button type="button" onClick={() => onDelete(v.name)} title="delete view" className="px-2 py-1 text-zinc-600 opacity-0 transition hover:text-red-300 group-hover:opacity-100">✕</button>
@@ -613,7 +613,7 @@ function SaveMenu({ views, onApply, onSave, onDelete }: { views: SavedView[]; on
 const STAT_KINDS = new Set(["stat"]);
 
 export default function FleetView() {
-  const { placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView } = useKpis();
+  const { placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [projects, setProjects] = useState<string[]>([]);
   const [wide, setWide] = useState(true);
@@ -698,16 +698,9 @@ export default function FleetView() {
               {sessionLabel}
             </span>
           </SessionMenu>
-          {/* ⋮ panels nav — Metrics → KPIs opens the library; ⟲ reset sits beside it */}
+          {/* ⋮ panels nav — Metrics → KPIs opens the library */}
           <TerminalNavMenu project={project ?? ""} sessionId={sessions[0] ?? null} />
-          <button type="button" onClick={() => window.dispatchEvent(new Event("hq:fleet-grid-reset"))} title="reset the dashboard layout" className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-          </button>
           <span className="ml-auto flex items-center gap-1">
-            <SaveMenu views={views} onApply={setPlaced} onSave={saveView} onDelete={deleteView} />
             <button type="button" onClick={() => setWide((v) => !v)} title={wide ? "focus width" : "widescreen"} className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M15 3h6v6" />
@@ -716,6 +709,19 @@ export default function FleetView() {
                 <path d="M3 21l7-7" />
               </svg>
             </button>
+          </span>
+        </div>
+        {/* view bar — the active dashboard view name · refresh + save, inline right */}
+        <div className="mt-2 flex items-center justify-between">
+          <span className="truncate text-[11px] text-zinc-300">{viewName}</span>
+          <span className="flex items-center gap-1">
+            <button type="button" onClick={() => window.dispatchEvent(new Event("hq:fleet-grid-reset"))} title="reset the dashboard layout" className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+            <SaveMenu views={views} onApply={applyView} onSave={saveView} onDelete={deleteView} />
           </span>
         </div>
       </div>

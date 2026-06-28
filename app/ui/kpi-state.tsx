@@ -26,6 +26,8 @@ export type KpiCtx = {
   views: SavedView[]; // user-saved board compositions (persisted)
   saveView: (name: string) => void;
   deleteView: (name: string) => void;
+  viewName: string; // the active view's name ("Custom" once manually edited)
+  applyView: (v: SavedView) => void;
 };
 
 export type SavedView = { name: string; ids: string[] };
@@ -50,6 +52,7 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
   const [project, setProject] = useState<string | null>(null);
   const [sessions, setSessions] = useState<string[]>([]);
   const [views, setViews] = useState<SavedView[]>([]);
+  const [viewName, setViewName] = useState("Dashboard");
 
   useEffect(() => {
     try {
@@ -94,7 +97,8 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
     toggle: () => setOpen((v) => !v),
     placed,
     setPlaced: writePlaced,
-    addMetric: (id) =>
+    addMetric: (id) => {
+      setViewName("Custom");
       setPlacedState((p) => {
         const cur = p ?? [];
         if (cur.includes(id)) return cur;
@@ -103,15 +107,18 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem(PLACED, JSON.stringify(next));
         } catch {}
         return next;
-      }),
-    removeMetric: (id) =>
+      });
+    },
+    removeMetric: (id) => {
+      setViewName("Custom");
       setPlacedState((p) => {
         const next = (p ?? []).filter((x) => x !== id);
         try {
           localStorage.setItem(PLACED, JSON.stringify(next));
         } catch {}
         return next;
-      }),
+      });
+    },
     catalog,
     setCatalog,
     project,
@@ -123,8 +130,14 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
       const n = name.trim();
       if (!n) return;
       writeViews([...views.filter((v) => v.name !== n), { name: n, ids: placed ?? [] }]);
+      setViewName(n);
     },
     deleteView: (name) => writeViews(views.filter((v) => v.name !== name)),
+    viewName,
+    applyView: (v) => {
+      writePlaced(v.ids);
+      setViewName(v.name);
+    },
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -149,6 +162,8 @@ export function useKpis(): KpiCtx {
       views: [],
       saveView: () => {},
       deleteView: () => {},
+      viewName: "Dashboard",
+      applyView: () => {},
     }
   );
 }
