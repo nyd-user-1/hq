@@ -620,7 +620,7 @@ function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: stri
 const STAT_KINDS = new Set(["stat"]);
 
 export default function FleetView() {
-  const { open, setOpen, placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
+  const { placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [projects, setProjects] = useState<string[]>([]);
   const [wide, setWide] = useState(false); // open in FOCUS mode by default
@@ -725,27 +725,9 @@ export default function FleetView() {
             </button>
           </span>
         </div>
-        {/* view bar — the view name (lowercase, saved-views dropdown) + a list-
-            ordered BUTTON next to it that opens the KPI metric library */}
+        {/* view bar — the view name (lowercase) is the saved-views dropdown trigger */}
         <div className="mt-2 flex items-center gap-2">
           <SaveMenu current={viewName} views={views} onApply={applyView} onSave={saveView} onDelete={deleteView} />
-          {/* lucide list-ordered — KPI library toggle. Kebab standard: no border, no
-              default bg, muted bg on hover only, p-1 / 14px. */}
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            title={open ? "close the KPI panel" : "open the KPI metric library"}
-            className={`rounded p-1 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white ${open ? "bg-zinc-800" : ""}`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <line x1="10" x2="21" y1="6" y2="6" />
-              <line x1="10" x2="21" y1="12" y2="12" />
-              <line x1="10" x2="21" y1="18" y2="18" />
-              <path d="M4 6h1v4" />
-              <path d="M4 10h2" />
-              <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
-            </svg>
-          </button>
         </div>
       </div>
 
