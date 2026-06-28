@@ -260,21 +260,16 @@ function StackedAreaBody({ shape }: { shape: Extract<Shape, { kind: "stackedArea
   const days = shape.dayLabels.length;
   const W = 300;
   const H = 70;
-  const totals = new Array<number>(days).fill(0);
-  for (const s of shape.series) for (let i = 0; i < days; i++) totals[i] += s.points[i] || 0;
-  const max = Math.max(1, ...totals);
+  // overlapping spline areas — each series from the baseline (not cumulative), on a
+  // shared scale, biggest total in back so smaller ones layer on top (the reference
+  // look). Smooth top edge + a vertical gradient fill, like the line chart.
+  const max = Math.max(1, ...shape.series.flatMap((s) => s.points));
   const X = (i: number) => (days > 1 ? (i / (days - 1)) * W : 0);
   const Y = (v: number) => H - (v / max) * (H - 4) - 2;
-  const cum = new Array<number>(days).fill(0);
-  const bands = shape.series.map((s) => {
-    const lower = cum.slice();
-    const upper = cum.map((c, i) => c + (s.points[i] || 0));
-    for (let i = 0; i < days; i++) cum[i] = upper[i];
-    const top = upper.map((v, i) => [X(i), Y(v)] as [number, number]);
-    const bot = lower.map((v, i) => [X(i), Y(v)] as [number, number]).reverse();
-    const d = `${smoothPath(top)} L${bot.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" L")} Z`;
-    return { tone: s.tone ?? "zinc", name: s.name, d };
-  });
+  const ordered = [...shape.series]
+    .map((s) => ({ s, total: s.points.reduce((a, b) => a + b, 0) }))
+    .sort((a, b) => b.total - a.total)
+    .map(({ s }) => s);
   const onMove = (e: React.MouseEvent) => {
     const r = ref.current?.getBoundingClientRect();
     if (!r || days < 1) return;
@@ -299,9 +294,28 @@ function StackedAreaBody({ shape }: { shape: Extract<Shape, { kind: "stackedArea
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={ref} className="relative min-h-0 w-full flex-1" onMouseMove={onMove} onMouseLeave={() => setTip(null)}>
         <svg viewBox="0 0 300 70" preserveAspectRatio="none" className="h-full w-full" aria-hidden>
-          {bands.map((b, i) => (
-            <path key={i} d={b.d} fill={INK[b.tone]} fillOpacity="0.5" stroke={INK[b.tone]} strokeOpacity="0.4" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
-          ))}
+          <defs>
+            {ordered.map((s) => {
+              const tone = s.tone ?? "zinc";
+              return (
+                <linearGradient key={s.name} id={`sa-${tone}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={INK[tone]} stopOpacity="0.4" />
+                  <stop offset="100%" stopColor={INK[tone]} stopOpacity="0.03" />
+                </linearGradient>
+              );
+            })}
+          </defs>
+          {ordered.map((s, i) => {
+            const tone = s.tone ?? "zinc";
+            const xy = s.points.map((p, j) => [X(j), Y(p)] as [number, number]);
+            const line = smoothPath(xy);
+            return (
+              <g key={i}>
+                <path d={`${line} L${W},${H} L0,${H} Z`} fill={`url(#sa-${tone})`} />
+                <path d={line} fill="none" stroke={INK[tone]} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+              </g>
+            );
+          })}
         </svg>
       </div>
       <div className="mt-1.5 flex justify-between text-[9px] text-zinc-600">
@@ -557,7 +571,7 @@ function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: stri
   return (
     <HoverMenu
       label={<span title="saved views" className="text-[11px]">{current}</span>}
-      labelClass="cursor-pointer rounded px-1 py-0.5 lowercase text-zinc-400 transition-colors hover:text-white"
+      labelClass="cursor-pointer rounded px-1 py-0.5 lowercase text-zinc-500 transition-colors hover:text-zinc-300"
       align="left"
     >
       <div className="flex w-60 flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl">
