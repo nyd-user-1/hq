@@ -57,7 +57,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
     <>
       {ids.map((id, i) => (
         <div key={id} className="relative flex min-w-0 flex-1 flex-col">
-          <Boundary label={`terminal ${i + 2}`}>
+          <Boundary label={`terminal-${i + 2}`} copyText="app/ui/terminal.tsx">
             <Link
               href={closeHref(id)}
               scroll={false}

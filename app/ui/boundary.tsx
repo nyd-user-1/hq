@@ -7,6 +7,7 @@ import BoundaryChip from "@/app/ui/boundary-chip";
 // `trail` renders just after it (e.g. the new-session "+").
 export default function Boundary({
   label,
+  copyText,
   lead,
   trail,
   topOnly = false,
@@ -15,6 +16,9 @@ export default function Boundary({
   children,
 }: {
   label: string;
+  // What the chip COPIES when it must differ from the display (e.g. four wall
+  // panes labelled terminal-1..4 that all copy app/ui/terminal.tsx).
+  copyText?: string;
   lead?: React.ReactNode;
   trail?: React.ReactNode;
   // `topOnly`: just a dashed TOP line (no box, no side/bottom border, no
@@ -44,7 +48,7 @@ export default function Boundary({
     >
       <span className="absolute -top-2.5 left-4 z-10 flex max-w-[calc(100%-2rem)] items-center gap-2">
         {lead}
-        <BoundaryChip label={label} />
+        <BoundaryChip label={label} copyText={copyText} />
         {trail}
       </span>
       {children}

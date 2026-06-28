@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ago } from "@/lib/ago";
+import { slotOf } from "@/app/ui/terminals";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
 // first, labelled by the short session id (+ a dim project suffix, or a custom
@@ -423,7 +424,8 @@ export default function SidebarRecents() {
   // One session row — extracted so the Archived group reuses the exact same row
   // (label, favorite star, live dot, kebab) and the inline rename/project editor.
   const renderRow = (s: Recent) => {
-    const active = current === s.id;
+    // Highlighted when this session is open in ANY terminal slot (1-4), not just T1.
+    const active = slotOf(params, s.id) > 0;
     const openHref = wallParam
       ? `${pathname}?session=${s.id}&wall=${wallParam}`
       : `${pathname}?session=${s.id}`;
@@ -653,6 +655,33 @@ export default function SidebarRecents() {
             )}
           </div>
           <div className="my-1 h-px bg-zinc-800" />
+          {(() => {
+            // Add this session to the WALL as the next pane ("Terminal 2 → 3 → 4"
+            // by how many are already up; 4 panes = the cap). Hidden if it's
+            // already a pane (Terminal 1 or on the wall).
+            const ids = wallParam
+              ? wallParam.split(",").map((x) => x.trim()).filter(Boolean)
+              : [];
+            const total = 1 + ids.length;
+            if (total >= 4 || menuSession.id === current || ids.includes(menuSession.id))
+              return null;
+            return (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  const sp = new URLSearchParams();
+                  if (current) sp.set("session", current);
+                  sp.set("wall", [...ids, menuSession.id].join(","));
+                  router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+                  closeMenu();
+                }}
+                className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+              >
+                <SplitIcon />
+                Terminal {total + 1}
+              </button>
+            );
+          })()}
           <button
             role="menuitem"
             onClick={() => {
@@ -699,33 +728,6 @@ export default function SidebarRecents() {
             <LinkIcon />
             Related…
           </button>
-          {(() => {
-            // Add this session to the WALL as the next pane. "Terminal 2 → 3 → 4"
-            // by how many are already up (4 panes = the cap). Hidden if this session
-            // is already a pane (Terminal 1 or on the wall).
-            const wallIds = wallParam
-              ? wallParam.split(",").map((x) => x.trim()).filter(Boolean)
-              : [];
-            const total = 1 + wallIds.length; // Terminal 1 + the wall panes
-            if (total >= 4 || menuSession.id === current || wallIds.includes(menuSession.id))
-              return null;
-            return (
-              <button
-                role="menuitem"
-                onClick={() => {
-                  const sp = new URLSearchParams();
-                  if (current) sp.set("session", current);
-                  sp.set("wall", [...wallIds, menuSession.id].join(","));
-                  router.push(`${pathname}?${sp.toString()}`, { scroll: false });
-                  closeMenu();
-                }}
-                className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
-              >
-                <SplitIcon />
-                Terminal {total + 1}
-              </button>
-            );
-          })()}
           <button
             role="menuitem"
             onClick={() => {
