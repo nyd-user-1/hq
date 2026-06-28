@@ -570,18 +570,7 @@ function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: stri
   const [name, setName] = useState("");
   return (
     <HoverMenu
-      label={
-        <span title="saved views" className="flex items-center gap-1.5 text-[11px]">
-          {current}
-          {/* lucide circle-ellipsis — the saved-views menu affordance */}
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <circle cx="12" cy="12" r="10" />
-            <path d="M17 12h.01" />
-            <path d="M12 12h.01" />
-            <path d="M7 12h.01" />
-          </svg>
-        </span>
-      }
+      label={<span title="saved views" className="text-[11px]">{current}</span>}
       labelClass="cursor-pointer rounded px-1 py-0.5 lowercase text-zinc-500 transition-colors hover:text-zinc-300"
       align="left"
     >
@@ -736,16 +725,24 @@ export default function FleetView() {
             </button>
           </span>
         </div>
-        {/* view bar — the view name (lowercase, saved-views dropdown) on the left;
-            a panel-right toggle for the KPI library on the right */}
-        <div className="mt-2 flex items-center justify-between">
+        {/* view bar — the view name (lowercase, saved-views dropdown) + a list-
+            ordered BUTTON next to it that opens the KPI metric library */}
+        <div className="mt-2 flex items-center gap-2">
           <SaveMenu current={viewName} views={views} onApply={applyView} onSave={saveView} onDelete={deleteView} />
-          {/* lucide panel-right-open / panel-right-close — toggles the KPI library */}
-          <button type="button" onClick={() => setOpen(!open)} title={open ? "close the KPI panel" : "open the KPI panel"} className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <path d="M15 3v18" />
-              {open ? <path d="m10 15-3-3 3-3" /> : <path d="m8 9 3 3-3 3" />}
+          {/* lucide list-ordered — the KPI library toggle (a button, not a bare icon) */}
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            title={open ? "close the KPI panel" : "open the KPI metric library"}
+            className={`flex items-center rounded-md border p-1.5 transition-colors ${open ? "border-zinc-600 bg-zinc-800 text-zinc-200" : "border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <line x1="10" x2="21" y1="6" y2="6" />
+              <line x1="10" x2="21" y1="12" y2="12" />
+              <line x1="10" x2="21" y1="18" y2="18" />
+              <path d="M4 6h1v4" />
+              <path d="M4 10h2" />
+              <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
             </svg>
           </button>
         </div>
