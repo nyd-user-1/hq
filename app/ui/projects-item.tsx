@@ -2,21 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { withPins } from "@/app/ui/keep-pins";
 
 // Projects nav item — sits directly under "New Session" in the sidebar. Opens the
-// Projects panel (/projects) while keeping the terminal pins (?session/?pair).
-// Lives here (not the panels dropdown) so Projects reads as a top-level
-// destination, claude.ai-style.
+// full-width Projects browser (project-overlay.tsx) over the center column via
+// ?center=project, mirroring FilesItem: a query toggle (not a route) so it keeps
+// the current panel + the terminal pins; clicking again (or any session) drops it.
 export default function ProjectsItem() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
-  const active =
-    pathname === "/projects" || pathname.startsWith("/projects/");
-  // Toggle: open the panel if closed, close it (→ "/") if already open.
-  const href = active
-    ? withPins("/", params.toString())
-    : withPins("/projects", params.toString());
+  const active = params.get("center") === "project";
+  const sp = new URLSearchParams(params.toString());
+  if (active) sp.delete("center");
+  else sp.set("center", "project");
+  const href = `${pathname}${sp.toString() ? `?${sp}` : ""}`;
   return (
     <Link
       href={href}

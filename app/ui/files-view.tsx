@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SearchField from "@/app/ui/search-field";
-import PanelNav from "@/app/ui/panel-nav-bar";
+import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
 import CmdkFilesTable, { type FilesMeta } from "@/app/ui/cmdk-files-table";
 import type { FileRow } from "@/lib/files-index";
 
@@ -59,7 +59,7 @@ export default function FilesView() {
   // Centered "conversation shell" ↔ wide, mirroring the terminal's focus toggle.
   // Default WIDE: the 6-column table wants the room the overlay gives it; the
   // toggle centers it into the reading column for anyone who prefers that.
-  const [focusMode, setFocusMode] = useState(false);
+  const [focusMode, setFocusMode] = useState(true); // start in focus mode, like a session
 
   useEffect(() => {
     let alive = true;
@@ -126,8 +126,7 @@ export default function FilesView() {
           <span className="size-2 shrink-0 rounded-full bg-emerald-500/80" />
           <span className="font-mono text-zinc-300">files</span>
         </span>
-        <span className="font-mono text-[11px] text-zinc-600">—</span>
-        <PanelNav />
+        <TerminalNavMenu project="" sessionId={null} />
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <button
             onClick={close}
@@ -170,7 +169,7 @@ export default function FilesView() {
       {/* recent files — the parallel to new-session's project chips: a 2-row band
           that scrolls horizontally, basename labels, click opens the file. */}
       {!loading && recent.length > 0 && (
-        <div className="scrollbar-none grid grid-flow-col grid-rows-2 auto-cols-[9rem] gap-2 overflow-x-auto pb-1">
+        <div className="scrollbar-none mt-3 grid grid-flow-col grid-rows-2 auto-cols-[9rem] gap-2 overflow-x-auto pb-1">
           {recent.map((r) => (
             <button
               key={`${r.kind}:${r.ref}`}
@@ -192,7 +191,7 @@ export default function FilesView() {
         value={q}
         onChange={setQ}
         placeholder="Filter files by name or path…"
-        className="max-w-md"
+        className="mt-3 max-w-md"
       />
 
       {/* table — windowed; fills the rest */}
