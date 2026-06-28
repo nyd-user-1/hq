@@ -29,7 +29,12 @@ export type Shape =
   | { kind: "ranking"; title: string; rows: { name: string; pct: number; value: string }[]; tone?: Tone }
   | { kind: "distribution"; title: string; bins: { h: number; hot: boolean }[]; xL: string; xR: string; tone?: Tone }
   | { kind: "scatter"; title: string; pts: { x: number; y: number; label?: string }[]; xL: string; yL: string; tone?: Tone }
-  | { kind: "heatmap"; title: string; grid: number[][]; rows: string[]; cols: string[]; tone?: Tone };
+  | { kind: "heatmap"; title: string; grid: number[][]; rows: string[]; cols: string[]; tone?: Tone }
+  | { kind: "stacked"; title: string; segs: { name: string; value: string; pct: number; tone?: Tone }[] }
+  | { kind: "table"; title: string; cols: string[]; rows: string[][] }
+  | { kind: "calendar"; title: string; cells: number[]; capL: string; capR: string; tone?: Tone }
+  | { kind: "box"; title: string; min: number; q1: number; med: number; q3: number; max: number; fmt: "dur" | "num"; tone?: Tone }
+  | { kind: "timeline"; title: string; items: { label: string; at: number }[]; startMs: number; endMs: number; capL: string; capR: string; tone?: Tone };
 
 // Full kind superset — the catalog labels cards by these; renderers exist for the
 // implemented ones, the rest are reserved for the chart-zoo expansion.
@@ -178,6 +183,8 @@ function fleetCtx(project: string | null) {
   const week0 = dayStart.getTime() - 55 * DAY_MS;
   const sessDay = new Array<number>(14).fill(0);
   const sessWeek = new Array<number>(8).fill(0);
+  const cal = new Array<number>(35).fill(0); // last 5 weeks, for the calendar
+  const cal0 = dayStart.getTime() - 34 * DAY_MS;
   // activity heatmap — weekday (0=Sun) × hour (0..23)
   const heat: number[][] = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
   for (const t of mtimes) {
@@ -185,11 +192,13 @@ function fleetCtx(project: string | null) {
     if (di >= 0 && di < 14) sessDay[di]++;
     const wi = Math.floor((t - week0) / (7 * DAY_MS));
     if (wi >= 0 && wi < 8) sessWeek[wi]++;
+    const ci = Math.floor((t - cal0) / DAY_MS);
+    if (ci >= 0 && ci < 35) cal[ci]++;
     const d = new Date(t);
     heat[d.getDay()][d.getHours()]++;
   }
 
-  return { now, states, week, spend, set, active7d, todos, life, dayTok, weekTok, sessDay, sessWeek, heat };
+  return { now, states, week, spend, set, active7d, todos, life, dayTok, weekTok, sessDay, sessWeek, heat, cal };
 }
 
 // ── session context ──────────────────────────────────────────────────────────
@@ -282,6 +291,14 @@ const REGISTRY: Compute[] = [
   { def: { id: "tokens_by_turn", label: "Tokens by turn", group: "Session", kind: "ranking", scopes: ["session"] }, session: (c) => { const max = c.heavy[0]?.tok || 1; return ranking("Tokens by turn · top", c.heavy.map((t) => ({ name: `turn ${t.i + 1}`, pct: Math.round((t.tok / max) * 100), value: fmtTok(t.tok) })), "blue"); } },
   { def: { id: "time_per_turn", label: "Time per turn", group: "Session", kind: "distribution", scopes: ["session"] }, session: (c) => ({ kind: "distribution", title: "Time per turn", bins: bucket(c.gaps, [5_000, 15_000, 30_000, 60_000, 120_000, 300_000], 4), xL: "<5s", xR: "5m+", tone: "blue" }) },
   { def: { id: "tools_used", label: "Tools used", group: "Session", kind: "ranking", scopes: ["session"] }, session: (c) => { const max = c.tools[0]?.[1] || 1; return ranking("Tools used · this session", c.tools.map(([name, n]) => ({ name, pct: Math.round((n / max) * 100), value: String(n) })), "blue"); } },
+
+  // ── chart-zoo: composition / tabular / temporal / spread ──
+  { def: { id: "model_mix_stacked", label: "Model mix (stacked)", group: "Sessions", kind: "stacked", scopes: ["fleet"] }, fleet: (c) => ({ kind: "stacked", title: "Model mix · wk", segs: c.states.byModel.slice(0, 6).map((m, i) => ({ name: m.tier, value: Math.round(m.pct) + "%", pct: m.pct, tone: (["orange", "blue", "green", "amber", "red", "zinc"] as Tone[])[i] })) }) },
+  { def: { id: "top_sessions_table", label: "Top sessions (table)", group: "Sessions", kind: "table", scopes: ["fleet"] }, fleet: (c) => ({ kind: "table", title: "Top sessions", cols: ["session", "project", "turns", "tokens"], rows: [...c.set].sort((a, b) => b.weightedTokens - a.weightedTokens).slice(0, 8).map((s) => [s.id.slice(0, 8), s.project, String(s.messages), fmtTok(s.weightedTokens)]) }) },
+  { def: { id: "sessions_calendar", label: "Sessions calendar", group: "Sessions", kind: "calendar", scopes: ["fleet"] }, fleet: (c) => ({ kind: "calendar", title: "Sessions · last 5 weeks", cells: c.cal, capL: "5wk ago", capR: "today", tone: "green" }) },
+  { def: { id: "sessions_timeline", label: "Sessions timeline", group: "Sessions", kind: "timeline", scopes: ["fleet"] }, fleet: (c) => { const end = c.now, start = end - 14 * DAY_MS; return { kind: "timeline", title: "Sessions · 14d", items: c.set.filter((s) => s.lastActive >= start).slice(0, 40).map((s) => ({ label: `${s.project} ${s.id.slice(0, 6)}`, at: s.lastActive })), startMs: start, endMs: end, capL: "14d ago", capR: "now", tone: "blue" }; } },
+  { def: { id: "turn_time_box", label: "Turn time (box)", group: "Session", kind: "box", scopes: ["session"] }, session: (c) => { const g = [...c.gaps].sort((a, b) => a - b); const q = (p: number) => (g.length ? g[Math.min(g.length - 1, Math.floor(p * (g.length - 1)))] : 0); return { kind: "box", title: "Turn time · quartiles", min: q(0), q1: q(0.25), med: q(0.5), q3: q(0.75), max: q(1), fmt: "dur", tone: "blue" }; } },
+  { def: { id: "ctx_burndown", label: "Context burn-down", group: "Session", kind: "area", scopes: ["session"] }, session: (c) => area("Burn-down to 200k cliff", c.burn.map((b) => Math.max(0, CLIFF - b)), "start", "cliff", "amber") },
 
   // ── Todos ──
   { def: { id: "todos_total", label: "Todos · total", group: "Todos", kind: "stat", scopes: ["fleet"] }, fleet: (c) => ({ label: "todos", value: String(c.todos.length), sub: "total" }) },

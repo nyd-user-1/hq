@@ -24,6 +24,14 @@ const KPI_TXT: Record<Tone, string> = { blue: "text-blue-400", orange: "text-ora
 
 const fmtNum = (n: number): string =>
   n >= 1e9 ? (n / 1e9).toFixed(1) + "B" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(Math.round(n));
+const fmtDur = (ms: number): string => {
+  const s = ms / 1000;
+  if (s < 60) return Math.round(s) + "s";
+  const m = s / 60;
+  if (m < 60) return Math.round(m) + "m";
+  const h = m / 60;
+  return h < 24 ? h.toFixed(1) + "h" : Math.round(h / 24) + "d";
+};
 
 // Smooth (rounded) path — horizontal-tangent cubic between points.
 function smoothPath(pts: [number, number][]): string {
@@ -182,6 +190,111 @@ function HeatBody({ shape }: { shape: Extract<Shape, { kind: "heatmap" }> }) {
   );
 }
 
+function StackedBody({ shape }: { shape: Extract<Shape, { kind: "stacked" }> }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col justify-center gap-3">
+      <div className="flex h-4 w-full overflow-hidden rounded bg-zinc-800">
+        {shape.segs.filter((s) => s.pct > 0).map((s, i) => (
+          <span key={i} className={BAR[s.tone ?? "zinc"]} style={{ width: `${s.pct}%` }} title={`${s.name} ${s.value}`} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px]">
+        {shape.segs.map((s, i) => (
+          <span key={i} className="flex items-center gap-1 text-zinc-400">
+            <i className={`size-2 rounded-sm ${BAR[s.tone ?? "zinc"]}`} />
+            {s.name} {s.value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TableBody({ shape }: { shape: Extract<Shape, { kind: "table" }> }) {
+  return (
+    <div className="scrollbar-none min-h-0 flex-1 overflow-auto">
+      <table className="w-full text-[10px]">
+        <thead>
+          <tr className="text-zinc-600">
+            {shape.cols.map((c) => (
+              <th key={c} className="px-1 py-0.5 text-left font-normal uppercase tracking-wider">{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {shape.rows.map((r, i) => (
+            <tr key={i} className="border-t border-zinc-800/60 text-zinc-300">
+              {r.map((cell, j) => (
+                <td key={j} className="truncate px-1 py-0.5 font-mono">{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CalendarBody({ shape }: { shape: Extract<Shape, { kind: "calendar" }> }) {
+  const ink = INK[shape.tone ?? "zinc"];
+  const max = Math.max(1, ...shape.cells);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
+      <div className="grid min-h-0 flex-1 grid-cols-7 gap-1">
+        {shape.cells.map((v, i) => (
+          <span key={i} className="rounded-sm" style={{ background: ink, opacity: v ? 0.2 + 0.8 * (v / max) : 0.05 }} title={`${v} sessions`} />
+        ))}
+      </div>
+      <div className="flex justify-between text-[9px] text-zinc-600">
+        <span>{shape.capL}</span>
+        <span>{shape.capR}</span>
+      </div>
+    </div>
+  );
+}
+
+function BoxBody({ shape }: { shape: Extract<Shape, { kind: "box" }> }) {
+  const f = shape.fmt === "dur" ? fmtDur : fmtNum;
+  const max = Math.max(1, shape.max);
+  const pct = (v: number) => (v / max) * 100;
+  const tone = shape.tone ?? "zinc";
+  const ink = INK[tone];
+  return (
+    <div className="flex min-h-0 flex-1 flex-col justify-center gap-2">
+      <div className="relative h-6">
+        <div className="absolute top-1/2 h-px -translate-y-1/2 bg-zinc-600" style={{ left: `${pct(shape.min)}%`, width: `${pct(shape.max) - pct(shape.min)}%` }} />
+        <div className="absolute top-1/2 h-4 -translate-y-1/2 rounded-sm border" style={{ left: `${pct(shape.q1)}%`, width: `${Math.max(1, pct(shape.q3) - pct(shape.q1))}%`, background: `${ink}33`, borderColor: ink }} />
+        <div className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2" style={{ left: `${pct(shape.med)}%`, background: BRIGHT[tone] }} />
+      </div>
+      <div className="flex justify-between text-[9px] text-zinc-600">
+        <span>{f(shape.min)}</span>
+        <span>med {f(shape.med)}</span>
+        <span>{f(shape.max)}</span>
+      </div>
+    </div>
+  );
+}
+
+function TimelineBody({ shape }: { shape: Extract<Shape, { kind: "timeline" }> }) {
+  const ink = INK[shape.tone ?? "zinc"];
+  const span = Math.max(1, shape.endMs - shape.startMs);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
+      <div className="relative min-h-0 flex-1">
+        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-zinc-800" />
+        {shape.items.map((it, i) => {
+          const left = Math.max(0, Math.min(100, ((it.at - shape.startMs) / span) * 100));
+          return <span key={i} className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${left}%`, top: "50%", background: ink, opacity: 0.6 }} title={it.label} />;
+        })}
+      </div>
+      <div className="flex justify-between text-[9px] text-zinc-600">
+        <span>{shape.capL}</span>
+        <span>{shape.capR}</span>
+      </div>
+    </div>
+  );
+}
+
 function ShapeCard({ shape }: { shape: Shape }) {
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
@@ -196,6 +309,11 @@ function ShapeCard({ shape }: { shape: Shape }) {
         {shape.kind === "distribution" && <DistBody shape={shape} />}
         {shape.kind === "scatter" && <ScatterBody shape={shape} />}
         {shape.kind === "heatmap" && <HeatBody shape={shape} />}
+        {shape.kind === "stacked" && <StackedBody shape={shape} />}
+        {shape.kind === "table" && <TableBody shape={shape} />}
+        {shape.kind === "calendar" && <CalendarBody shape={shape} />}
+        {shape.kind === "box" && <BoxBody shape={shape} />}
+        {shape.kind === "timeline" && <TimelineBody shape={shape} />}
       </div>
     </div>
   );
