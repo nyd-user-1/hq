@@ -52,7 +52,7 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
   const [project, setProject] = useState<string | null>(null);
   const [sessions, setSessions] = useState<string[]>([]);
   const [views, setViews] = useState<SavedView[]>([]);
-  const [viewName, setViewName] = useState("Dashboard");
+  const [viewName, setViewName] = useState("Overview");
 
   useEffect(() => {
     try {
@@ -162,7 +162,7 @@ export function useKpis(): KpiCtx {
       views: [],
       saveView: () => {},
       deleteView: () => {},
-      viewName: "Dashboard",
+      viewName: "Overview",
       applyView: () => {},
     }
   );

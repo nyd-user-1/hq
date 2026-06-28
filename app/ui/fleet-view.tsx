@@ -552,20 +552,20 @@ function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: s
 }
 
 // Save / load board VIEWS — a hover dropdown: name+save, recommended seeds, saved.
-function SaveMenu({ views, onApply, onSave, onDelete }: { views: SavedView[]; onApply: (v: SavedView) => void; onSave: (name: string) => void; onDelete: (name: string) => void }) {
+function SaveMenu({ current, views, onApply, onSave, onDelete }: { current: string; views: SavedView[]; onApply: (v: SavedView) => void; onSave: (name: string) => void; onDelete: (name: string) => void }) {
   const [name, setName] = useState("");
   return (
     <HoverMenu
       label={
-        <span title="saved views" className="flex items-center">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-            <path d="M17 21v-8H7v8M7 3v5h8" />
+        <span title="saved views" className="flex items-center gap-1 text-[11px] text-zinc-300">
+          {current}
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600" aria-hidden>
+            <path d="m6 9 6 6 6-6" />
           </svg>
         </span>
       }
-      labelClass="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-      align="right"
+      labelClass="cursor-pointer rounded px-1 py-0.5 transition-colors hover:text-white"
+      align="left"
     >
       <div className="flex w-60 flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl">
         <div className="flex items-center gap-1">
@@ -613,10 +613,10 @@ function SaveMenu({ views, onApply, onSave, onDelete }: { views: SavedView[]; on
 const STAT_KINDS = new Set(["stat"]);
 
 export default function FleetView() {
-  const { placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
+  const { setOpen, placed, setPlaced, addMetric, removeMetric, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [projects, setProjects] = useState<string[]>([]);
-  const [wide, setWide] = useState(true);
+  const [wide, setWide] = useState(false); // open in FOCUS mode by default
 
   useEffect(() => {
     let alive = true;
@@ -711,18 +711,27 @@ export default function FleetView() {
             </button>
           </span>
         </div>
-        {/* view bar — the active dashboard view name · refresh + save, inline right */}
+        {/* view bar — the view name (saved-views dropdown) + refresh on the left;
+            the chart-column button (opens the KPI library) on the right */}
         <div className="mt-2 flex items-center justify-between">
-          <span className="truncate text-[11px] text-zinc-300">{viewName}</span>
           <span className="flex items-center gap-1">
+            <SaveMenu current={viewName} views={views} onApply={applyView} onSave={saveView} onDelete={deleteView} />
             <button type="button" onClick={() => window.dispatchEvent(new Event("hq:fleet-grid-reset"))} title="reset the dashboard layout" className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
               </svg>
             </button>
-            <SaveMenu views={views} onApply={applyView} onSave={saveView} onDelete={deleteView} />
           </span>
+          {/* lucide chart-column-increasing — opens the KPI metric library */}
+          <button type="button" onClick={() => setOpen(true)} title="metric library — add charts" className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M13 17V9" />
+              <path d="M18 17V5" />
+              <path d="M8 17v-3" />
+              <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+            </svg>
+          </button>
         </div>
       </div>
 
