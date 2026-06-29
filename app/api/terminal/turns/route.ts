@@ -12,6 +12,7 @@ import { getSessionsMeta } from "@/lib/sessions-meta";
 import { handoffsFor } from "@/lib/handoffs"; // HQ↔terminal control-transfer markers (NOT vault's latestHandoff above)
 import { channelFor } from "@/lib/channel"; // channel-in: is a live push-channel open for this session?
 import { isChannelEnabled } from "@/lib/channel-mode"; // the explicit experimental-path toggle (default OFF = MVP)
+import { listRepls } from "@/lib/repl"; // the daemon's warm pool — durable "hq owns this session" truth
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,17 @@ export async function GET(req: Request) {
   // confirm in the send box; a cold resume just proceeds + drops a plain divider.
   const surface = resolved ? sessionSurface(resolved) : "cc";
   const liveTerminal = !!resolved && isLiveTerminal(resolved);
+  // Durable hq-ownership: does the daemon hold a warm REPL for THIS session right
+  // now, and is it mid-turn? This is the source of truth for "hq can drive + stop
+  // this session" — unlike the client's per-instance `live`/`sending` flags, it
+  // survives a reload/remount. Without it, an hq-started session whose component
+  // re-mounted falls back to `locked` (no stop button, "locked while active") even
+  // though hq's warm process is right there, runnable and killable. listRepls() is
+  // non-spawning (returns [] with no daemon) and a cheap local-socket call.
+  const agents = resolved ? await listRepls() : [];
+  const owned = agents.find((a) => a.sessionId === resolved || a.key === resolved);
+  const hqOwned = !!owned;
+  const hqBusy = !!owned?.busy;
   // Only meaningful when NOT working: did the last turn end on a hard interrupt?
   // Drives the terminal's red "interrupted — awaiting new direction" border.
   const interrupted = !status && lastTurnInterrupted(resolved);
@@ -127,6 +139,8 @@ export async function GET(req: Request) {
     channelMode, // experimental channel toggle is ON globally (drives the header flask)
     surface, // "hq" | "cc" — last activity surface for the resolved session
     liveTerminal, // resuming would fork a live CC terminal → show the neutral confirm
+    hqOwned, // the daemon holds a warm REPL for this session → hq can drive + stop it (never "locked")
+    hqBusy, // that warm REPL is mid-turn right now → show the stop button even after a remount
     interrupted,
     diverged: rival.diverged,
     rivalLeafUuid: rival.rivalLeafUuid,

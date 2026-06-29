@@ -1029,6 +1029,13 @@ export default function Terminal({
   // Fork affordance: the resolved session's last surface ("hq"|"cc") and whether
   // resuming it would FORK a live Claude Code terminal. From the turns poll.
   const [liveTerminal, setLiveTerminal] = useState(false);
+  // Durable hq-ownership (from the turns poll, server-derived via the daemon's warm
+  // pool). `live`/`sending` are per-instance and die on remount/reload; these don't.
+  // hqOwned = the daemon holds a warm REPL for this session → hq can drive + stop it,
+  // so it's NEVER "locked". hqBusy = that REPL is mid-turn → show the stop button even
+  // when this component never sent (a reload of an in-flight hq-started session).
+  const [hqOwned, setHqOwned] = useState(false);
+  const [hqBusy, setHqBusy] = useState(false);
   // The GLOBAL experimental channel toggle (account menu → lib/channel-mode.ts).
   // Separate from per-session channelConnected: drives the header flask so you can
   // never be in channel mode without a visible marker, even on a session that isn't
@@ -1097,14 +1104,16 @@ export default function Terminal({
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // debounce orange→green
   const dismissRef = useRef<(() => void) | null>(null); // detaches the held-green engagement listeners
   const working = status !== null;
-  // Locked = a non-live (HQ doesn't own it) session that's mid-turn: sending would
-  // --resume a SECOND process and interleave/corrupt. The send box disables until it
-  // goes idle. EXEMPTION (channel-in): a channel-connected session is driven by PUSH
-  // (POST /api/channel), not --resume, so it is fork-free and NEVER locked even while
-  // busy — that is the whole point of channel-in. This supersedes the old "any
-  // non-live busy session reads locked" caveat: a session with a live push-channel
-  // (detected via channelConnected from the turns poll) stays sendable mid-turn.
-  const locked = !live && !channelConnected && working;
+  // Locked = a session HQ doesn't own that's mid-turn: sending would --resume a
+  // SECOND process and interleave/corrupt. The send box disables until it goes idle.
+  // EXEMPTIONS (all fork-free, so NEVER locked even while busy):
+  //   • live          — this instance is driving the warm REPL right now.
+  //   • hqOwned       — the daemon holds a warm REPL for it (DURABLE: survives a
+  //                     remount/reload that drops `live`), so sending routes through
+  //                     that same process, not a fork. Fixes the "I started it in HQ
+  //                     but it says locked while active" bug after a re-mount.
+  //   • channelConnected — driven by PUSH (POST /api/channel), not --resume.
+  const locked = !live && !hqOwned && !channelConnected && working;
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
   // CODE-REVIEW FE-5: the Esc handler used to bind on EVERY render (no deps) so
   // its closures stayed fresh, but the terminal re-renders every 1s while working
@@ -1431,6 +1440,10 @@ export default function Terminal({
       // channel push to a busy session keeps it true across the working-tick.
       setChannelConnected(d.channelConnected ?? false);
       setLiveTerminal(d.liveTerminal ?? false);
+      // Durable daemon ownership — feeds `locked` (never lock an hq-owned session)
+      // and the stop button (show it mid-turn even after a remount dropped `sending`).
+      setHqOwned(d.hqOwned ?? false);
+      setHqBusy(d.hqBusy ?? false);
       setChannelMode(d.channelMode ?? false);
       setInterrupted(d.interrupted ?? false);
       // LATCH the divergence net: raise on a rival, but NEVER clear on !diverged
@@ -2472,7 +2485,9 @@ export default function Terminal({
   // there's no mid-turn abort-but-keep-warm primitive (see risks). Also clears
   // the optimistic in-flight flags since repl.busy may never have risen.
   async function stopSend() {
-    const target = sendTargetRef.current;
+    // sendTargetRef is only set by a local doSend — fall back to the pinned/resolved
+    // id so stopping works on an hq-owned run this instance never sent (post-remount).
+    const target = sendTargetRef.current ?? pinned ?? resolvedId;
     if (!target) return;
     stoppedRef.current = true;
     setItems((t) => [
@@ -2540,6 +2555,10 @@ export default function Terminal({
     (draft.trim() !== "" || attachments.length > 0) &&
     (staged || !notConnected) &&
     !locked;
+  // The send (↑) button morphs into the red stop while a run is in flight. `sending`
+  // is this instance's optimistic flag; OR in the durable signal so a reload / remount
+  // of an hq-owned, mid-turn session still shows stop (not a dead send arrow).
+  const inFlight = sending || (hqOwned && hqBusy);
 
   // The cache meter — top-right in the header (and the footer in the centered
   // shell). ctx moved out to sit beside the session id (ctxMeter, below).
@@ -3736,7 +3755,7 @@ export default function Terminal({
               )}
               {/* send (↑) → while a run is in flight, becomes the red stop button
                   with the traditional white square. */}
-              {sending ? (
+              {inFlight ? (
                 <button
                   type="button"
                   onClick={stopSend}
