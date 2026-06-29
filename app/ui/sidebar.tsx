@@ -22,7 +22,7 @@ export default function Sidebar() {
       <Link
         href="/"
         scroll={false}
-        className="block shrink-0 rounded-lg border border-zinc-800 px-2.5 py-1.5 transition-colors hover:bg-zinc-900"
+        className="block shrink-0 rounded-lg px-2.5 py-1.5 text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
       >
         <h1 className="text-base font-normal tracking-tight">hq/terminal</h1>
       </Link>
