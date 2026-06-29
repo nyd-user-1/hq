@@ -69,7 +69,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
                 <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </Link>
-            <Terminal sessionId={id} initialFocus={initialFocus} />
+            <Terminal sessionId={id} initialFocus={initialFocus} terminalKey={`t${i + 2}`} />
           </Boundary>
         </div>
       ))}

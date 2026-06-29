@@ -12,6 +12,7 @@ import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import SendBoxSearch from "@/app/ui/send-box-search";
 import Tooltip from "@/app/ui/tooltip";
 import { useRepl } from "@/app/ui/use-repl";
+import { useFocus } from "@/app/ui/focus-state";
 import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
 import SessionMenu from "@/app/ui/session-menu";
 import { OnboardingConversation } from "@/app/ui/landing-install";
@@ -70,6 +71,10 @@ const TERMINAL_RUNTIME_CSS = `
 .boundary-flash.is-thinking .boundary-flash-chip { background-color: #ea580c !important; color: #fff !important; }
 .boundary-flash.is-done .boundary-flash-chip { background-color: #16a34a !important; color: #fff !important; }
 .boundary-flash.is-interrupted .boundary-flash-chip { background-color: #dc2626 !important; color: #fff !important; }
+/* FOCUS: the active terminal's resting border (blue-600). NO !important on purpose —
+   it outranks the base zinc-700 (two classes vs one) but LOSES to the turn-state
+   rules above, so a working pane shows its orange/green/red, not blue. */
+.boundary-flash.is-active { border-color: #2563eb; }
 /* Find-in-page: a crisp white × on a dark circle for the native clear button. */
 .hq-find-field::-webkit-search-cancel-button {
   -webkit-appearance: none; appearance: none;
@@ -903,6 +908,7 @@ export default function Terminal({
   paramKey = "session",
   initialFocus = true,
   sessionId,
+  terminalKey = "t1",
 }: {
   // Which URL param this terminal reads/writes for its session. Terminal 1 (the
   // shell's always-mounted heart) uses "session"; Terminal 2 (the pair pane)
@@ -918,8 +924,13 @@ export default function Terminal({
   // scheme. Every URL-coupled bit below short-circuits on `controlled`, so the
   // existing T1/T2 path (sessionId absent) stays byte-for-byte unchanged.
   sessionId?: string;
+  // FOCUS key — this terminal's stable slot id ("t1" for Terminal 1, "t2".."t4"
+  // for wall panes). The active one wears a blue resting boundary; clicking a
+  // terminal makes it active. See app/ui/focus-state.tsx.
+  terminalKey?: string;
 } = {}) {
   const controlled = sessionId != null && sessionId !== "";
+  const { activeKey, setActive } = useFocus();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -1339,6 +1350,20 @@ export default function Terminal({
       dismissRef.current?.();
     };
   }, [working, sending, interrupted, paramKey]);
+
+  // FOCUS — a blue resting boundary on the ACTIVE terminal. Only meaningful with 2+
+  // terminals on screen: a lone terminal is trivially active, so showing blue then
+  // is noise — it stays grey until a sibling exists. The turn-state classes above
+  // (.is-thinking/.is-done/.is-interrupted) carry !important and BEAT .is-active, so
+  // focus-blue is the RESTING marker and the working colors win while the pane runs.
+  const multiTerminal = controlled ? true : !!wallParam;
+  const isActive = activeKey === terminalKey && multiTerminal;
+  useEffect(() => {
+    const box = rootRef.current?.closest(".boundary-flash");
+    if (!box) return;
+    box.classList.toggle("is-active", isActive);
+    return () => box.classList.remove("is-active");
+  }, [isActive]);
 
   // Inject the runtime <style> on mount so the turn-state border/pulse/chip rules
   // exist the instant `.is-thinking`/`.is-done` get toggled (id-guarded; the two
@@ -2629,6 +2654,9 @@ export default function Terminal({
   return (
     <div
       ref={rootRef}
+      // Click anywhere in the pane → make it the active terminal (Chrome's "active
+      // window"). Capture so it registers even if an inner handler stops the event.
+      onPointerDownCapture={() => setActive(terminalKey)}
       className="relative flex h-full min-h-0 flex-col gap-3"
       // The whole pane is the catch basin: drop a screenshot anywhere in THIS
       // terminal and it attaches to THIS send box; drop a To Do card and its text

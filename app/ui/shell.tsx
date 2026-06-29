@@ -47,6 +47,7 @@ import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
 import CommandPalette from "@/app/ui/command-palette";
+import { FocusProvider } from "@/app/ui/focus-state";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
 // always mounted — the persistent heart), and the right app-panel portal anchor.
@@ -73,6 +74,7 @@ export default async function Shell({
       {/* no row gap — the sidebar carries mr-4 while open (collapses with it)
           and the app panel brings its own ml-4, so closed = truly full width */}
       <CommandProvider>
+      <FocusProvider>
       <PlannerProvider>
       <ApiProvider>
       <PluginsProvider>
@@ -112,7 +114,7 @@ export default async function Shell({
                     <p className="text-sm text-zinc-600">loading terminal…</p>
                   }
                 >
-                  <Terminal initialFocus={focusDefault} />
+                  <Terminal initialFocus={focusDefault} terminalKey="t1" />
                 </Suspense>
               </Boundary>
             </TerminalRow>
@@ -205,6 +207,7 @@ export default async function Shell({
       </PluginsProvider>
       </ApiProvider>
       </PlannerProvider>
+      </FocusProvider>
       </CommandProvider>
     </div>
   );

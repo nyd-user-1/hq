@@ -9,7 +9,13 @@ import { useSidebar } from "@/app/ui/sidebar-state";
 export default function NewSessionItem() {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
-  const staged = useSearchParams().get("session") === "new";
+  const params = useSearchParams();
+  // Exclusive-blue: New Session lights only when it's the surface actually showing.
+  // A center overlay (Projects/Files/Fleet via ?center) sits ON TOP of the staging
+  // terminal, so it owns the highlight — don't also light New Session, or two items
+  // read "open" at once (the bug). center overlays are single-valued, so at most one
+  // sidebar item is ever blue.
+  const staged = params.get("session") === "new" && !params.get("center");
   const { open, toggle } = useSidebar();
   return (
     <button
