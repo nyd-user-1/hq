@@ -955,6 +955,14 @@ export default function Terminal({
   const staged = controlled
     ? false // a grid pane always drives a concrete session — never the home picker
     : sessionParam === "new" || (paramKey === "session" && !sessionParam && !sibling && !wallParam);
+  // Two faces of the staging surface — both have no pinned session and both launch a
+  // newborn on send (shared via `staged`), they differ ONLY in what sits above the
+  // send box. COMPOSE = an explicit "+ new session": a blank header + send box, cursor
+  // focused, like beginning a Claude chat (the "/new" face). HOME = a cold open of
+  // Terminal 1: the sessions-view index (projects band + every transcript) over that
+  // same box (the "/" face). Anything else that keys off `staged` covers both.
+  const compose = !controlled && sessionParam === "new";
+  const home = staged && !compose;
   const pinned = staged ? null : sessionParam; // null = newest session
   // ?install=1 = preview the deployed install card locally (the empty-state the
   // terminal shows when there's no session — i.e. on a Vercel deploy).
@@ -1643,6 +1651,13 @@ export default function Terminal({
     setResume(null);
     setPredecessorCtx(0);
   }, [staged]);
+
+  // Compose mode (an explicit "+ new session") puts the cursor in the box, blinking —
+  // like starting a Claude chat. HOME leaves focus alone; you may be scanning the
+  // sessions table, not typing yet.
+  useEffect(() => {
+    if (compose) taRef.current?.focus();
+  }, [compose]);
 
   // The model picker override is per-session — clear it when the pin changes.
   useEffect(() => {
@@ -2677,7 +2692,7 @@ export default function Terminal({
             }`}
           />
           <span className="font-mono text-zinc-300">
-            {staged ? "new session" : project || "session"}
+            {compose ? "new session" : home ? "sessions" : project || "session"}
           </span>
         </span>
         {/* hover the id → SessionMenu (search + auto-scroll list of past sessions,
@@ -2963,9 +2978,11 @@ export default function Terminal({
         {/* The "+" staging view: nothing exists yet — say how a session is
             born, offer the recent list, and auto-flip when one appears. No
             handoff kickoff here: that belongs to /clear-born continuations. */}
-        {staged && (
-          // Top-aligned, full-width (matches the header rule above). Two ruled
-          // sections — PROJECTS (pick a launch target) then SESSIONS (reopen one).
+        {home && (
+          // The sessions-view index — Terminal 1's "/" face. Top-aligned, full-width
+          // (matches the header rule above). Two ruled sections — PROJECTS (pick a
+          // launch target) then SESSIONS (reopen one). COMPOSE skips this entirely:
+          // just the blank box below.
           <div className="flex w-full flex-col gap-6 pb-8 pt-6 font-mono">
             {/* PROJECTS — click to SELECT a launch target (the session starts only on
                 send, never on a stray click). An even grid, clamped to 2 rows; the
