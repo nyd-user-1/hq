@@ -491,16 +491,167 @@ function GanttBody({ shape }: { shape: Extract<Shape, { kind: "gantt" }> }) {
   );
 }
 
+// ── interactive temporal range — prototype on the tokens/day chart ───────────
+type RangeKey = "all" | "90" | "30" | "7";
+const RANGE_OPTS: [RangeKey, string][] = [
+  ["all", "All time"],
+  ["90", "Last 3 months"],
+  ["30", "Last 30 days"],
+  ["7", "Last 7 days"],
+];
+const SAMPLES = 56;
+const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+// Resample a series to a FIXED sample count so two different-length ranges can be
+// tweened element-wise (the morph), regardless of how many days each holds.
+function resample(pts: number[], n: number): number[] {
+  if (!pts.length) return new Array(n).fill(0);
+  if (pts.length === 1) return new Array(n).fill(pts[0]);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / (n - 1)) * (pts.length - 1);
+    const lo = Math.floor(t);
+    const hi = Math.min(pts.length - 1, lo + 1);
+    out.push(pts[lo] + (pts[hi] - pts[lo]) * (t - lo));
+  }
+  return out;
+}
+
+// The range picker — hq's HoverMenu, sitting where the kind-badge was (top-right).
+function RangeMenu({ value, onChange }: { value: RangeKey; onChange: (v: RangeKey) => void }) {
+  const cur = RANGE_OPTS.find((o) => o[0] === value)?.[1] ?? "All time";
+  return (
+    <span className="ml-auto shrink-0">
+      <HoverMenu
+        align="right"
+        label={
+          <span className="flex items-center gap-1 text-[10px] text-zinc-400">
+            {cur}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </span>
+        }
+        labelClass="cursor-pointer rounded px-1.5 py-0.5 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+      >
+        <div className="flex w-32 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+          {RANGE_OPTS.map(([v, l]) => (
+            <button key={v} type="button" onClick={() => onChange(v)} className={`rounded px-2 py-1 text-left text-[11px] transition-colors hover:bg-zinc-900 ${v === value ? "text-green-400" : "text-zinc-300"}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </HoverMenu>
+    </span>
+  );
+}
+
+// Gradient area + spline that TWEENS between ranges on requestAnimationFrame — the
+// dependency-free stand-in for recharts' path animation. Both endpoints resample to
+// SAMPLES, then lerp element-wise with easeInOutCubic over 380ms.
+function AnimatedLine({ shape, range }: { shape: Extract<Shape, { kind: "series" | "area" }>; range: RangeKey }) {
+  const tone = shape.tone ?? "blue";
+  const ink = INK[tone];
+  const n = range === "all" ? shape.points.length : Math.min(shape.points.length, Number(range));
+  // the REAL windowed points/labels (for the tooltip) and the resampled morph target
+  const win = useMemo(() => shape.points.slice(-Math.max(2, n)), [shape.points, n]);
+  const winLabels = useMemo(() => (shape.labels ?? []).slice(-Math.max(2, n)), [shape.labels, n]);
+  const target = useMemo(() => resample(win, SAMPLES), [win]);
+  // a VALUE signature — so the 8s poll handing us a new array of the SAME numbers
+  // doesn't restart the tween (that was the "crawl": a perpetual per-render restart).
+  const sig = useMemo(() => target.map((v) => Math.round(v)).join(","), [target]);
+
+  const [disp, setDisp] = useState(target);
+  const dispRef = useRef(target);
+  const rafRef = useRef(0);
+  useEffect(() => {
+    cancelAnimationFrame(rafRef.current);
+    const from = dispRef.current;
+    const start = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / 200); // snappy
+      const e = easeInOutCubic(p);
+      const next = from.map((v, i) => v + (target[i] - v) * e);
+      dispRef.current = next;
+      setDisp(next);
+      rafRef.current = p < 1 ? requestAnimationFrame(step) : 0;
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]); // animate ONLY when the values change
+
+  // hover tooltip over the real data points (crosshair + dot + floating row)
+  const cref = useRef<HTMLDivElement>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const [tip, setTip] = useState<Tip>(null);
+  const wn = win.length;
+  const onMove = (e: React.MouseEvent) => {
+    const r = cref.current?.getBoundingClientRect();
+    if (!r || wn < 2) return;
+    const idx = Math.max(0, Math.min(wn - 1, Math.round(((e.clientX - r.left) / r.width) * (wn - 1))));
+    setHover(idx);
+    setTip({ x: e.clientX, y: e.clientY, node: tipRow(winLabels[idx] ?? `#${idx + 1}`, fmtNum(win[idx])) });
+  };
+  const leave = () => {
+    setHover(null);
+    setTip(null);
+  };
+
+  const W = 300;
+  const H = 70;
+  const max = Math.max(1, ...disp);
+  const xy = disp.map((v, i) => [(i / (SAMPLES - 1)) * W, H - (v / max) * (H - 6) - 3] as [number, number]);
+  const line = smoothPath(xy);
+  const gid = `anim-${tone}`;
+  const capR = range === "all" ? "today" : range === "90" ? "3 mo" : `${range} d`;
+  const hx = hover != null && wn > 1 ? (hover / (wn - 1)) * 100 : 0;
+  const hSample = hover != null ? Math.round((hover / Math.max(1, wn - 1)) * (SAMPLES - 1)) : 0;
+  const hyPct = hover != null ? (xy[hSample][1] / H) * 100 : 0;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div ref={cref} className="relative min-h-0 w-full flex-1" onMouseMove={onMove} onMouseLeave={leave}>
+        <svg viewBox="0 0 300 70" preserveAspectRatio="none" className="h-full w-full" aria-hidden>
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={ink} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={ink} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <path d={line ? `${line} L${W},${H} L0,${H} Z` : ""} fill={`url(#${gid})`} />
+          <path d={line} fill="none" stroke={ink} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        </svg>
+        {hover != null && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 w-px bg-zinc-700/60" style={{ left: `${hx}%` }} />
+            <div className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-zinc-950" style={{ left: `${hx}%`, top: `${hyPct}%`, background: BRIGHT[tone] }} />
+          </>
+        )}
+      </div>
+      <div className="mt-1.5 flex justify-between text-[9px] text-zinc-600">
+        <span>{shape.capL}</span>
+        <span>{capR}</span>
+      </div>
+      <TipLayer tip={tip} />
+    </div>
+  );
+}
+
 function ShapeCard({ shape }: { shape: Shape }) {
+  const interactive = (shape.kind === "series" || shape.kind === "area") && !!shape.range;
+  const [range, setRange] = useState<RangeKey>("all");
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
       <div className="mb-2.5 flex items-baseline gap-2">
         <span className="truncate text-[11px] text-zinc-400">{shape.title}</span>
-        <span className="ml-auto rounded border border-zinc-800 px-1.5 text-[8px] uppercase tracking-widest text-zinc-600 transition group-hover/w:opacity-0">{shape.kind}</span>
+        {interactive ? (
+          <RangeMenu value={range} onChange={setRange} />
+        ) : (
+          <span className="ml-auto rounded border border-zinc-800 px-1.5 text-[8px] uppercase tracking-widest text-zinc-600 transition group-hover/w:opacity-0">{shape.kind}</span>
+        )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
-        {shape.kind === "series" && <LineChart shape={shape} strong={false} />}
-        {shape.kind === "area" && <LineChart shape={shape} strong={true} />}
+        {shape.kind === "series" && (interactive ? <AnimatedLine shape={shape} range={range} /> : <LineChart shape={shape} strong={false} />)}
+        {shape.kind === "area" && (interactive ? <AnimatedLine shape={shape} range={range} /> : <LineChart shape={shape} strong={true} />)}
         {shape.kind === "ranking" && <RankingBody shape={shape} />}
         {shape.kind === "distribution" && <DistBody shape={shape} />}
         {shape.kind === "scatter" && <ScatterBody shape={shape} />}
@@ -569,6 +720,10 @@ function ProjectMenu({ projects, value, onPick }: { projects: string[]; value: s
 // a HEADER (search over the whole catalog), a scrollable BODY (recommended + saved
 // VIEWS first, then the full metric catalog grouped, click-to-toggle), and a FOOTER
 // (the "save current as" field + button). The search filters both views and metrics.
+// Display-only Title Case — capitalize the first letter of each word; the stored
+// view/metric names (used for save/apply/delete) are left untouched.
+const titleCase = (s: string) => s.replace(/(^|\s)([a-z])/g, (_, b: string, c: string) => b + c.toUpperCase());
+
 function SaveMenu({
   current,
   views,
@@ -579,6 +734,8 @@ function SaveMenu({
   placedSet,
   onAddMetric,
   onRemoveMetric,
+  onOpenPanel,
+  onNewBoard,
 }: {
   current: string;
   views: SavedView[];
@@ -589,6 +746,8 @@ function SaveMenu({
   placedSet: Set<string>;
   onAddMetric: (id: string) => void;
   onRemoveMetric: (id: string) => void;
+  onOpenPanel: () => void;
+  onNewBoard: () => void;
 }) {
   const [name, setName] = useState("");
   const [q, setQ] = useState("");
@@ -617,8 +776,8 @@ function SaveMenu({
 
   return (
     <HoverMenu
-      label={<span title="saved views" className="text-[11px]">{current}</span>}
-      labelClass="cursor-pointer rounded px-1 py-0.5 lowercase text-zinc-500 transition-colors hover:text-zinc-300"
+      label={<span title="saved views" className="text-[11px]">{titleCase(current)}</span>}
+      labelClass="cursor-pointer rounded px-1 py-0.5 text-zinc-500 transition-colors hover:text-zinc-300"
       align="left"
     >
       <div className="flex max-h-[360px] w-72 flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
@@ -643,9 +802,42 @@ function SaveMenu({
 
         {/* BODY — VIEWS first, then the metric catalog (scrollable) */}
         <div className="scrollbar-none flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5">
+          {/* start a blank board + open the panel to build one from scratch */}
+          <button
+            type="button"
+            onClick={onNewBoard}
+            title="blank the board and open the KPI panel to build your own"
+            className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] text-zinc-200 transition-colors hover:bg-zinc-900"
+          >
+            <span className="min-w-0 flex-1 truncate">New dashboard</span>
+          </button>
+          {/* open the full metrics panel (kpi-panel.tsx) */}
+          <button
+            type="button"
+            onClick={onOpenPanel}
+            title="toggle the KPI panel"
+            className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] text-zinc-200 transition-colors hover:bg-zinc-900"
+          >
+            <span className="min-w-0 flex-1 truncate">KPI panel</span>
+          </button>
+          <div className="mx-1 my-0.5 h-px bg-zinc-800" />
+          {savedViews.length > 0 && (
+            <>
+              <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Saved</div>
+              {savedViews.map((v) => (
+                <div key={v.name} className="group flex items-center rounded hover:bg-zinc-900">
+                  <button type="button" onClick={() => onApply(v)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-[11px] text-zinc-300">
+                    <span className="min-w-0 flex-1 truncate">{titleCase(v.name)}</span>
+                    <span className="shrink-0 text-[9px] uppercase tracking-wide text-zinc-600">{v.ids.length} cards</span>
+                  </button>
+                  <button type="button" onClick={() => onDelete(v.name)} title="delete view" className="px-2 py-1 text-zinc-600 opacity-0 transition hover:text-red-300 group-hover:opacity-100">✕</button>
+                </div>
+              ))}
+            </>
+          )}
           {recommended.length > 0 && (
             <>
-              <div className="px-1 pt-0.5 text-[9px] uppercase tracking-widest text-zinc-600">Recommended</div>
+              <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Recommended</div>
               {recommended.map((v) => (
                 <button
                   key={v.name}
@@ -654,23 +846,9 @@ function SaveMenu({
                   title="load this view onto the board"
                   className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900"
                 >
-                  <span className="min-w-0 flex-1 truncate">{v.name}</span>
+                  <span className="min-w-0 flex-1 truncate">{titleCase(v.name)}</span>
                   <span className="shrink-0 text-[9px] uppercase tracking-wide text-zinc-600">{v.ids.length} cards</span>
                 </button>
-              ))}
-            </>
-          )}
-          {savedViews.length > 0 && (
-            <>
-              <div className="px-1 pt-1 text-[9px] uppercase tracking-widest text-zinc-600">Saved</div>
-              {savedViews.map((v) => (
-                <div key={v.name} className="group flex items-center rounded hover:bg-zinc-900">
-                  <button type="button" onClick={() => onApply(v)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-[11px] text-zinc-300">
-                    <span className="min-w-0 flex-1 truncate">{v.name}</span>
-                    <span className="shrink-0 text-[9px] uppercase tracking-wide text-zinc-600">{v.ids.length} cards</span>
-                  </button>
-                  <button type="button" onClick={() => onDelete(v.name)} title="delete view" className="px-2 py-1 text-zinc-600 opacity-0 transition hover:text-red-300 group-hover:opacity-100">✕</button>
-                </div>
               ))}
             </>
           )}
@@ -687,7 +865,7 @@ function SaveMenu({
                     title={on ? "on board — click to remove" : "click to add to the board"}
                     className={`flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] transition-colors hover:bg-zinc-900 ${on ? "text-emerald-300" : "text-zinc-300"}`}
                   >
-                    <span className="min-w-0 flex-1 truncate">{d.label}</span>
+                    <span className="min-w-0 flex-1 truncate">{titleCase(d.label)}</span>
                     <span className={`shrink-0 text-[9px] uppercase tracking-wide ${on ? "text-emerald-500/80" : "text-zinc-600"}`}>{on ? "on" : d.kind}</span>
                   </button>
                 );
@@ -733,7 +911,7 @@ function SaveMenu({
 const STAT_KINDS = new Set(["stat"]);
 
 export default function FleetView() {
-  const { placed, setPlaced, addMetric, removeMetric, catalog, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView } = useKpis();
+  const { placed, setPlaced, addMetric, removeMetric, catalog, setCatalog, project, setProject, sessions, setSessions, views, saveView, deleteView, viewName, applyView, open, setOpen } = useKpis();
   const [metrics, setMetrics] = useState<FleetMetrics | null>(null);
   const [projects, setProjects] = useState<string[]>([]);
   const [wide, setWide] = useState(false); // open in FOCUS mode by default
@@ -850,6 +1028,11 @@ export default function FleetView() {
             placedSet={new Set(placed ?? [])}
             onAddMetric={addMetric}
             onRemoveMetric={removeMetric}
+            onOpenPanel={() => setOpen(!open)}
+            onNewBoard={() => {
+              setPlaced([]);
+              setOpen(true);
+            }}
           />
         </div>
       </div>

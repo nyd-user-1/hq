@@ -24,8 +24,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export type Tone = "blue" | "orange" | "green" | "amber" | "red" | "zinc";
 export type Stat = { label: string; value: string; sub?: string; tone?: Tone };
 export type Shape =
-  | { kind: "series"; title: string; points: number[]; capL: string; capR: string; labels?: string[]; tone?: Tone }
-  | { kind: "area"; title: string; points: number[]; capL: string; capR: string; labels?: string[]; tone?: Tone }
+  | { kind: "series"; title: string; points: number[]; capL: string; capR: string; labels?: string[]; tone?: Tone; range?: boolean }
+  | { kind: "area"; title: string; points: number[]; capL: string; capR: string; labels?: string[]; tone?: Tone; range?: boolean }
   | { kind: "ranking"; title: string; rows: { name: string; pct: number; value: string }[]; tone?: Tone }
   | { kind: "distribution"; title: string; bins: { h: number; hot: boolean }[]; xL: string; xR: string; tone?: Tone }
   | { kind: "scatter"; title: string; pts: { x: number; y: number; label?: string }[]; xL: string; yL: string; tone?: Tone }
@@ -102,8 +102,12 @@ function bucket(values: number[], edges: number[], hotFrom: number): { h: number
 }
 
 const ranking = (title: string, rows: { name: string; pct: number; value: string }[], tone?: Tone): Shape => ({ kind: "ranking", title, rows, tone });
-const series = (title: string, points: number[], capL: string, capR: string, tone?: Tone, labels?: string[]): Shape => ({ kind: "series", title, points, capL, capR, tone, labels });
-const area = (title: string, points: number[], capL: string, capR: string, tone?: Tone, labels?: string[]): Shape => ({ kind: "area", title, points, capL, capR, tone, labels });
+// A labeled (= time-axis) series/area is temporal → auto-enable the range picker.
+const series = (title: string, points: number[], capL: string, capR: string, tone?: Tone, labels?: string[]): Shape => ({ kind: "series", title, points, capL, capR, tone, labels, range: labels ? true : undefined });
+const area = (title: string, points: number[], capL: string, capR: string, tone?: Tone, labels?: string[]): Shape => ({ kind: "area", title, points, capL, capR, tone, labels, range: labels ? true : undefined });
+// All-time daily tokens, leading zero-days trimmed — the default window for the
+// interactive temporal charts (client slices it to 90/30/7).
+const allDayTok = () => { const a = tokensByDay(120); let z = 0; while (z < a.length - 7 && a[z].weighted === 0) z++; return a.slice(z); };
 
 function sessionMtimes(): number[] {
   const out: number[] = [];
@@ -170,7 +174,7 @@ function fleetCtx(project: string | null) {
   const todos = getTodos();
   const life = lifetimeByProject();
 
-  const dayTok = tokensByDay(14);
+  const dayTok = allDayTok();
   const dayTok56 = tokensByDay(56);
   const weekTok: number[] = [];
   for (let w = 0; w < 8; w++) {

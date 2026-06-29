@@ -668,27 +668,21 @@ export function recent(
       out.push({ kind: "transcript", ref: s.id, title, snippet: s.title || "", at: s.lastActive, score: 0, phrase: false });
     }
   }
-  if (scope === "all" || scope === "memory") {
-    let names: string[] = [];
-    try { names = fs.readdirSync(MEMORY_DIR); } catch { names = []; }
-    for (const name of names) {
-      if (!name.endsWith(".md")) continue; // MEMORY.md included — it's a real file (surface-everything)
-      const full = path.join(MEMORY_DIR, name);
-      try {
-        out.push({
-          kind: "memory",
-          ref: name,
-          title: name.slice(0, -3),
-          snippet: memoryDescription(fs.readFileSync(full, "utf8")),
-          at: fs.statSync(full).mtimeMs,
-          score: 0,
-          phrase: false,
-        });
-      } catch {
-        // file vanished mid-read
-      }
-    }
-  }
+  if (scope === "all" || scope === "memory")
+    // memoryDocs() merges EVERY ~/.claude/projects/*/memory dir (newest mtime wins
+    // per name) — the same multi-slug set the full-text path uses. recent() used to
+    // read only the home-slug MEMORY_DIR, so project memory (handoffs, MEMORY.md)
+    // was missing from the empty-query browse even though search could find it.
+    for (const f of memoryDocs())
+      out.push({
+        kind: "memory",
+        ref: f.name,
+        title: f.name.slice(0, -3),
+        snippet: memoryDescription(f.content),
+        at: f.mtime,
+        score: 0,
+        phrase: false,
+      });
   if (scope === "all" || scope === "notes") {
     let names: string[] = [];
     try { names = fs.readdirSync(NOTES_DIR); } catch { names = []; }
