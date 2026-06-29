@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { slotOf, getTerminals, wallIds, MAX_TERMINALS } from "@/app/ui/terminals";
+import { slotOf, getTerminals, wallTokens, MAX_TERMINALS } from "@/app/ui/terminals";
 
 // Hover menu on the terminal header's session id: a search + auto-scroll dropdown
 // over your PAST sessions, newest→oldest (same TodoMenu "Get Todo" drawer shape).
@@ -120,7 +120,9 @@ export default function SessionMenu({
   // terminal 1 where it is. Shown only when there's room (< MAX_TERMINALS).
   const openAsTerminal = (id: string) => {
     const sp = new URLSearchParams(params.toString());
-    sp.set("wall", [...wallIds(params), id].join(","));
+    // Append to the RAW tokens (sessions + views) so opening a session never drops
+    // an existing view pane.
+    sp.set("wall", [...wallTokens(params), id].join(","));
     router.push(`?${sp.toString()}`, { scroll: false });
     close();
   };
