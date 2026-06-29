@@ -5,7 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ago } from "@/lib/ago";
-import { slotOf } from "@/app/ui/terminals";
+import { slotOf, wallTokens } from "@/app/ui/terminals";
+import { useFocus } from "@/app/ui/focus-state";
 
 // Claude-style "Recents": a live list of recent Claude Code sessions, newest
 // first, labelled by the short session id (+ a dim project suffix, or a custom
@@ -228,6 +229,9 @@ export default function SidebarRecents() {
   const params = useSearchParams();
   const current = params.get("session"); // terminal 1's session
   const wallParam = params.get("wall"); // the wall panes 2–4 (comma-separated), if any
+  // Clicking a session loads it into the ACTIVE terminal (Chrome's "active window"):
+  // T1 → ?session; a focused wall pane → rewrite that pane's ?wall token.
+  const { activeKey } = useFocus();
   const [sessions, setSessions] = useState<Recent[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("date"); // default: grouped by day (claude.ai-style)
@@ -429,9 +433,22 @@ export default function SidebarRecents() {
   const renderRow = (s: Recent) => {
     // Highlighted when this session is open in ANY terminal slot (1-4), not just T1.
     const active = slotOf(params, s.id) > 0;
-    const openHref = wallParam
-      ? `${pathname}?session=${s.id}&wall=${wallParam}`
-      : `${pathname}?session=${s.id}`;
+    // Target the active terminal: a focused wall pane (t2..t4) → swap that pane's
+    // token, keeping T1; otherwise drive T1's ?session (keeping the wall intact).
+    const focusIdx = activeKey === "t1" ? -1 : Number.parseInt(activeKey.slice(1), 10) - 2;
+    const wallToks = wallTokens(params);
+    let openHref: string;
+    if (focusIdx >= 0 && focusIdx < wallToks.length) {
+      const next = [...wallToks];
+      next[focusIdx] = s.id;
+      const sp = new URLSearchParams(params.toString());
+      sp.set("wall", next.join(","));
+      openHref = `${pathname}?${sp.toString()}`;
+    } else {
+      openHref = wallParam
+        ? `${pathname}?session=${s.id}&wall=${wallParam}`
+        : `${pathname}?session=${s.id}`;
+    }
     // Label precedence: your rename → Claude's ai-title → the id.
     const label = s.customTitle || s.aiTitle || s.id.slice(0, 8);
     const titled = !!(s.customTitle || s.aiTitle);
