@@ -82,7 +82,11 @@ export default function ProjectSessions({
                 <span className="flex shrink-0 items-baseline gap-1.5">
                   <span
                     className={`text-[10px] leading-none ${
-                      s.active ? "text-green-500" : "text-zinc-600"
+                      selected
+                        ? "animate-pulse text-emerald-400 [text-shadow:0_0_6px_rgba(52,211,153,0.7)]"
+                        : s.active
+                          ? "text-green-500"
+                          : "text-zinc-600"
                     }`}
                     aria-hidden
                   >
