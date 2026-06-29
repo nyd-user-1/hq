@@ -13,6 +13,7 @@ import { handoffsFor } from "@/lib/handoffs"; // HQ↔terminal control-transfer 
 import { channelFor } from "@/lib/channel"; // channel-in: is a live push-channel open for this session?
 import { isChannelEnabled } from "@/lib/channel-mode"; // the explicit experimental-path toggle (default OFF = MVP)
 import { listRepls } from "@/lib/repl"; // the daemon's warm pool — durable "hq owns this session" truth
+import { stoppedAt } from "@/lib/stops"; // "stopped from hq" marker (a killed turn writes no result)
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,15 @@ export async function GET(req: Request) {
       );
     }
   }
-  const status = workingStatus(resolved);
+  // A hq stop SIGTERMs the turn without a closing `result`, so workingStatus() would
+  // read it as "working" forever (the box re-locks on reload). If we recorded a stop
+  // (lib/stops.ts) at or after the last transcript write, the turn is finished —
+  // force idle here. A later real write makes the marker stale (stopAt < lastWrite),
+  // so this self-clears on the next send.
+  const rawStatus = workingStatus(resolved);
+  const stopAt = resolved ? stoppedAt(resolved) : 0;
+  const wasStopped = stopAt > 0 && stopAt >= lastWrite;
+  const status = wasStopped ? null : rawStatus;
   // channel-in: a live push-channel (~/.claude/hq/channels/<resolved>.json) means
   // this session can be DRIVEN BY PUSH (no --resume fork) even while busy. Keyed on
   // `resolved` — the post-self-pin transcript id the client renders + compares — so
@@ -90,7 +99,7 @@ export async function GET(req: Request) {
   const hqBusy = !!owned?.busy;
   // Only meaningful when NOT working: did the last turn end on a hard interrupt?
   // Drives the terminal's red "interrupted — awaiting new direction" border.
-  const interrupted = !status && lastTurnInterrupted(resolved);
+  const interrupted = !status && (wasStopped || lastTurnInterrupted(resolved));
   // Divergence net: did a rival (still-open TUI) process write a divergent leaf
   // into the same transcript HQ's warm repl is driving? Transcript-derived
   // knownLeaf — no extra input. Rides this 1s poll; no new endpoint.

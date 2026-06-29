@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { sessionCwd } from "@/lib/transcript";
+import { markStopped } from "@/lib/stops";
 
 export const maxDuration = 300; // Vercel hobby cap; locally the dev server has no limit
 
@@ -159,6 +160,11 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const id = new URL(req.url).searchParams.get("session");
   if (!id) return new NextResponse("session id required", { status: 400 });
+  // Record the stop FIRST — stopSend always DELETEs, but a warm-REPL (Manager)
+  // session has no headless child here (the warm process is killed via the daemon),
+  // so this 404s for it. The marker must be written regardless, so the turns reader
+  // can stop showing a killed turn as "working" forever (lib/stops.ts).
+  markStopped(id);
   const child = running.get(id);
   if (!child) {
     return new NextResponse("no HQ-spawned run for that session", {
