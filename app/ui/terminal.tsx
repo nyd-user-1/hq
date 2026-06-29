@@ -73,8 +73,12 @@ const TERMINAL_RUNTIME_CSS = `
 .boundary-flash.is-interrupted .boundary-flash-chip { background-color: #dc2626 !important; color: #fff !important; }
 /* FOCUS: the active terminal's resting border (blue-600). NO !important on purpose —
    it outranks the base zinc-700 (two classes vs one) but LOSES to the turn-state
-   rules above, so a working pane shows its orange/green/red, not blue. */
+   rules above, so a working pane shows its orange/green/red, not blue. The chips
+   (lead icon + label, both .boundary-flash-chip) take the blue the same way the
+   load/thinking/done states color them — blue-600 bg, white text — also without
+   !important, so a working pane's orange/green/red chips win. */
 .boundary-flash.is-active { border-color: #2563eb; }
+.boundary-flash.is-active .boundary-flash-chip { background-color: #2563eb; color: #fff; }
 /* Find-in-page: a crisp white × on a dark circle for the native clear button. */
 .hq-find-field::-webkit-search-cancel-button {
   -webkit-appearance: none; appearance: none;
