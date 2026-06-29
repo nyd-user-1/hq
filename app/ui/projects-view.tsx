@@ -142,7 +142,7 @@ export default function ProjectsView({
               "relative flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2.5 text-left transition-colors hover:border-zinc-600 hover:bg-zinc-900/40";
             const body = (
               <>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span className="break-words text-sm font-medium text-zinc-200">{p.name}</span>
                   <span className="ml-auto shrink-0 font-mono text-[11px] text-zinc-600">
                     {p.sessions} {p.sessions === 1 ? "session" : "sessions"}
