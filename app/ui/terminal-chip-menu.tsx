@@ -72,12 +72,12 @@ export default function TerminalChipMenu({
   const atCap = wallTokens(params).length >= MAX_TERMINALS - 1;
 
   return (
-    <div className="relative flex shrink-0 items-center" onMouseEnter={enter} onMouseLeave={leave}>
+    <div className="relative flex shrink-0 self-stretch items-stretch" onMouseEnter={enter} onMouseLeave={leave}>
       <button
         type="button"
         aria-label="terminal content menu"
         title="switch this terminal · split"
-        className={`boundary-flash-chip flex cursor-pointer items-center bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400 transition-colors hover:text-zinc-200 ${open ? "text-zinc-100" : ""}`}
+        className={`boundary-flash-chip flex cursor-pointer items-center bg-zinc-800 px-1.5 font-mono text-[10px] text-zinc-400 transition-colors hover:text-zinc-200 ${open ? "text-zinc-100" : ""}`}
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="m6 9 6 6 6-6" />
@@ -85,6 +85,19 @@ export default function TerminalChipMenu({
       </button>
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 flex w-48 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+          {/* Split FIRST — the Session… row's flyout opens downward, so anything
+              below it gets covered; keeping Split at the top keeps it reachable. */}
+          <button
+            type="button"
+            onClick={split}
+            disabled={atCap}
+            title={atCap ? "max 4 terminals" : "open a new terminal beside this one"}
+            className={`${ROW} ${atCap ? "cursor-not-allowed text-zinc-700 hover:bg-transparent" : ""}`}
+          >
+            <span>Split →</span>
+            <span className="text-zinc-600">＋</span>
+          </button>
+          <div className="my-1 h-px bg-zinc-800" />
           <div className="px-2 pb-1 pt-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
             show in this terminal
           </div>
@@ -103,7 +116,8 @@ export default function TerminalChipMenu({
             );
           })}
           {/* Switch this pane to a session — reuses the session picker; pick → this
-              pane shows that session (onPick keeps it from touching the terminal). */}
+              pane shows that session (onPick keeps it from touching the terminal).
+              LAST so its downward flyout covers only the table below, not the menu. */}
           <SessionMenu
             currentId={current.kind === "session" ? current.sessionId : null}
             onPick={(id) => {
@@ -116,17 +130,6 @@ export default function TerminalChipMenu({
               <span className="text-zinc-600">›</span>
             </span>
           </SessionMenu>
-          <div className="my-1 h-px bg-zinc-800" />
-          <button
-            type="button"
-            onClick={split}
-            disabled={atCap}
-            title={atCap ? "max 4 terminals" : "open a new terminal beside this one"}
-            className={`${ROW} ${atCap ? "cursor-not-allowed text-zinc-700 hover:bg-transparent" : ""}`}
-          >
-            <span>Split →</span>
-            <span className="text-zinc-600">＋</span>
-          </button>
         </div>
       )}
     </div>

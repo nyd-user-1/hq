@@ -101,7 +101,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
             <Boundary
               label={`terminal-${slot}`}
               copyText="app/ui/terminal.tsx"
-              trail={content ? <TerminalChipMenu index={i} current={content} /> : undefined}
+              lead={content ? <TerminalChipMenu index={i} current={content} /> : undefined}
             >
               <Link
                 href={closeHref(i)}

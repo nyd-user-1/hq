@@ -13,8 +13,9 @@ export default function SidebarToggle() {
     <ButtonChipIcon
       onClick={toggle}
       label={open ? "Collapse sidebar" : "Expand sidebar"}
-      // join the rerender flash on reload like the other boundary chips
-      className="boundary-flash-chip shrink-0"
+      // join the rerender flash on reload like the other boundary chips; self-stretch
+      // matches the icon chip's height to the taller text label beside it.
+      className="boundary-flash-chip shrink-0 self-stretch"
       icon={
         // lucide PanelLeftClose / PanelLeftOpen
         <svg
