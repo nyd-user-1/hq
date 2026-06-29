@@ -1,16 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import Boundary from "@/app/ui/boundary";
 import Terminal from "@/app/ui/terminal";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
-import { useFocus } from "@/app/ui/focus-state";
-import { wallTokens, parseToken, type WallView } from "@/app/ui/terminals";
-import FleetView from "@/app/ui/fleet-view";
-import FilesView from "@/app/ui/files-view";
-import ProjectView from "@/app/ui/project-view";
+import PaneView from "@/app/ui/pane-view";
+import { wallTokens, parseToken } from "@/app/ui/terminals";
 
 // Terminal 1 + the WALL. Terminal 1 (children) is ALWAYS the first child → never
 // remounts. Up to THREE more panes come from ?wall — a comma-list of TYPED tokens,
@@ -36,38 +33,6 @@ export default function TerminalRow({
       <Suspense fallback={null}>
         <WallPanes initialFocus={initialFocus} />
       </Suspense>
-    </div>
-  );
-}
-
-// One view rendered as a pane's content (Fleet is a clean drop-in; Files/Projects
-// render fine but still carry their ?center-overlay router wiring — see notes).
-function ViewFor({ view }: { view: WallView }) {
-  if (view === "fleet") return <FleetView />;
-  if (view === "files") return <FilesView />;
-  if (view === "projects") return <ProjectView />;
-  return null; // "sessions" home isn't embeddable in a pane yet
-}
-
-// A view pane carries the same focus behavior as a session pane (Terminal does its
-// own): a pointer-down makes it active, and it wears the blue .is-active border.
-function ViewPane({ view, terminalKey }: { view: WallView; terminalKey: string }) {
-  const { activeKey, setActive } = useFocus();
-  const ref = useRef<HTMLDivElement>(null);
-  const isActive = activeKey === terminalKey;
-  useEffect(() => {
-    const box = ref.current?.closest(".boundary-flash");
-    if (!box) return;
-    box.classList.toggle("is-active", isActive);
-    return () => box.classList.remove("is-active");
-  }, [isActive]);
-  return (
-    <div
-      ref={ref}
-      onPointerDownCapture={() => setActive(terminalKey)}
-      className="flex min-h-0 flex-1 flex-col"
-    >
-      <ViewFor view={view} />
     </div>
   );
 }
@@ -101,7 +66,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
             <Boundary
               label={`terminal-${slot}`}
               copyText="app/ui/terminal.tsx"
-              lead={content ? <TerminalChipMenu index={i} current={content} /> : undefined}
+              lead={content ? <TerminalChipMenu target={{ kind: "wall", index: i }} /> : undefined}
             >
               <Link
                 href={closeHref(i)}
@@ -115,7 +80,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
                 </svg>
               </Link>
               {content?.kind === "view" ? (
-                <ViewPane view={content.view} terminalKey={terminalKey} />
+                <PaneView view={content.view} terminalKey={terminalKey} />
               ) : (
                 <Terminal
                   sessionId={content?.kind === "session" ? content.sessionId : tok}

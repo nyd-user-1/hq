@@ -5,7 +5,6 @@ import Sidebar from "@/app/ui/sidebar";
 import SidebarColumn from "@/app/ui/sidebar-column";
 import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
-import Terminal from "@/app/ui/terminal";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import TerminalRow from "@/app/ui/terminal-row";
 import FilesOverlay from "@/app/ui/files-overlay";
@@ -48,6 +47,8 @@ import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
 import CommandPalette from "@/app/ui/command-palette";
 import { FocusProvider } from "@/app/ui/focus-state";
+import Terminal1Slot from "@/app/ui/terminal1-slot";
+import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
 // always mounted — the persistent heart), and the right app-panel portal anchor.
@@ -108,13 +109,22 @@ export default async function Shell({
             {/* WIREFRAME: PairColumn keeps Terminal 1 always-first so it never
                 remounts; ?pair=<id> adds a mock Terminal 2 pane beside it. */}
             <TerminalRow initialFocus={focusDefault}>
-              <Boundary label="terminal-1" copyText="app/ui/terminal.tsx" lead={<SidebarToggle />}>
+              <Boundary
+                label="terminal-1"
+                copyText="app/ui/terminal.tsx"
+                lead={<SidebarToggle />}
+                trail={
+                  <Suspense fallback={null}>
+                    <TerminalChipMenu target={{ kind: "t1" }} />
+                  </Suspense>
+                }
+              >
                 <Suspense
                   fallback={
                     <p className="text-sm text-zinc-600">loading terminal…</p>
                   }
                 >
-                  <Terminal initialFocus={focusDefault} terminalKey="t1" />
+                  <Terminal1Slot initialFocus={focusDefault} />
                 </Suspense>
               </Boundary>
             </TerminalRow>

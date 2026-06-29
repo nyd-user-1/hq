@@ -5,17 +5,22 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   wallTokens,
   tokenFor,
+  parseToken,
   MAX_TERMINALS,
   type PaneContent,
   type WallView,
 } from "@/app/ui/terminals";
 import SessionMenu from "@/app/ui/session-menu";
 
-// The boundary-chip Switch/Split menu for a WALL pane (Terminal 2–4). A hover "▾"
-// chip sitting after the terminal-N label: SWITCH this pane's content (a dashboard
-// view or a session) or SPLIT a new pane in beside it. Writes the typed ?wall token
-// at this pane's index — so a terminal is no longer locked to a session; it's a
-// viewport that can hold Fleet/Files/Projects OR any session.
+// The boundary-chip Switch/Split menu — a hover "▾" chip on a terminal's boundary.
+// SWITCH this terminal's content (a dashboard view or a session) or SPLIT a new
+// pane in beside it. Works for any terminal via `target`:
+//   { kind: "t1" }            → writes ?session (the anchor; @view = a view in T1)
+//   { kind: "wall", index }   → writes the typed ?wall token at that pane's index
+// So a terminal is no longer locked to a session; it's a viewport that can hold
+// Fleet/Files/Projects OR any session — Terminal 1 included.
+type Target = { kind: "t1" } | { kind: "wall"; index: number };
+
 const VIEW_ROWS: { view: WallView; label: string }[] = [
   { view: "fleet", label: "Fleet" },
   { view: "files", label: "Files" },
@@ -25,14 +30,7 @@ const VIEW_ROWS: { view: WallView; label: string }[] = [
 const ROW =
   "flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
 
-export default function TerminalChipMenu({
-  index,
-  current,
-}: {
-  // 0-based position of this pane within ?wall (slot = index + 2).
-  index: number;
-  current: PaneContent;
-}) {
+export default function TerminalChipMenu({ target }: { target: Target }) {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
@@ -48,16 +46,31 @@ export default function TerminalChipMenu({
     closeTimer.current = setTimeout(() => setOpen(false), 160);
   };
 
-  const writeTokens = (toks: string[]) => {
+  // This terminal's current content (for the ✓ highlight). null = T1 home/new.
+  let current: PaneContent | null = null;
+  if (target.kind === "wall") {
+    current = parseToken(wallTokens(params)[target.index] ?? "");
+  } else {
+    const ses = params.get("session");
+    current = ses && ses !== "new" ? parseToken(ses) : null;
+  }
+
+  const writeWall = (toks: string[]) => {
     const sp = new URLSearchParams(params.toString());
     if (toks.length) sp.set("wall", toks.join(","));
     else sp.delete("wall");
     router.push(`${pathname}?${sp.toString()}`, { scroll: false });
   };
   const setContent = (c: PaneContent) => {
-    const toks = wallTokens(params);
-    toks[index] = tokenFor(c);
-    writeTokens(toks);
+    if (target.kind === "wall") {
+      const toks = wallTokens(params);
+      toks[target.index] = tokenFor(c);
+      writeWall(toks);
+    } else {
+      const sp = new URLSearchParams(params.toString());
+      sp.set("session", tokenFor(c)); // @view = a view in T1; an id = a session
+      router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+    }
     setOpen(false);
   };
   // Split = add a fresh pane beside this one (a Fleet board by default; switch it
@@ -66,7 +79,7 @@ export default function TerminalChipMenu({
     const toks = wallTokens(params);
     if (toks.length >= MAX_TERMINALS - 1) return;
     toks.push("@fleet");
-    writeTokens(toks);
+    writeWall(toks);
     setOpen(false);
   };
   const atCap = wallTokens(params).length >= MAX_TERMINALS - 1;
@@ -102,7 +115,7 @@ export default function TerminalChipMenu({
             show in this terminal
           </div>
           {VIEW_ROWS.map(({ view, label }) => {
-            const active = current.kind === "view" && current.view === view;
+            const active = current?.kind === "view" && current.view === view;
             return (
               <button
                 key={view}
@@ -116,16 +129,16 @@ export default function TerminalChipMenu({
             );
           })}
           {/* Switch this pane to a session — reuses the session picker; pick → this
-              pane shows that session (onPick keeps it from touching the terminal).
-              LAST so its downward flyout covers only the table below, not the menu. */}
+              terminal shows that session. LAST so its downward flyout covers only
+              the content below, not the menu. */}
           <SessionMenu
-            currentId={current.kind === "session" ? current.sessionId : null}
+            currentId={current?.kind === "session" ? current.sessionId : null}
             onPick={(id) => {
               if (id) setContent({ kind: "session", sessionId: id });
               setOpen(false);
             }}
           >
-            <span className={`${ROW} ${current.kind === "session" ? "text-zinc-100" : ""}`}>
+            <span className={`${ROW} ${current?.kind === "session" ? "text-zinc-100" : ""}`}>
               <span>Session…</span>
               <span className="text-zinc-600">›</span>
             </span>
