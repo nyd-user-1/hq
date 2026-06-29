@@ -22,8 +22,12 @@ function ago(ms: number): string {
 // that keeps a sort. "New project" is a placeholder until curated projects land.
 export default function ProjectsView({
   projects,
+  onSelect,
 }: {
   projects: ProjectSummary[];
+  // Standalone panel passes this to drill in-panel; the @panel route omits it and
+  // keeps the URL <Link> (?project=…). Card body is shared between the two.
+  onSelect?: (name: string) => void;
 }) {
   const [q, setQ] = useState("");
   const [dir, setDir] = useState<"new" | "old">("new");
@@ -100,13 +104,11 @@ export default function ProjectsView({
         </p>
       ) : (
         <ul className="scrollbar-none grid min-h-0 flex-1 grid-cols-1 content-start gap-2 overflow-y-auto @md:grid-cols-2">
-          {shown.map((p) => (
-            <li key={p.name}>
-              <Link
-                href={cardHref(p.name)}
-                scroll={false}
-                className="flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2.5 transition-colors hover:border-zinc-600 hover:bg-zinc-900/40"
-              >
+          {shown.map((p) => {
+            const cardCls =
+              "flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2.5 text-left transition-colors hover:border-zinc-600 hover:bg-zinc-900/40";
+            const body = (
+              <>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span
                     className={`size-2 shrink-0 rounded-full ${
@@ -123,9 +125,22 @@ export default function ProjectsView({
                 <p className="font-mono text-xs text-zinc-500">
                   updated {ago(p.lastActive)}
                 </p>
-              </Link>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={p.name}>
+                {onSelect ? (
+                  <button type="button" onClick={() => onSelect(p.name)} className={`w-full ${cardCls}`}>
+                    {body}
+                  </button>
+                ) : (
+                  <Link href={cardHref(p.name)} scroll={false} className={cardCls}>
+                    {body}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

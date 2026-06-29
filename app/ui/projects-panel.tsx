@@ -1,19 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ComponentProps } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
 import ProjectsView from "@/app/ui/projects-view";
+import ProjectSessions from "@/app/ui/project-sessions";
 import { useProjectsPanel } from "@/app/ui/projects-panel-state";
 
-// Standalone Projects panel — the skills-panel push-in standard. The same
-// ProjectsView grid the @panel/projects route renders, fed client-side from GET
-// /api/projects. (Card drill-down still navigates the @panel/projects route for
-// now — intentional duplicate during the review period.)
+// Standalone Projects panel — the skills-panel push-in standard. The grid AND the
+// per-project session drill-down both live IN the panel (client state), so a card
+// click never leaves for the @panel/projects route. Data via GET /api/projects
+// (grid) and GET /api/projects?name=… (a project's sessions). Picking a session
+// pins it in the terminal (?session on the current URL — the panel stays open).
 export default function ProjectsPanel() {
   const { open, setOpen } = useProjectsPanel();
+  const router = useRouter();
+  const pathname = usePathname() ?? "/";
+  const params = useSearchParams();
   const [projects, setProjects] = useState<ComponentProps<typeof ProjectsView>["projects"] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ComponentProps<typeof ProjectSessions>["sessions"] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -31,13 +39,50 @@ export default function ProjectsPanel() {
     if (open) load();
   }, [open, load]);
 
+  // drill-down: fetch the selected project's sessions
+  useEffect(() => {
+    if (!selected) {
+      setSessions(null);
+      return;
+    }
+    let cancelled = false;
+    setSessions(null);
+    fetch(`/api/projects?name=${encodeURIComponent(selected)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => !cancelled && setSessions(d?.sessions ?? []))
+      .catch(() => !cancelled && setSessions([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
+
+  // pin a session in the terminal — set ?session on the current URL. The panel is
+  // client state, so this switches the terminal without closing the panel.
+  const pin = (id: string) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.set("session", id);
+    router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+  };
+
   return (
-    <AppPanel rootId="projects-panel-root" open={open} onClose={() => setOpen(false)} widthClass="sm:w-[min(360px,40vw)]">
+    <AppPanel
+      rootId="projects-panel-root"
+      open={open}
+      onClose={() => {
+        setOpen(false);
+        setSelected(null);
+      }}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
       <Boundary label="projects-panel.tsx">
-        {projects ? (
-          <div className="scrollbar-none -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
-            <ProjectsView projects={projects} />
-          </div>
+        {selected ? (
+          sessions ? (
+            <ProjectSessions name={selected} sessions={sessions} onBack={() => setSelected(null)} onPick={pin} />
+          ) : (
+            <p className="font-mono text-[11px] text-zinc-600">loading…</p>
+          )
+        ) : projects ? (
+          <ProjectsView projects={projects} onSelect={setSelected} />
         ) : (
           <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no projects"}</p>
         )}

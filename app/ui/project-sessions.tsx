@@ -15,9 +15,15 @@ const ROW =
 export default function ProjectSessions({
   name,
   sessions,
+  onBack,
+  onPick,
 }: {
   name: string;
   sessions: RecentSession[];
+  // Standalone panel passes these to go back / pin in-panel (client state); the
+  // @panel route omits them and keeps the URL <Link> nav.
+  onBack?: () => void;
+  onPick?: (id: string) => void;
 }) {
   const params = useSearchParams();
   const current = params.get("session");
@@ -39,13 +45,23 @@ export default function ProjectSessions({
     <div className="flex min-h-0 flex-1 flex-col gap-1">
       {/* header — mirrors the Skills detail header (← back · identifier · meta) */}
       <div className="flex items-baseline gap-3">
-        <Link
-          href={back}
-          scroll={false}
-          className="shrink-0 font-mono text-xs text-blue-400 transition-colors hover:text-blue-300"
-        >
-          ← Projects
-        </Link>
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="shrink-0 font-mono text-xs text-blue-400 transition-colors hover:text-blue-300"
+          >
+            ← Projects
+          </button>
+        ) : (
+          <Link
+            href={back}
+            scroll={false}
+            className="shrink-0 font-mono text-xs text-blue-400 transition-colors hover:text-blue-300"
+          >
+            ← Projects
+          </Link>
+        )}
         <span className="min-w-0 truncate font-mono text-xs text-zinc-300">
           {name}
         </span>
@@ -60,13 +76,9 @@ export default function ProjectSessions({
         <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
           {sessions.map((s) => {
             const selected = current === s.id;
-            return (
-              <Link
-                key={s.id}
-                href={pinHref(s.id)}
-                scroll={false}
-                className={`${ROW} ${selected ? "bg-green-500/[0.06]" : ""}`}
-              >
+            const cls = `${ROW} ${selected ? "bg-green-500/[0.06]" : ""}`;
+            const inner = (
+              <>
                 <span className="flex shrink-0 items-baseline gap-1.5">
                   <span
                     className={`text-[10px] leading-none ${
@@ -88,6 +100,15 @@ export default function ProjectSessions({
                   {ago(s.lastActive)}
                   {s.branch ? ` · ${s.branch}` : ""}
                 </span>
+              </>
+            );
+            return onPick ? (
+              <button key={s.id} type="button" onClick={() => onPick(s.id)} className={cls}>
+                {inner}
+              </button>
+            ) : (
+              <Link key={s.id} href={pinHref(s.id)} scroll={false} className={cls}>
+                {inner}
               </Link>
             );
           })}
