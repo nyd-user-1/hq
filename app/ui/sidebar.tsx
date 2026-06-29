@@ -24,7 +24,7 @@ export default function Sidebar() {
         scroll={false}
         className="block shrink-0 rounded-lg border border-zinc-800 px-2.5 py-1.5 transition-colors hover:bg-zinc-900"
       >
-        <h1 className="text-base font-medium tracking-tight">hq/terminal</h1>
+        <h1 className="text-base font-normal tracking-tight">hq/terminal</h1>
       </Link>
 
       <div className="flex shrink-0 flex-col gap-1">
