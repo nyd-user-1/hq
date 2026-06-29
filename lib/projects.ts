@@ -8,15 +8,16 @@ import { getRecentSessions, type RecentSession } from "./sessions";
 
 export type ProjectSummary = {
   name: string;
-  sessions: number; // count in the last 7 days
+  sessions: number; // all-time interactive session count
   lastActive: number; // most-recent session mtime
   active: boolean; // any session active within the cache window
 };
 
 export function getProjects(): ProjectSummary[] {
-  // High limit = "all interactive sessions in the window"; recentFiles already
-  // caps at the last 7 days, so this rarely binds.
-  const recents = getRecentSessions(1000);
+  // ALL-TIME (maxAge = Infinity), not the 7-day recents window — a "Projects" view
+  // should list every project you've ever worked in, not just this week's. Head-only
+  // scan (lighter than getAllSessionsFull). High limit ⇒ effectively uncapped.
+  const recents = getRecentSessions(100000, Infinity);
   const map = new Map<string, ProjectSummary>();
   for (const s of recents) {
     const name = s.project || "Unassigned";
@@ -38,9 +39,9 @@ export function getProjects(): ProjectSummary[] {
 }
 
 // All interactive sessions whose derived project matches `name` (newest first) —
-// the drill-down when you click a project card.
+// the drill-down when you click a project card. All-time, to match getProjects.
 export function getProjectSessions(name: string): RecentSession[] {
-  return getRecentSessions(1000).filter(
+  return getRecentSessions(100000, Infinity).filter(
     (s) => (s.project || "Unassigned") === name
   );
 }

@@ -411,12 +411,16 @@ function channelSessions(meta: SessionsMeta): RecentSession[] {
   return out;
 }
 
-function sessionsOfKind(kind: "interactive" | "sdk", limit: number): RecentSession[] {
+function sessionsOfKind(
+  kind: "interactive" | "sdk",
+  limit: number,
+  maxAgeMs = 7 * 24 * 60 * 60 * 1000,
+): RecentSession[] {
   const meta = getSessionsMeta();
   const driven = hqDrivenIds();
   const out: RecentSession[] = [];
   const seen = new Set<string>();
-  for (const { file, mtime } of recentFiles()) {
+  for (const { file, mtime } of recentFiles(maxAgeMs)) {
     const m = sessionMeta(file, mtime, meta);
     // an HQ-driven session counts as interactive even though it's sdk-cli
     const isSdk = m.entrypoint === "sdk-cli" && !driven.has(m.id);
@@ -440,8 +444,10 @@ function sessionsOfKind(kind: "interactive" | "sdk", limit: number): RecentSessi
   return out;
 }
 
-export function getRecentSessions(limit = 24): RecentSession[] {
-  return sessionsOfKind("interactive", limit);
+// maxAgeMs defaults to the 7-day recents window; pass Infinity for an all-time
+// scan (head-only, so lighter than getAllSessionsFull — no tail read per file).
+export function getRecentSessions(limit = 24, maxAgeMs?: number): RecentSession[] {
+  return sessionsOfKind("interactive", limit, maxAgeMs);
 }
 
 export function getSdkSessions(limit = 40): RecentSession[] {
