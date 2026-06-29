@@ -1872,13 +1872,12 @@ export default function Terminal({
         return;
       }
 
-      // single Esc — interrupt a run HQ owns; for an external (TUI) turn, say so.
-      if (sendingRef.current) {
+      // single Esc — interrupt the running turn. Works for ANY working session, not
+      // just one this instance started: a locked / mirrored / stuck turn must always
+      // be stoppable from here (stopSend clears the stuck status + best-effort kills
+      // every HQ-owned run path). Esc never just "explains why it can't" anymore.
+      if (sendingRef.current || workingRef.current) {
         stopSendRef.current();
-      } else if (workingRef.current) {
-        if (escTimer.current) clearTimeout(escTimer.current);
-        setEscNote("this turn is running in its own terminal — HQ can only interrupt runs it started");
-        escTimer.current = setTimeout(() => setEscNote(null), 4000);
       }
       // hint that a second Esc clears, when there's text to lose
       if (draftRef.current.trim()) {
@@ -2534,7 +2533,15 @@ export default function Terminal({
     // `result` to the transcript, so the status poll (gated by stoppedRef below)
     // would otherwise keep `working` true forever, locking the send box.
     try {
-      await repl.stop(); // {action:'stop'} → stopRepl (releases the warm process)
+      // Kill every HQ-owned run path for this session, best-effort: the warm REPL
+      // (the live driver) AND any legacy headless `-p` child. Neither owning it is
+      // fine — the local clear above (stoppedRef + setStatus(null)) is what unsticks
+      // a stuck / mirrored turn, so stop ALWAYS releases the lock even when there's
+      // nothing for HQ to actually signal.
+      await Promise.allSettled([
+        repl.stop(), // {action:'stop'} → stopRepl (releases the warm process)
+        fetch(`/api/terminal?session=${encodeURIComponent(target)}`, { method: "DELETE" }),
+      ]);
       setLive(false);
       drivenSessionRef.current = null;
     } catch {
@@ -2584,10 +2591,13 @@ export default function Terminal({
     (draft.trim() !== "" || attachments.length > 0) &&
     (staged || !notConnected) &&
     !locked;
-  // The send (↑) button morphs into the red stop while a run is in flight. `sending`
-  // is this instance's optimistic flag; OR in the durable signal so a reload / remount
-  // of an hq-owned, mid-turn session still shows stop (not a dead send arrow).
-  const inFlight = sending || (hqOwned && hqBusy);
+  // The send (↑) button morphs into the red stop while a run is in flight. Stop is
+  // ALWAYS available whenever a turn is running (`working`) — even on a session HQ
+  // doesn't own — so the user can interrupt ANY session from here and a locked box
+  // never traps a stuck / mirrored turn with no way out. `sending` is this instance's
+  // optimistic flag (it leads the poll); `hqBusy` is the durable server signal that
+  // survives a remount.
+  const inFlight = sending || working || (hqOwned && hqBusy);
 
   // The cache meter — top-right in the header (and the footer in the centered
   // shell). ctx moved out to sit beside the session id (ctxMeter, below).
@@ -3792,7 +3802,7 @@ export default function Terminal({
                   type="button"
                   onClick={stopSend}
                   aria-label="Stop"
-                  title="stop — kill the HQ-spawned run"
+                  title="stop — interrupt this run (Esc)"
                   className="flex shrink-0 items-center rounded-md border border-red-500/70 bg-red-500/20 p-1.5 text-red-50 transition-colors hover:bg-red-500/30"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
