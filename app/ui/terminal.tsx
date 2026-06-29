@@ -1051,6 +1051,11 @@ export default function Terminal({
   // when this component never sent (a reload of an in-flight hq-started session).
   const [hqOwned, setHqOwned] = useState(false);
   const [hqBusy, setHqBusy] = useState(false);
+  // Ownership badge: the session's current DRIVING surface. "hq" = hq is the driver
+  // (it spawned it, or took the wheel) → MANAGER; "cc" = a Claude Code terminal is
+  // the driver and hq is mirroring → OBSERVER. Durable (transcript-derived), from
+  // the turns poll.
+  const [surface, setSurface] = useState<"hq" | "cc">("hq");
   // The GLOBAL experimental channel toggle (account menu → lib/channel-mode.ts).
   // Separate from per-session channelConnected: drives the header flask so you can
   // never be in channel mode without a visible marker, even on a session that isn't
@@ -1473,6 +1478,7 @@ export default function Terminal({
       // and the stop button (show it mid-turn even after a remount dropped `sending`).
       setHqOwned(d.hqOwned ?? false);
       setHqBusy(d.hqBusy ?? false);
+      setSurface(d.surface === "cc" ? "cc" : "hq");
       setChannelMode(d.channelMode ?? false);
       setInterrupted(d.interrupted ?? false);
       // LATCH the divergence net: raise on a rival, but NEVER clear on !diverged
@@ -2781,6 +2787,26 @@ export default function Terminal({
             <span className="font-mono text-[11px] text-zinc-600">—</span>
           )}
         </SessionMenu>
+        {/* Ownership badge — MANAGER (hq is the driver: it spawned this session or
+            took the wheel) vs OBSERVER (a Claude Code terminal drives it, hq mirrors).
+            Fill = control, outline = observe (the design vocabulary — no hue, no
+            icon). Only on a real, resolved session. */}
+        {resolvedId && !staged && (
+          <span
+            title={
+              surface === "hq"
+                ? "Manager — this session is driven from hq"
+                : "Observer — hq is mirroring a Claude Code terminal it doesn't drive"
+            }
+            className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+              surface === "hq"
+                ? "bg-zinc-700 text-zinc-100"
+                : "border border-zinc-700 text-zinc-400"
+            }`}
+          >
+            {surface === "hq" ? "Manager" : "Observer"}
+          </span>
+        )}
         {/* Panels — the message-turn ⋮ kebab after the session id opens the nav menu
             (Activity · Console · Search · Metrics, each a flyout). */}
         <TerminalNavMenu project={staged ? "" : project} sessionId={resolvedId} />
