@@ -64,6 +64,16 @@ export default function ProjectsPanel() {
     router.push(`${pathname}?${sp.toString()}`, { scroll: false });
   };
 
+  // delete a TEMP project's transcripts (guarded server-side to temp-only) + reload.
+  const remove = async (name: string) => {
+    await fetch("/api/projects", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }).catch(() => {});
+    load();
+  };
+
   return (
     <AppPanel
       rootId="projects-panel-root"
@@ -82,7 +92,7 @@ export default function ProjectsPanel() {
             <p className="font-mono text-[11px] text-zinc-600">loading…</p>
           )
         ) : projects ? (
-          <ProjectsView projects={projects} onSelect={setSelected} />
+          <ProjectsView projects={projects} onSelect={setSelected} onDelete={remove} />
         ) : (
           <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no projects"}</p>
         )}

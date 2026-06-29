@@ -305,7 +305,7 @@ function headInfo(file: string): {
 
 // Every transcript across all project dirs touched in the last 7 days, newest
 // first — the shared scan behind both session readers below.
-function recentFiles(maxAgeMs = 7 * 24 * 60 * 60 * 1000): { file: string; mtime: number }[] {
+export function recentFiles(maxAgeMs = 7 * 24 * 60 * 60 * 1000): { file: string; mtime: number }[] {
   const now = Date.now();
   let dirs: fs.Dirent[];
   try {
