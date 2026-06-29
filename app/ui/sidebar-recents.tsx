@@ -420,6 +420,9 @@ export default function SidebarRecents() {
   const visible = showHidden ? live : live.filter((s) => !s.hidden);
   const groups = groupSessions(visible, groupBy);
   const menuSession = menuFor ? sessions.find((s) => s.id === menuFor) : null;
+  // Which terminal (slot) this session is open in, 0 if not on screen. When open,
+  // the menu header leads with "Terminal N" instead of the project.
+  const menuSlot = menuSession ? slotOf(params, menuSession.id) : 0;
 
   // One session row — extracted so the Archived group reuses the exact same row
   // (label, favorite star, live dot, kebab) and the inline rename/project editor.
@@ -639,18 +642,24 @@ export default function SidebarRecents() {
           style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
           className="fixed z-50 flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
         >
-          {/* read-only context — project + branch (moved out of the row) */}
+          {/* read-only context. When the session is open in a terminal, lead with
+              "Terminal N" and drop the project down beside the branch (same small
+              font, inline); otherwise the project leads and the branch sits below. */}
           <div className="flex flex-col gap-0.5 px-2 pb-1.5 pt-1">
             <span className="min-w-0 truncate text-xs text-zinc-300">
-              {menuSession.project || "Unassigned"}
+              {menuSlot > 0 ? `Terminal ${menuSlot}` : menuSession.project || "Unassigned"}
             </span>
-            {menuSession.branch && (
-              <span
-                className="flex items-center gap-1 font-mono text-[10px] text-zinc-500"
-                title={`branch: ${menuSession.branch}`}
-              >
-                <BranchIcon />
-                <span className="min-w-0 truncate">{menuSession.branch}</span>
+            {(menuSlot > 0 || menuSession.branch) && (
+              <span className="flex items-center gap-2 font-mono text-[10px] text-zinc-500">
+                {menuSlot > 0 && (
+                  <span className="min-w-0 truncate">{menuSession.project || "Unassigned"}</span>
+                )}
+                {menuSession.branch && (
+                  <span className="flex items-center gap-1" title={`branch: ${menuSession.branch}`}>
+                    <BranchIcon />
+                    <span className="min-w-0 truncate">{menuSession.branch}</span>
+                  </span>
+                )}
               </span>
             )}
           </div>
