@@ -39,6 +39,14 @@ const KIND_FILTERS: { key: "all" | ProjectKind; label: string }[] = [
   { key: "temp", label: "Temp" },
 ];
 
+// Short, native (never-clipped) tooltip per kind — sits on the corner icon.
+const KIND_LABEL: Record<ProjectKind, string> = {
+  github: "On GitHub — git repo with a github.com remote",
+  git: "Local git repo — committed, not pushed to GitHub",
+  claude: "Claude — a folder/conversation, no git repo",
+  temp: "Temporary — ephemeral dir; delete to reclaim disk",
+};
+
 // Projects landing, claude.ai-style: a full-width search box, a control row (+ /
 // Sort) and a kind filter, then a card grid grouped by Claude's own cwd buckets,
 // each stamped with its kind icon. Temp buckets carry a guarded Delete (reclaim
@@ -131,17 +139,20 @@ export default function ProjectsView({
         <ul className="scrollbar-none grid min-h-0 flex-1 grid-cols-1 content-start gap-2 overflow-y-auto @md:grid-cols-2">
           {shown.map((p) => {
             const cardCls =
-              "flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2.5 text-left transition-colors hover:border-zinc-600 hover:bg-zinc-900/40";
+              "relative flex flex-col gap-1 rounded-md border border-zinc-800 px-3 py-2.5 text-left transition-colors hover:border-zinc-600 hover:bg-zinc-900/40";
             const body = (
               <>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <KindMark kind={p.kind} />
                   <span className="break-words text-sm font-medium text-zinc-200">{p.name}</span>
                   <span className="ml-auto shrink-0 font-mono text-[11px] text-zinc-600">
                     {p.sessions} {p.sessions === 1 ? "session" : "sessions"}
                   </span>
                 </div>
-                <p className="font-mono text-xs text-zinc-500">updated {ago(p.lastActive)}</p>
+                <p className="pr-7 font-mono text-xs text-zinc-500">updated {ago(p.lastActive)}</p>
+                {/* kind icon — bottom-right corner, native (never-clipped) tooltip */}
+                <span title={KIND_LABEL[p.kind]} className="absolute bottom-2 right-2.5 text-zinc-500">
+                  <KindMark kind={p.kind} />
+                </span>
               </>
             );
             return (
