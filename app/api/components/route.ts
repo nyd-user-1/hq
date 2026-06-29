@@ -1,4 +1,28 @@
-import { saveComponentsOrder } from "@/lib/components";
+import {
+  saveComponentsOrder,
+  orderedComponents,
+  readComponentSource,
+  componentId,
+  undiscoveredComponents,
+  REGISTRY_SESSION,
+  REGISTRY_CREATED_AT,
+} from "@/lib/components";
+
+export const dynamic = "force-dynamic";
+
+// GET — the component registry as the @panel/components page builds it (ordered +
+// each file's source + c_ id + provenance) plus the undiscovered list. Feeds the
+// standalone components-panel (client) the same data the server page passes inline.
+export function GET() {
+  const items = orderedComponents().map((c) => ({
+    ...c,
+    code: readComponentSource(c.file),
+    id: componentId(c.name),
+    session: REGISTRY_SESSION,
+    createdAt: REGISTRY_CREATED_AT,
+  }));
+  return Response.json({ items, undiscovered: undiscoveredComponents() });
+}
 
 // PUT { order: string[] } — persist the Components registry display order
 // (drag-to-reorder) to the HQ-native sidecar.

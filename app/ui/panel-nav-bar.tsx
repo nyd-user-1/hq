@@ -19,6 +19,9 @@ import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { usePermissions } from "@/app/ui/permissions-state";
 import { useChangelog } from "@/app/ui/changelog-state";
+import { useComponentsPanel } from "@/app/ui/components-panel-state";
+import { useProjectsPanel } from "@/app/ui/projects-panel-state";
+import { useTodoPanel } from "@/app/ui/todo-panel-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -45,6 +48,9 @@ export default function PanelNav() {
     permissions: usePermissions(),
     kpis: useKpis(),
     changelog: useChangelog(),
+    componentsPanel: useComponentsPanel(),
+    projectsPanel: useProjectsPanel(),
+    todoPanel: useTodoPanel(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">

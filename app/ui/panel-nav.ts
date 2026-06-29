@@ -76,7 +76,12 @@ export type ToggleKey =
   | "outputStyles"
   | "permissions"
   | "kpis"
-  | "changelog";
+  | "changelog"
+  // standalone review-panels mirroring the @panel/(activity) routes (temporary
+  // duplication while the route-vs-panel question is decided)
+  | "componentsPanel"
+  | "projectsPanel"
+  | "todoPanel";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey }

@@ -19,6 +19,9 @@ import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { usePermissions } from "@/app/ui/permissions-state";
 import { useKpis } from "@/app/ui/kpi-state";
 import { useChangelog } from "@/app/ui/changelog-state";
+import { useComponentsPanel } from "@/app/ui/components-panel-state";
+import { useProjectsPanel } from "@/app/ui/projects-panel-state";
+import { useTodoPanel } from "@/app/ui/todo-panel-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 type Leaf = NavLeaf | { title: string; href: string };
@@ -36,6 +39,15 @@ const SearchIcon = () => (<svg {...IP}><circle cx="11" cy="11" r="8" /><path d="
 const MetricsIcon = () => (<svg {...IP}><line x1="18" x2="18" y1="20" y2="10" /><line x1="12" x2="12" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="14" /></svg>);
 const Chevron = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600"><path d="m9 18 6-6-6-6" /></svg>);
 const Branch = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>);
+// Top-level review panels (standalone toggles mirroring the @panel/(activity) routes).
+const ComponentsIcon = () => (<svg {...IP}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>);
+const ProjectsIcon = () => (<svg {...IP}><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></svg>);
+const TodoIcon = () => (<svg {...IP}><polyline points="9 11 12 14 20 6" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>);
+const REVIEW = [
+  { title: "Components", toggle: "componentsPanel", Icon: ComponentsIcon },
+  { title: "Projects", toggle: "projectsPanel", Icon: ProjectsIcon },
+  { title: "To Do", toggle: "todoPanel", Icon: TodoIcon },
+] as const;
 
 const SEARCH_SCOPES: Leaf[] = [
   { title: "All", href: "/search?scope=all" },
@@ -76,6 +88,9 @@ export default function TerminalNavMenu({
     permissions: usePermissions(),
     kpis: useKpis(),
     changelog: useChangelog(),
+    componentsPanel: useComponentsPanel(),
+    projectsPanel: useProjectsPanel(),
+    todoPanel: useTodoPanel(),
   };
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";
@@ -156,6 +171,22 @@ export default function TerminalNavMenu({
                 </div>
               )}
             </div>
+          ))}
+          {/* top-level review panels — direct toggles (standalone Activity panels) */}
+          <div className="my-1 h-px bg-zinc-800" />
+          {REVIEW.map(({ title, toggle, Icon }) => (
+            <button
+              key={title}
+              type="button"
+              onClick={() => {
+                toggles[toggle].toggle();
+                close();
+              }}
+              className={`${ROW} w-full ${toggles[toggle].open ? "bg-zinc-900 text-zinc-100" : ""}`}
+            >
+              <Icon />
+              {title}
+            </button>
           ))}
           {sessionId && (
             <>

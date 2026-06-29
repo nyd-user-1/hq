@@ -37,6 +37,12 @@ import { PreviewProvider } from "@/app/ui/preview-state";
 import PreviewPanel from "@/app/ui/preview-panel";
 import { ChangelogProvider } from "@/app/ui/changelog-state";
 import ChangelogPanel from "@/app/ui/changelog-panel";
+import { ComponentsPanelProvider } from "@/app/ui/components-panel-state";
+import ComponentsPanel from "@/app/ui/components-panel";
+import { ProjectsPanelProvider } from "@/app/ui/projects-panel-state";
+import ProjectsPanel from "@/app/ui/projects-panel";
+import { TodoPanelProvider } from "@/app/ui/todo-panel-state";
+import TodoPanel from "@/app/ui/todo-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
@@ -80,6 +86,9 @@ export default async function Shell({
       <PermissionsProvider>
       <PreviewProvider>
       <ChangelogProvider>
+      <ComponentsPanelProvider>
+      <ProjectsPanelProvider>
+      <TodoPanelProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -151,6 +160,10 @@ export default async function Shell({
           {/* The independent Changelog panel's own portal root — a peer that can
               sit open alongside the route panel, the planner, the API, and the plugins. */}
           <div id="changelog-panel-root" className="flex h-full min-w-0" />
+          {/* Standalone review panels mirroring @panel/(activity) — Components/Projects/To Do. */}
+          <div id="components-panel-root" className="flex h-full min-w-0" />
+          <div id="projects-panel-root" className="flex h-full min-w-0" />
+          <div id="todo-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -171,8 +184,14 @@ export default async function Shell({
       <PermissionsPanel />
       <PreviewPanel />
       <ChangelogPanel />
+      <ComponentsPanel />
+      <ProjectsPanel />
+      <TodoPanel />
       <TextEditor />
       </TextEditorProvider>
+      </TodoPanelProvider>
+      </ProjectsPanelProvider>
+      </ComponentsPanelProvider>
       </ChangelogProvider>
       </PreviewProvider>
       </PermissionsProvider>
