@@ -16,8 +16,15 @@ import AccountChip from "@/app/ui/account-chip";
 export default function Sidebar() {
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
-      <Link href="/" scroll={false} className="block shrink-0">
-        <h1 className="text-base font-semibold tracking-tight">hq</h1>
+      {/* Brand chip — same thin border / resting-bg / hover as the account chip
+          at the foot of the rail; px-2.5 lines "hq/terminal" up with the item
+          icons below it. */}
+      <Link
+        href="/"
+        scroll={false}
+        className="block shrink-0 rounded-lg border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 transition-colors hover:bg-zinc-900"
+      >
+        <h1 className="text-base font-semibold tracking-tight">hq/terminal</h1>
       </Link>
 
       <div className="flex shrink-0 flex-col gap-1">
