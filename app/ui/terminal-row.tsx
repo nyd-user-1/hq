@@ -66,6 +66,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
             <Boundary
               label={`terminal-${slot}`}
               copyText="app/ui/terminal.tsx"
+              reorderSlot={slot}
               lead={content ? <TerminalChipMenu target={{ kind: "wall", index: i }} /> : undefined}
             >
               <Link

@@ -13,6 +13,7 @@ export default function Boundary({
   topOnly = false,
   bleedX = false,
   padX,
+  reorderSlot,
   children,
 }: {
   label: string;
@@ -21,6 +22,10 @@ export default function Boundary({
   copyText?: string;
   lead?: React.ReactNode;
   trail?: React.ReactNode;
+  // Terminal panes pass their slot (1-4) so the label chip becomes a drag handle /
+  // drop target for reordering (see boundary-chip.tsx). A plain number, so it rides
+  // cleanly through this server component.
+  reorderSlot?: number;
   // `topOnly`: just a dashed TOP line (no box, no side/bottom border, no
   // horizontal padding) so the content reclaims the ~40px the box would inset.
   // Used by the inner panel pages, which already sit inside their group layout's
@@ -48,7 +53,7 @@ export default function Boundary({
     >
       <span className="absolute -top-2.5 left-4 z-20 flex max-w-[calc(100%-2rem)] items-center gap-2">
         {lead}
-        <BoundaryChip label={label} copyText={copyText} />
+        <BoundaryChip label={label} copyText={copyText} reorderSlot={reorderSlot} />
         {trail}
       </span>
       {children}

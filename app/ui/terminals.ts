@@ -77,3 +77,38 @@ export function slotOf(params: URLSearchParams, sessionId: string | null): numbe
     )?.slot ?? 0
   );
 }
+
+// Move the pane at `fromSlot` to `toSlot` (both 1-based) and return the new params:
+// slot 1 → ?session (the anchor), the rest → ?wall. Dropping a pane onto slot 1
+// PROMOTES it (its token becomes ?session). Slot 1 may be "home" (no real session)
+// — a null placeholder keeps the slots lined up; you can't drag the home pane, but
+// you can drop onto it (promoting the dragged pane and replacing home).
+export function reorderPanes(
+  params: URLSearchParams,
+  fromSlot: number,
+  toSlot: number,
+): URLSearchParams {
+  const same = () => new URLSearchParams(params.toString());
+  const t1 = params.get("session");
+  const t1Real = t1 && t1 !== "new" ? t1 : null;
+  const bySlot: (string | null)[] = [t1Real, ...wallTokens(params)];
+  if (
+    fromSlot < 1 || fromSlot > bySlot.length ||
+    toSlot < 1 || toSlot > bySlot.length ||
+    fromSlot === toSlot ||
+    bySlot[fromSlot - 1] == null // can't move the home pane
+  ) {
+    return same();
+  }
+  const next = [...bySlot];
+  const [moved] = next.splice(fromSlot - 1, 1);
+  next.splice(toSlot - 1, 0, moved);
+  const sp = same();
+  const head = next[0];
+  if (head) sp.set("session", head);
+  else sp.delete("session"); // null head ⇒ slot 1 is home again
+  const rest = next.slice(1).filter((t): t is string => t != null);
+  if (rest.length) sp.set("wall", rest.join(","));
+  else sp.delete("wall");
+  return sp;
+}

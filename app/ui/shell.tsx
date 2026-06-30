@@ -49,6 +49,7 @@ import CommandPalette from "@/app/ui/command-palette";
 import { FocusProvider } from "@/app/ui/focus-state";
 import Terminal1Slot from "@/app/ui/terminal1-slot";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
+import ReorderListener from "@/app/ui/reorder-listener";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
 // always mounted — the persistent heart), and the right app-panel portal anchor.
@@ -112,6 +113,7 @@ export default async function Shell({
               <Boundary
                 label="terminal-1"
                 copyText="app/ui/terminal.tsx"
+                reorderSlot={1}
                 lead={<SidebarToggle />}
                 trail={
                   <Suspense fallback={null}>
@@ -180,6 +182,10 @@ export default async function Shell({
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
         <CommandPalette />
+        {/* Performs terminal drag-reorder (hears the boundary chips' drop event). */}
+        <Suspense fallback={null}>
+          <ReorderListener />
+        </Suspense>
       </SidebarProvider>
 
       <PanelWrapper panel={panel} />
