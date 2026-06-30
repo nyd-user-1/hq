@@ -2838,7 +2838,7 @@ export default function Terminal({
         )}
         {/* Panels — the message-turn ⋮ kebab after the session id opens the nav menu
             (Activity · Console · Search · Metrics, each a flyout). */}
-        <TerminalNavMenu project={staged ? "" : project} sessionId={resolvedId} />
+        <TerminalNavMenu project={staged ? "" : project} name={staged ? "" : headerName} sessionId={resolvedId} />
         {/* EXPERIMENTAL channel-in marker. Shown ONLY when the global channel toggle
             is ON (account menu). Its presence = "you are NOT in the plain warm-REPL
             MVP": channel-aware sessions get driven via the live push channel. Absent
