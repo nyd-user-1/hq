@@ -186,7 +186,7 @@ export default function TerminalNavMenu({
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 flex w-52 flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
           {/* read-only context — project + branch (matches the sidebar Recents menu) */}
-          <div className="flex flex-col gap-0.5 px-2 pb-1.5 pt-1">
+          <div className="flex flex-col gap-0.5 px-2 pb-1.5 pt-1" onMouseEnter={() => setFlyout(null)}>
             <span className="min-w-0 truncate text-xs text-zinc-300">{name || project || "session"}</span>
             {branch && (
               <span className="flex items-center gap-1 font-mono text-[10px] text-zinc-500" title={`branch: ${branch}`}>
@@ -220,6 +220,7 @@ export default function TerminalNavMenu({
             <button
               key={title}
               type="button"
+              onMouseEnter={() => setFlyout(null)}
               onClick={() => {
                 toggles[toggle].toggle();
                 close();
@@ -236,6 +237,7 @@ export default function TerminalNavMenu({
             <button
               key={title}
               type="button"
+              onMouseEnter={() => setFlyout(null)}
               onClick={() => {
                 toggles[toggle].toggle();
                 close();
@@ -251,6 +253,7 @@ export default function TerminalNavMenu({
               <div className="my-1 h-px bg-zinc-800" />
               <button
                 type="button"
+                onMouseEnter={() => setFlyout(null)}
                 onClick={() => {
                   navigator.clipboard.writeText(sessionId);
                   setCopied(true);
