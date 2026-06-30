@@ -1083,6 +1083,9 @@ export default function Terminal({
   // so it's NEVER "locked". hqBusy = that REPL is mid-turn → show the stop button even
   // when this component never sent (a reload of an in-flight hq-started session).
   const [hqOwned, setHqOwned] = useState(false);
+  // teamId when THIS session is the lead of a tmux-mode team — the send box then
+  // drives it by typing into its tmux pane (send-keys), never a forking resume.
+  const [tmuxLeadTeam, setTmuxLeadTeam] = useState<string | null>(null);
   const [hqBusy, setHqBusy] = useState(false);
   // The GLOBAL experimental channel toggle (account menu → lib/channel-mode.ts).
   // Separate from per-session channelConnected: drives the header flask so you can
@@ -1497,6 +1500,7 @@ export default function Terminal({
       // channel push to a busy session keeps it true across the working-tick.
       setChannelConnected(d.channelConnected ?? false);
       setLiveTerminal(d.liveTerminal ?? false);
+      setTmuxLeadTeam(d.tmuxLeadTeam ?? null);
       // Durable daemon ownership — feeds `locked` (never lock an hq-owned session)
       // and the stop button (show it mid-turn even after a remount dropped `sending`).
       setHqOwned(d.hqOwned ?? false);
@@ -2414,6 +2418,31 @@ export default function Terminal({
           : undefined; // ~/hq default
       setSelectedTarget(null);
       await birthAndDrive(target, first);
+      return;
+    }
+    // TMUX-TEAM LEAD: this session is a live interactive lead running in a tmux
+    // pane. Drive it by typing into that pane (send-keys) — NOT a warm --resume
+    // (a 2nd process = the fork). Append the optimistic turn and let the
+    // transcript poll render the lead's reply, exactly like the channel path.
+    if (tmuxLeadTeam) {
+      const prompt = draft.trim();
+      const imgs = attachments;
+      if (!prompt && imgs.length === 0) return;
+      setItems((t) => [
+        ...t,
+        { kind: "turn", role: "user", text: prompt, at: new Date().toISOString() },
+      ]);
+      setDraft("");
+      setAttachments([]);
+      setError(null);
+      busyRef.current = true; // protect the optimistic turn through the working-tick poll
+      const res = await fetch("/api/teams/pane", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ team: tmuxLeadTeam, member: "team-lead", text: prompt }),
+      }).catch(() => null);
+      busyRef.current = false;
+      if (!res || !res.ok) setError("couldn't reach the lead's tmux pane — is the team still running?");
       return;
     }
     // (The old "locked while active" gate is retired — sending into a session a

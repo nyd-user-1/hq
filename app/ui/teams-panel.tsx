@@ -58,6 +58,11 @@ export default function TeamsPanel() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [spawnOpen, setSpawnOpen] = useState(false);
+  const [spawnCwd, setSpawnCwd] = useState("/Users/brendanstanton/Code/hq");
+  const [spawnPrompt, setSpawnPrompt] = useState("");
+  const [spawning, setSpawning] = useState(false);
+  const [spawnMsg, setSpawnMsg] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,8 +78,38 @@ export default function TeamsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
+    if (!open) return;
+    load();
+    const iv = setInterval(load, 5000); // auto-surface a freshly spawned team
+    return () => clearInterval(iv);
   }, [open, load]);
+
+  // Spawn a brand-new team FROM hq: a managed tmux split-pane session.
+  const spawn = async () => {
+    const cwd = spawnCwd.trim();
+    const prompt = spawnPrompt.trim();
+    if (!cwd || !prompt || spawning) return;
+    setSpawning(true);
+    setSpawnMsg("");
+    try {
+      const r = await fetch("/api/teams/spawn", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cwd, prompt }),
+      }).then((res) => res.json());
+      if (r?.ok) {
+        setSpawnMsg("spawning… the team appears here in ~30s");
+        setSpawnPrompt("");
+        setSpawnOpen(false);
+      } else {
+        setSpawnMsg(r?.error ?? "spawn failed");
+      }
+    } catch (e) {
+      setSpawnMsg(e instanceof Error ? e.message : "spawn failed");
+    } finally {
+      setSpawning(false);
+    }
+  };
 
   // Drive lead — pin the lead session as the main terminal (Terminal 1), keeping
   // any existing wall pin. withPins keeps the URL down to ?session/?wall.
@@ -140,6 +175,54 @@ export default function TeamsPanel() {
         {err && (
           <p className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">{err}</p>
         )}
+
+        {/* Spawn a team FROM hq — a managed tmux split-pane session (real,
+            drivable agents). */}
+        <div className="shrink-0">
+          {spawnOpen ? (
+            <div className="flex flex-col gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/30 p-2">
+              <input
+                value={spawnCwd}
+                onChange={(e) => setSpawnCwd(e.target.value)}
+                placeholder="working dir"
+                className="rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+              />
+              <textarea
+                value={spawnPrompt}
+                onChange={(e) => setSpawnPrompt(e.target.value)}
+                rows={3}
+                placeholder="the team's task — e.g. “Spawn 3 teammates to review PR #142: security, performance, tests.”"
+                className="scrollbar-none resize-none rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+              />
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSpawnOpen(false)}
+                  className="rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                >
+                  cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={spawn}
+                  disabled={spawning}
+                  className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25 disabled:opacity-50"
+                >
+                  {spawning ? "spawning…" : "Spawn team"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSpawnOpen(true)}
+              className="w-full rounded-md border border-dashed border-zinc-700 px-2 py-1.5 font-mono text-[11px] text-zinc-400 transition-colors hover:border-emerald-500/50 hover:text-emerald-300"
+            >
+              + Spawn team
+            </button>
+          )}
+          {spawnMsg && <p className="mt-1 font-mono text-[10px] text-zinc-500">{spawnMsg}</p>}
+        </div>
 
         <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2">
           {teams.length ? (
