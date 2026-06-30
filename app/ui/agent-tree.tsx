@@ -188,7 +188,9 @@ export default function AgentTree({
                 {t.members.map((m, i) => (
                   <Link
                     key={i}
-                    href={m.sessionId ? pinHref(m.sessionId) : withPins("/tree", search)}
+                    // Only the lead is a top-level session (pinnable); teammates are
+                    // in-process subagents with no session id of their own.
+                    href={m.isLead ? pinHref(t.leadSessionId) : withPins("/tree", search)}
                     scroll={false}
                     className="flex items-baseline gap-2 rounded-sm py-1 transition-colors hover:bg-zinc-800/30"
                   >

@@ -22,6 +22,8 @@ import { useChangelog } from "@/app/ui/changelog-state";
 import { useComponentsPanel } from "@/app/ui/components-panel-state";
 import { useProjectsPanel } from "@/app/ui/projects-panel-state";
 import { useTodoPanel } from "@/app/ui/todo-panel-state";
+import { useTeams } from "@/app/ui/teams-state";
+import { useTasks } from "@/app/ui/tasks-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 type Leaf = NavLeaf | { title: string; href: string };
@@ -47,6 +49,14 @@ const REVIEW = [
   { title: "Components", toggle: "componentsPanel", Icon: ComponentsIcon },
   { title: "Projects", toggle: "projectsPanel", Icon: ProjectsIcon },
   { title: "To Do", toggle: "todoPanel", Icon: TodoIcon },
+] as const;
+// Agent Teams — the live team roster + the shared task list. A dedicated
+// top-level block (not a flyout leaf) so the entry into Teams is unambiguous.
+const TeamsIcon = () => (<svg {...IP}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>);
+const TasksIcon = () => (<svg {...IP}><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><line x1="13" y1="6" x2="21" y2="6" /><line x1="13" y1="12" x2="21" y2="12" /><line x1="13" y1="18" x2="21" y2="18" /></svg>);
+const TEAMS = [
+  { title: "Teams", toggle: "teamsPanel", Icon: TeamsIcon },
+  { title: "Tasks", toggle: "tasksPanel", Icon: TasksIcon },
 ] as const;
 
 const SEARCH_SCOPES: Leaf[] = [
@@ -95,6 +105,8 @@ export default function TerminalNavMenu({
     componentsPanel: useComponentsPanel(),
     projectsPanel: useProjectsPanel(),
     todoPanel: useTodoPanel(),
+    teamsPanel: useTeams(),
+    tasksPanel: useTasks(),
   };
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";
@@ -179,6 +191,22 @@ export default function TerminalNavMenu({
           {/* top-level review panels — direct toggles (standalone Activity panels) */}
           <div className="my-1 h-px bg-zinc-800" />
           {REVIEW.map(({ title, toggle, Icon }) => (
+            <button
+              key={title}
+              type="button"
+              onClick={() => {
+                toggles[toggle].toggle();
+                close();
+              }}
+              className={`${ROW} w-full ${toggles[toggle].open ? "bg-zinc-900 text-zinc-100" : ""}`}
+            >
+              <Icon />
+              {title}
+            </button>
+          ))}
+          {/* Agent Teams — direct toggles, the unambiguous entry into Teams/Tasks */}
+          <div className="my-1 h-px bg-zinc-800" />
+          {TEAMS.map(({ title, toggle, Icon }) => (
             <button
               key={title}
               type="button"

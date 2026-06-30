@@ -22,6 +22,8 @@ import { useChangelog } from "@/app/ui/changelog-state";
 import { useComponentsPanel } from "@/app/ui/components-panel-state";
 import { useProjectsPanel } from "@/app/ui/projects-panel-state";
 import { useTodoPanel } from "@/app/ui/todo-panel-state";
+import { useTeams } from "@/app/ui/teams-state";
+import { useTasks } from "@/app/ui/tasks-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -51,6 +53,8 @@ export default function PanelNav() {
     componentsPanel: useComponentsPanel(),
     projectsPanel: useProjectsPanel(),
     todoPanel: useTodoPanel(),
+    teamsPanel: useTeams(),
+    tasksPanel: useTasks(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">

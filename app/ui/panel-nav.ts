@@ -81,7 +81,10 @@ export type ToggleKey =
   // duplication while the route-vs-panel question is decided)
   | "componentsPanel"
   | "projectsPanel"
-  | "todoPanel";
+  | "todoPanel"
+  // Agent Teams — the live team roster + the shared task list.
+  | "teamsPanel"
+  | "tasksPanel";
 export type NavLeaf =
   | { title: string; href: string }
   | { title: string; toggle: ToggleKey }
