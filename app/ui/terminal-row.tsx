@@ -7,6 +7,7 @@ import Boundary from "@/app/ui/boundary";
 import Terminal from "@/app/ui/terminal";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import PaneView from "@/app/ui/pane-view";
+import PaneDropZone from "@/app/ui/pane-drop-zone";
 import { wallTokens, parseToken } from "@/app/ui/terminals";
 
 // Terminal 1 + the WALL. Terminal 1 (children) is ALWAYS the first child → never
@@ -26,8 +27,11 @@ export default function TerminalRow({
 }) {
   return (
     <div className="flex min-h-0 flex-1 gap-4">
-      {/* Terminal 1 — always rendered, always first → never remounts */}
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      {/* Terminal 1 — always rendered, always first → never remounts. Slot 1 is a
+          reorder DROP target (drag another terminal onto it to promote it). */}
+      <PaneDropZone slot={1} className="flex min-w-0 flex-1 flex-col">
+        {children}
+      </PaneDropZone>
       {/* Wall panes 2–4 — Suspense keeps useSearchParams from breaking the static
           /_not-found prerender */}
       <Suspense fallback={null}>
@@ -62,7 +66,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
         // Key by the token (not the index) so closing a sibling never remounts the
         // others — preserves each pane's live state, as the wall did before.
         return (
-          <div key={tok} className="relative flex min-w-0 flex-1 flex-col">
+          <PaneDropZone key={tok} slot={slot} className="flex min-w-0 flex-1 flex-col">
             <Boundary
               label={`terminal-${slot}`}
               copyText="app/ui/terminal.tsx"
@@ -90,7 +94,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
                 />
               )}
             </Boundary>
-          </div>
+          </PaneDropZone>
         );
       })}
     </>

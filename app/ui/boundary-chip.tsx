@@ -58,6 +58,7 @@ export default function BoundaryChip({
             const from = Number(e.dataTransfer.getData(DND_TYPE));
             if (!Number.isFinite(from) || from === reorderSlot) return;
             e.preventDefault();
+            e.stopPropagation(); // don't also fire the pane drop zone underneath
             window.dispatchEvent(
               new CustomEvent("hq:reorder-pane", { detail: { from, to: reorderSlot } }),
             );
