@@ -46,15 +46,21 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";
   const session = params.get("session");
+  const lead = params.get("lead");
   const toks = wallTokens(params);
   if (toks.length === 0) return null;
 
-  // close ONE pane = drop its token by index (keep T1's ?session + the others)
+  // close ONE pane = drop its token by index (keep T1's ?session + the others).
+  // The ?lead anchor rides along while any wall pane survives; when the LAST one
+  // closes the wall is gone, so drop ?lead too (team mode ends, the lock + ★ lift).
   const closeHref = (i: number) => {
     const rest = toks.filter((_, idx) => idx !== i);
     const sp = new URLSearchParams();
     if (session) sp.set("session", session);
-    if (rest.length) sp.set("wall", rest.join(","));
+    if (rest.length) {
+      sp.set("wall", rest.join(","));
+      if (lead) sp.set("lead", lead);
+    }
     return sp.toString() ? `${pathname}?${sp}` : pathname;
   };
 

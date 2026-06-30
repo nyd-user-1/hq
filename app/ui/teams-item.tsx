@@ -48,8 +48,14 @@ export default function TeamsItem() {
       .map((m) => `@tm:${team.id}:${m.name}`);
     const sp = new URLSearchParams(params.toString());
     sp.set("session", team.leadSessionId);
+    // The LEAD anchor: marks this wall as a team and locks slot 1 to the lead so
+    // T1 never snaps back to the newest session, and the ★ rides the lead pane.
+    sp.set("lead", team.leadSessionId);
     if (teammates.length) sp.set("wall", teammates.join(","));
-    else sp.delete("wall");
+    else {
+      sp.delete("wall");
+      sp.delete("lead"); // no teammates ⇒ no wall ⇒ nothing to anchor against
+    }
     router.push(`${pathname}?${sp.toString()}`, { scroll: false });
   };
 

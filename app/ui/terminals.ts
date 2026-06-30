@@ -104,11 +104,17 @@ export function reorderPanes(
   const t1 = params.get("session");
   const t1Real = t1 && t1 !== "new" ? t1 : null;
   const bySlot: (string | null)[] = [t1Real, ...wallTokens(params)];
+  // TEAM MODE: slot 1 is the LEAD, a locked anchor. Refuse any move that touches
+  // it — no pane may be promoted INTO slot 1 (which would strand a teammate "@tm:"
+  // token in the full Terminal, where it can't resolve → onboarding screen) and
+  // the lead may not be dragged OUT. The lead stays put; teammates reorder freely.
+  const lead = params.get("lead");
   if (
     fromSlot < 1 || fromSlot > bySlot.length ||
     toSlot < 1 || toSlot > bySlot.length ||
     fromSlot === toSlot ||
-    bySlot[fromSlot - 1] == null // can't move the home pane
+    bySlot[fromSlot - 1] == null || // can't move the home pane
+    (lead && (fromSlot === 1 || toSlot === 1)) // can't disturb the locked lead
   ) {
     return same();
   }

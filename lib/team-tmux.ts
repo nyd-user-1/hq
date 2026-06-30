@@ -130,13 +130,16 @@ export function capturePane(paneId: string): string | null {
 }
 
 // Type a message into an agent and submit it. `-l` sends the text literally (no
-// key interpretation), then a separate Enter submits.
+// key interpretation), then a separate Enter submits. The `--` before the body
+// is load-bearing: without it tmux parses a message that BEGINS WITH "-" as a
+// flag and the send fails (verified live against tmux 3.6b) — `--` ends option
+// parsing so the literal text is always treated as the operand.
 export function sendToPane(paneId: string, text: string): { ok: boolean; error?: string } {
   if (!isPaneId(paneId)) return { ok: false, error: "not a tmux pane" };
   const body = (text ?? "").replace(/\r/g, "");
   if (!body.trim()) return { ok: false, error: "empty message" };
   try {
-    tmux(["send-keys", "-t", paneId, "-l", body]);
+    tmux(["send-keys", "-t", paneId, "-l", "--", body]);
     tmux(["send-keys", "-t", paneId, "Enter"]);
     return { ok: true };
   } catch (e) {
@@ -170,9 +173,10 @@ export function spawnTeam(
     tmux(["send-keys", "-t", session, "Enter"]);
     recordTeamTmux(teamId, session);
     // Deliver the task once claude has booted (it can't accept input instantly).
+    // `--` guards a task prompt that begins with "-" from being read as a flag.
     setTimeout(() => {
       try {
-        tmux(["send-keys", "-t", session, "-l", task]);
+        tmux(["send-keys", "-t", session, "-l", "--", task]);
         tmux(["send-keys", "-t", session, "Enter"]);
       } catch {
         /* the team is still spawned; the prompt just didn't land */

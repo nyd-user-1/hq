@@ -960,6 +960,12 @@ export default function Terminal({
   // the wall panes (Terminal 2–4) — preserved whenever Terminal 1 re-points, so
   // opening a session in T1 never closes the wall. (None in controlled mode.)
   const wallParam = controlled ? null : params.get("wall");
+  // TEAM-WALL LEAD ANCHOR (?lead): when a team is open, slot 1 is LOCKED to the
+  // lead. This is what stops the self-re-pin from snapping T1 to the newest
+  // session (the "lead never shows, my own session sits in T1" bug) — when set,
+  // the sticky pin below targets the lead, not whatever happens to be newest.
+  // Only meaningful for slot 1 (?session); the pair terminal never anchors a lead.
+  const leadAnchor = !controlled && paramKey === "session" ? params.get("lead") : null;
   // session id → href that re-points THIS terminal. Terminal 1 pins on the home
   // route (the /sessions panel was removed — the sidebar owns session selection
   // now); Terminal 2 sets ?pair on the current path while preserving T1's ?session.
@@ -1422,9 +1428,11 @@ export default function Terminal({
       ? "?staged=1"
       : pinned
         ? `?session=${encodeURIComponent(pinned)}`
-        : sibling
-          ? `?exclude=${encodeURIComponent(sibling)}` // unpinned: newest, but not Terminal 2's
-          : "";
+        : leadAnchor
+          ? `?session=${encodeURIComponent(leadAnchor)}` // team wall lost ?session → fetch the LEAD, not newest
+          : sibling
+            ? `?exclude=${encodeURIComponent(sibling)}` // unpinned: newest, but not Terminal 2's
+            : "";
     // Once you've scrolled back to load full history, keep polling the full list
     // (cached by mtime) so live turns merge onto it instead of snapping to a tail.
     const fullQ = expandedRef.current ? (q ? "&full=1" : "?full=1") : "";
@@ -1482,12 +1490,16 @@ export default function Terminal({
         // Sticky: an unpinned terminal pins itself to the session it just
         // resolved, so it STAYS there — clicking a Recents row is the only thing
         // that moves it, instead of live-chasing whatever session is newest.
+        // TEAM WALL: when a lead anchor is set, pin to the LEAD (never to d.id =
+        // newest) and carry ?lead through — this is the snap-back fix: slot 1
+        // restores itself to the lead, not to my own newest session.
         if (!controlled && !pinned && d.id) {
           const sp = new URLSearchParams();
-          sp.set(paramKey, d.id);
+          sp.set(paramKey, leadAnchor || d.id);
           const sibKey = paramKey === "session" ? "pair" : "session";
           if (sibling) sp.set(sibKey, sibling);
           if (wallParam) sp.set("wall", wallParam); // keep the wall when T1 self-pins
+          if (leadAnchor) sp.set("lead", leadAnchor); // keep the lead anchor latched
           router.replace(`${pathnameRef.current ?? "/"}?${sp.toString()}`, { scroll: false });
         }
       }
@@ -1531,7 +1543,7 @@ export default function Terminal({
           load();
         }, 2000);
     }
-  }, [pinned, staged, router, sibling, paramKey, controlled, wallParam]);
+  }, [pinned, staged, router, sibling, paramKey, controlled, wallParam, leadAnchor]);
 
   // Lazy scrollback: at the top, load the FULL transcript once and prepend it.
   // anchorRef (set here, applied in the layout effect below) keeps your reading
