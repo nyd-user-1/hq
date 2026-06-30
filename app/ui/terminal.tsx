@@ -1005,7 +1005,6 @@ export default function Terminal({
   // disambiguates the single click (copy) from the double click (rename).
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
-  const [badgeHover, setBadgeHover] = useState(false); // hover the ownership badge → preview the toggle
   const idClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveRename = () => {
     const id = resolvedId;
@@ -1391,27 +1390,10 @@ export default function Terminal({
   // focus-blue is the RESTING marker and the working colors win while the pane runs.
   const multiTerminal = controlled ? true : !!wallParam;
   const isActive = activeKey === terminalKey && multiTerminal;
-  // Ownership badge state: CONTROLLER = hq is driving this session (live in HQ or
-  // the daemon owns its warm process); OBSERVER = hq is only mirroring a terminal it
-  // doesn't drive. Clicking the badge toggles: take control (start driving) ⇄ hand
-  // back to the terminal.
-  const controlling = live || hqOwned;
   // Header name: a rename (customTitle) or the short id, truncated past 17 chars so a
   // long title can't blow out the header.
   const headerName = customTitle || (resolvedId ? resolvedId.slice(0, 8) : "");
   const headerNameTrunc = headerName.length > 17 ? `${headerName.slice(0, 17)}…` : headerName;
-  const toggleControl = () => {
-    if (controlling) {
-      // hand control back to the terminal — release HQ's process
-      setLive(false);
-      repl.stop();
-      drivenSessionRef.current = null;
-    } else {
-      // take control — HQ starts driving this session (the first send routes through
-      // the warm REPL; the existing fork-confirm guards the first write)
-      setLive(true);
-    }
-  };
   useEffect(() => {
     const box = rootRef.current?.closest(".boundary-flash");
     if (!box) return;
@@ -3014,37 +2996,6 @@ export default function Terminal({
             resume in terminal
           </button>
         )}
-        {/* Ownership badge — CONTROLLER (hq drives this session) vs OBSERVER (hq
-            mirrors a terminal it doesn't drive). Doubles as the FOCUS indicator: blue
-            when this terminal is the active one (so you can tell which is focused even
-            while both animate), grey otherwise. Click toggles control; hover previews
-            the toggle (Observer → Controller). ml-auto groups it with the layout toggle. */}
-        {resolvedId && !staged && (
-          <button
-            type="button"
-            onMouseEnter={() => setBadgeHover(true)}
-            onMouseLeave={() => setBadgeHover(false)}
-            onClick={toggleControl}
-            title={
-              controlling
-                ? "Controller — hq is driving this session. Click to hand control back to the terminal."
-                : "Observer — hq is mirroring a Claude Code terminal it doesn't drive. Click to TAKE CONTROL: hq starts driving this session so you can send to it from here."
-            }
-            className={`${live ? "" : "ml-auto"} shrink-0 cursor-pointer rounded px-1.5 py-0.5 font-mono text-[10px] transition-colors ${
-              isActive
-                ? controlling
-                  ? "bg-blue-600 text-white"
-                  : "border border-blue-500 text-blue-300"
-                : controlling
-                  ? "bg-zinc-700 text-zinc-100 hover:bg-zinc-600"
-                  : "border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
-            }`}
-          >
-            {controlling
-              ? badgeHover ? "Observer" : "Controller"
-              : badgeHover ? "Controller" : "Observer"}
-          </button>
-        )}
         {/* Layout toggle — flips this live session between two real modes: "focus
             mode" (the centered conversation shell, the DEFAULT) and "wide screen".
             The choice persists in the hq-focus cookie (read server-side in
@@ -3056,9 +3007,7 @@ export default function Terminal({
           <Tooltip
             label={focusMode ? "Wide screen" : "Focus mode"}
             placement="bottom"
-            // Right-cluster anchor only when nothing earlier carries ml-auto: the
-            // live badge (when live) or the ownership badge (when a session is shown).
-            className={!live && (!resolvedId || staged) ? "ml-auto" : undefined}
+            className={live ? undefined : "ml-auto"}
           >
           <button
             type="button"
