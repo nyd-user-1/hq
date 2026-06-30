@@ -1396,6 +1396,10 @@ export default function Terminal({
   // doesn't drive. Clicking the badge toggles: take control (start driving) ⇄ hand
   // back to the terminal.
   const controlling = live || hqOwned;
+  // Header name: a rename (customTitle) or the short id, truncated past 17 chars so a
+  // long title can't blow out the header.
+  const headerName = customTitle || (resolvedId ? resolvedId.slice(0, 8) : "");
+  const headerNameTrunc = headerName.length > 17 ? `${headerName.slice(0, 17)}…` : headerName;
   const toggleControl = () => {
     if (controlling) {
       // hand control back to the terminal — release HQ's process
@@ -2843,7 +2847,7 @@ export default function Terminal({
                     : "text-green-400 hover:text-green-300"
                 }`}
               >
-                {customTitle || resolvedId.slice(0, 8)}
+                {headerNameTrunc}
               </button>
             </SessionMenu>
           )

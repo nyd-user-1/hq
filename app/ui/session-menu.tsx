@@ -136,7 +136,10 @@ export default function SessionMenu({
     <div ref={rootRef} className="relative flex shrink-0 items-center" onMouseEnter={enter} onMouseLeave={leave}>
       {children}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 flex max-h-[340px] w-[275px] max-w-[275px] flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl">
+        <div
+          style={{ width: 275, maxWidth: 275 }}
+          className="absolute left-0 top-full z-50 mt-1 flex max-h-[340px] flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 shadow-xl"
+        >
           <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 px-2.5 py-2">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-600" aria-hidden>
               <circle cx="11" cy="11" r="8" />
