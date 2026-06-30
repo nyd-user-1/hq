@@ -48,8 +48,20 @@ import { TasksProvider } from "@/app/ui/tasks-state";
 import TasksPanel from "@/app/ui/tasks-panel";
 import { IssuesProvider } from "@/app/ui/issues-state";
 import IssuesPanel from "@/app/ui/issues-panel";
+import { TreeProvider } from "@/app/ui/tree-state";
+import TreePanel from "@/app/ui/tree-panel";
+import { RoutinesProvider } from "@/app/ui/routines-state";
+import RoutinesPanel from "@/app/ui/routines-panel";
+import { FirehoseProvider } from "@/app/ui/firehose-state";
+import FirehosePanel from "@/app/ui/firehose-panel";
+import { UsageProvider } from "@/app/ui/usage-state";
+import UsagePanel from "@/app/ui/usage-panel";
+import { CallsProvider } from "@/app/ui/calls-state";
+import CallsPanel from "@/app/ui/calls-panel";
+import { GuardrailsProvider } from "@/app/ui/guardrails-state";
+import GuardrailsPanel from "@/app/ui/guardrails-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
-import TextEditor from "@/app/ui/text-editor";
+import TextEditorPanel from "@/app/ui/text-editor-panel";
 import { CommandProvider } from "@/app/ui/command-state";
 import CommandPalette from "@/app/ui/command-palette";
 import { FocusProvider } from "@/app/ui/focus-state";
@@ -102,6 +114,12 @@ export default async function Shell({
       <TeamsProvider>
       <TasksProvider>
       <IssuesProvider>
+      <TreeProvider>
+      <RoutinesProvider>
+      <FirehoseProvider>
+      <UsageProvider>
+      <CallsProvider>
+      <GuardrailsProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -195,6 +213,14 @@ export default async function Shell({
           {/* GitHub Issues — a Changelog sibling (gh-backed), read straight from
               the repo's issue tracker. */}
           <div id="issues-panel-root" className="flex h-full min-w-0" />
+          {/* Migrated @panel routes → standalone push-in panels. */}
+          <div id="tree-panel-root" className="flex h-full min-w-0" />
+          <div id="routines-panel-root" className="flex h-full min-w-0" />
+          <div id="firehose-panel-root" className="flex h-full min-w-0" />
+          <div id="usage-panel-root" className="flex h-full min-w-0" />
+          <div id="calls-panel-root" className="flex h-full min-w-0" />
+          <div id="guardrails-panel-root" className="flex h-full min-w-0" />
+          <div id="text-editor-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -225,8 +251,20 @@ export default async function Shell({
       <TeamsPanel />
       <TasksPanel />
       <IssuesPanel />
-      <TextEditor />
+      <TreePanel />
+      <RoutinesPanel />
+      <FirehosePanel />
+      <UsagePanel />
+      <CallsPanel />
+      <GuardrailsPanel />
+      <TextEditorPanel />
       </TextEditorProvider>
+      </GuardrailsProvider>
+      </CallsProvider>
+      </UsageProvider>
+      </FirehoseProvider>
+      </RoutinesProvider>
+      </TreeProvider>
       </IssuesProvider>
       </TasksProvider>
       </TeamsProvider>

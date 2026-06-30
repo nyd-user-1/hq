@@ -78,6 +78,12 @@ export type ToggleKey =
   | "kpis"
   | "changelog"
   | "issues"
+  | "treePanel"
+  | "routinesPanel"
+  | "firehosePanel"
+  | "usagePanel"
+  | "callsPanel"
+  | "guardrailsPanel"
   // standalone review-panels mirroring the @panel/(activity) routes (temporary
   // duplication while the route-vs-panel question is decided)
   | "componentsPanel"
@@ -104,7 +110,7 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Issues", toggle: "issues" },
       { title: "Compose", href: "/compose" },
       { title: "Text", toggle: "text" },
-      { title: "Tree", href: "/tree" },
+      { title: "Tree", toggle: "treePanel" },
       { title: "Preview", toggle: "preview" },
     ],
   },
@@ -126,7 +132,7 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Commands", toggle: "commands" },
       { title: "Skills", toggle: "skills" },
       { title: "Plugins", toggle: "plugins" },
-      { title: "Routines", href: "/routines" },
+      { title: "Routines", toggle: "routinesPanel" },
       { title: "Hooks", toggle: "hooks" },
       { title: "MCP", toggle: "mcp" },
       { title: "Agents", toggle: "agents" },
@@ -137,15 +143,15 @@ export const NAV_HEADERS: NavHeader[] = [
     title: "Metrics",
     cols: 2, // 8 items → 2×4
     items: [
-      { title: "Usage", href: "/metrics" },
-      { title: "Calls", href: "/calls" },
-      { title: "Guardrails", href: "/guardrails" },
+      { title: "Usage", toggle: "usagePanel" },
+      { title: "Calls", toggle: "callsPanel" },
+      { title: "Guardrails", toggle: "guardrailsPanel" },
       { title: "Savings", href: "/savings" },
       { title: "Memory Audit", href: "/audit" },
       { title: "KPIs", toggle: "kpis" },
       { title: "Planner", toggle: "planner" },
       { title: "API", toggle: "api" },
-      { title: "Firehose", href: "/firehose" },
+      { title: "Firehose", toggle: "firehosePanel" },
     ],
   },
 ];

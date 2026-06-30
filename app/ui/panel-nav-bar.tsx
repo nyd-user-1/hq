@@ -25,6 +25,12 @@ import { useTodoPanel } from "@/app/ui/todo-panel-state";
 import { useTeams } from "@/app/ui/teams-state";
 import { useTasks } from "@/app/ui/tasks-state";
 import { useIssues } from "@/app/ui/issues-state";
+import { useTree } from "@/app/ui/tree-state";
+import { useRoutines } from "@/app/ui/routines-state";
+import { useFirehose } from "@/app/ui/firehose-state";
+import { useUsage } from "@/app/ui/usage-state";
+import { useCalls } from "@/app/ui/calls-state";
+import { useGuardrails } from "@/app/ui/guardrails-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 
@@ -57,6 +63,12 @@ export default function PanelNav() {
     teamsPanel: useTeams(),
     tasksPanel: useTasks(),
     issues: useIssues(),
+    treePanel: useTree(),
+    routinesPanel: useRoutines(),
+    firehosePanel: useFirehose(),
+    usagePanel: useUsage(),
+    callsPanel: useCalls(),
+    guardrailsPanel: useGuardrails(),
   };
   return (
     <nav className="flex min-w-0 items-center gap-0.5">
