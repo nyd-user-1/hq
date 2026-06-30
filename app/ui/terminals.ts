@@ -121,8 +121,15 @@ export function reorderPanes(
   const next = [...bySlot];
   const [moved] = next.splice(fromSlot - 1, 1);
   next.splice(toSlot - 1, 0, moved);
-  const sp = same();
+  // Never promote a non-session token (a "@tm:" teammate or "@view") into slot 1:
+  // the always-mounted Terminal can only render a session there — a view/teammate
+  // token would blank it (it polls /api/terminal/turns?session=@tm:… → no resolve →
+  // the onboarding screen). The ?lead lock above already guards this in team mode,
+  // but ?lead can be dropped while teammate tokens linger (e.g. pinning a Recents
+  // row keeps ?wall but not ?lead) — so refuse here too, independent of ?lead.
   const head = next[0];
+  if (head && parseToken(head)?.kind !== "session") return same();
+  const sp = same();
   if (head) sp.set("session", head);
   else sp.delete("session"); // null head ⇒ slot 1 is home again
   const rest = next.slice(1).filter((t): t is string => t != null);
