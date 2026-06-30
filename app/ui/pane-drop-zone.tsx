@@ -23,7 +23,17 @@ export default function PaneDropZone({
   const has = (e: React.DragEvent) => e.dataTransfer.types.includes(DND_TYPE);
   return (
     <div
-      className={`relative ${className}`}
+      // The pane's DEAD SPACE (the margins/padding around the conversation) is a drag
+      // handle too — grab it like a window title bar. The conversation content is
+      // marked draggable={false} (terminal.tsx), so a drag from it selects text;
+      // a drag from the empty space walks up to here and moves the pane. cursor-grab
+      // shows the affordance over that dead space.
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DND_TYPE, String(slot));
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      className={`relative cursor-grab active:cursor-grabbing ${className}`}
       onDragEnter={(e) => {
         if (!has(e)) return;
         e.preventDefault();

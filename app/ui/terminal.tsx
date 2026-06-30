@@ -2725,7 +2725,7 @@ export default function Terminal({
         </div>
       )}
       {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
-      <div className={`mb-2 ${centered ? "mx-auto w-full max-w-3xl px-4" : ""}`}>
+      <div draggable={false} className={`mb-2 cursor-auto ${centered ? "mx-auto w-full max-w-3xl px-4" : ""}`}>
         {/* The whole header row — session metadata (dot · project · id · search ·
             lineage) AND the layout toggle — rides the SAME centered column as the
             message stream when FOCUSED (the colWrap: mx-auto max-w-3xl px-4), so
@@ -3057,7 +3057,7 @@ export default function Terminal({
       >
         {/* Centered column when `centered`; `display:contents` (a no-op) when not,
             so the full-width transcript is unchanged. */}
-        <div className={colWrap}>
+        <div draggable={false} className={`${colWrap} cursor-auto`}>
         {/* The "+" staging view: nothing exists yet — say how a session is
             born, offer the recent list, and auto-flip when one appears. No
             handoff kickoff here: that belongs to /clear-born continuations. */}
@@ -3385,7 +3385,7 @@ export default function Terminal({
 
       {/* Bottom dock — status + composer, centered to the conversation column
           when `centered` (else `display:contents`, unchanged). */}
-      <div className={colWrap}>
+      <div draggable={false} className={`${colWrap} cursor-auto`}>
       {/* Divergence net — a rival (still-open TUI) process wrote a branch into the
           SAME transcript HQ is driving. A distinct amber banner ABOVE the status
           line (not folded into the interrupt border). LATCHED client-side; gated
