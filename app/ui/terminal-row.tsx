@@ -97,7 +97,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
               {content?.kind === "view" ? (
                 <PaneView view={content.view} terminalKey={terminalKey} />
               ) : content?.kind === "teammate" ? (
-                <TeammatePane teamId={content.teamId} member={content.member} label={content.member} />
+                <TeammatePane teamId={content.teamId} member={content.member} />
               ) : (
                 <Terminal
                   sessionId={content?.kind === "session" ? content.sessionId : tok}

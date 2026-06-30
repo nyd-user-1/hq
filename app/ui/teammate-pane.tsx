@@ -25,12 +25,12 @@ const COLOR_MAP: Record<string, string> = {
 export default function TeammatePane({
   teamId,
   member,
-  label,
-  color,
+  color: initialColor,
 }: {
   teamId: string;
   member: string;
-  label: string;
+  // The CC color, if the caller happens to know it; otherwise it's resolved live
+  // from /api/teams/pane (the "@tm:" wall token carries no color).
   color?: string;
 }) {
   // tmux mode: the live captured pane text (null until we know it's a pane).
@@ -39,12 +39,17 @@ export default function TeammatePane({
   // in-process fallback.
   const [turns, setTurns] = useState<Turn[]>([]);
   const [working, setWorking] = useState(false);
+  // member metadata resolved from the API (the token carries none).
+  const [color, setColor] = useState(initialColor ?? "");
+  const [agentType, setAgentType] = useState("");
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Poll: prefer the tmux pane; fall back to the transcript when it isn't one.
+  // /api/teams/pane always returns the member metadata (color/agentType), even in
+  // the in-process (paneId === null) case, so the dot + pill are never blank.
   useEffect(() => {
     let alive = true;
     async function load() {
@@ -53,6 +58,8 @@ export default function TeammatePane({
           `/api/teams/pane?team=${encodeURIComponent(teamId)}&member=${encodeURIComponent(member)}`,
         ).then((r) => r.json());
         if (!alive) return;
+        if (typeof pr?.color === "string" && pr.color) setColor(pr.color);
+        if (typeof pr?.agentType === "string") setAgentType(pr.agentType);
         if (pr?.paneId) {
           setIsPane(true);
           setPane(typeof pr.pane === "string" ? pr.pane : "");
@@ -65,6 +72,7 @@ export default function TeammatePane({
         if (!alive) return;
         setTurns(Array.isArray(tr.turns) ? tr.turns : []);
         setWorking(!!tr.working);
+        if (typeof tr?.color === "string" && tr.color) setColor(tr.color);
       } catch {
         // transient — keep the last good render
       }
@@ -101,20 +109,33 @@ export default function TeammatePane({
     }
   }, [draft, sending, teamId, member]);
 
-  const dotClass = COLOR_MAP[color ?? ""] ?? "text-zinc-400";
+  const dotClass = COLOR_MAP[color] ?? "text-zinc-400";
+  // drive vs read-only — FILL vs OUTLINE zinc (the observe/control vocabulary),
+  // never a hue. A tmux pane is drivable (send-keys into its real stdin); an
+  // in-process teammate is observe-only (its transcript). working/idle is a
+  // separate, honest activity axis, shown only for the read-only case.
+  const badge = isPane
+    ? "border border-zinc-600 bg-zinc-700 text-zinc-100" // control — filled
+    : "border border-zinc-700 text-zinc-500"; // observe — outline
 
   return (
     <div className="flex h-full min-h-0 flex-col font-mono text-xs">
       <div className="flex items-center gap-1.5 px-2 py-1.5">
-        <span className={dotClass}>●</span>
-        <span className="text-zinc-300">{label}</span>
-        <span className="text-zinc-500">{member}</span>
-        {isPane ? (
-          <span className="text-emerald-500" title="live tmux pane — drivable">
-            live
+        <span className={`shrink-0 ${dotClass}`} aria-hidden>●</span>
+        <span className="truncate text-zinc-300">{member}</span>
+        {agentType && (
+          <span className="shrink-0 rounded bg-zinc-800 px-1 py-0.5 text-[8px] uppercase tracking-wide text-zinc-500">
+            {agentType}
           </span>
-        ) : (
-          <span className={working ? "text-orange-500" : "text-zinc-500"}>
+        )}
+        <span
+          className={`shrink-0 rounded px-1 py-0.5 text-[8px] uppercase tracking-wide ${badge}`}
+          title={isPane ? "drivable — types into its real tmux stdin" : "read-only — its transcript (in-process teammate)"}
+        >
+          {isPane ? "drive" : "read-only"}
+        </span>
+        {!isPane && (
+          <span className={`shrink-0 ${working ? "text-orange-500" : "text-zinc-600"}`}>
             {working ? "working" : "idle"}
           </span>
         )}

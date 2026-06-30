@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
+import MailboxFeed from "@/app/ui/mailbox-feed";
 import { withPins } from "@/app/ui/keep-pins";
+import { MAX_TERMINALS } from "@/app/ui/terminals";
 import { ago } from "@/lib/ago";
 import { useTeams } from "@/app/ui/teams-state";
 import { useTasks } from "@/app/ui/tasks-state";
@@ -111,25 +113,34 @@ export default function TeamsPanel() {
     }
   };
 
-  // Drive lead — pin the lead session as the main terminal (Terminal 1), keeping
-  // any existing wall pin. withPins keeps the URL down to ?session/?wall.
+  // Drive lead — pin the lead session in Terminal 1 with the ?lead anchor (so T1
+  // locks to the lead and won't snap to newest), no teammate panes. Single-pane
+  // focus on the lead thread. withPins keeps the URL down to ?session/?wall/?lead.
   const driveLead = (t: Team) => {
     const sp = new URLSearchParams(params.toString());
     sp.set("session", t.leadSessionId);
+    sp.set("lead", t.leadSessionId);
     router.push(withPins(pathname, `?${sp.toString()}`), { scroll: false });
     setOpen(false);
   };
 
-  // Open on wall — add the lead as a live wall pane BESIDE the current terminal
-  // (terminal separation), rather than replacing Terminal 1. Teammates are
-  // in-process subagents with no top-level session, so they aren't wall panes
-  // yet — watch them in the roster above; the lead is the drivable thread.
+  // Open on wall — the full team across the wall: the lead anchored in T1 (drivable
+  // — send-keys for a tmux lead, the live session for an in-process one) and each
+  // teammate as a pane (a drivable tmux pane, or its read-only transcript when
+  // in-process). Mirrors the sidebar Teams item.
   const openOnWall = (t: Team) => {
+    const teammates = t.members
+      .filter((m) => !m.isLead)
+      .slice(0, MAX_TERMINALS - 1)
+      .map((m) => `@tm:${t.id}:${m.name}`);
     const sp = new URLSearchParams(params.toString());
-    const toks = (sp.get("wall") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    if (sp.get("session") !== t.leadSessionId && !toks.includes(t.leadSessionId))
-      toks.push(t.leadSessionId);
-    if (toks.length) sp.set("wall", toks.join(","));
+    sp.set("session", t.leadSessionId);
+    sp.set("lead", t.leadSessionId);
+    if (teammates.length) sp.set("wall", teammates.join(","));
+    else {
+      sp.delete("wall");
+      sp.delete("lead");
+    }
     router.push(withPins(pathname, `?${sp.toString()}`), { scroll: false });
     setOpen(false);
   };
@@ -324,6 +335,9 @@ function TeamCard({
           Tasks →
         </button>
       </div>
+
+      {/* live inter-agent traffic + a composer to message a member directly */}
+      <MailboxFeed teamId={team.id} members={members.map((m) => m.name)} />
     </div>
   );
 }
