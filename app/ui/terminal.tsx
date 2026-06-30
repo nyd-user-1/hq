@@ -986,6 +986,24 @@ export default function Terminal({
   const [project, setProject] = useState("");
   const [resolvedId, setResolvedId] = useState<string | null>(null);
   const [customTitle, setCustomTitle] = useState(""); // HQ rename (sidecar); shown in the header instead of the id
+  // Inline rename of the session straight from the header id: double-click → edit,
+  // ↵ saves to the same sessions-meta sidecar the sidebar writes. A click timer
+  // disambiguates the single click (copy) from the double click (rename).
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const idClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveRename = () => {
+    const id = resolvedId;
+    setRenaming(false);
+    if (!id) return;
+    const title = renameDraft.trim();
+    setCustomTitle(title); // optimistic — a meta write doesn't fire the transcript SSE
+    fetch("/api/sessions-meta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, title }),
+    }).catch(() => {});
+  };
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
@@ -2758,19 +2776,39 @@ export default function Terminal({
             {compose ? "new session" : home ? "sessions" : project || "session"}
           </span>
         </span>
-        {/* hover the id → SessionMenu (search + auto-scroll list of past sessions,
-            newest→oldest; pick one to switch the terminal to it). Click still copies. */}
-        <SessionMenu currentId={resolvedId}>
-          {resolvedId ? (
+        {/* Session id / title — single click COPIES, double click RENAMES inline.
+            The session switcher moved to the "logs" icon (left of the kebab). */}
+        {resolvedId ? (
+          renaming ? (
+            <input
+              autoFocus
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); saveRename(); }
+                else if (e.key === "Escape") { e.preventDefault(); setRenaming(false); }
+              }}
+              onBlur={() => setRenaming(false)}
+              placeholder="name this session — ↵ save · esc cancel"
+              className="w-56 max-w-full rounded bg-zinc-800 px-1 py-0.5 font-mono text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+            />
+          ) : (
             <button
               onClick={() => {
-                navigator.clipboard.writeText(resolvedId);
-                setIdCopied(true);
-                setTimeout(() => setIdCopied(false), 1200);
+                if (idClickTimer.current) return; // a double-click is forming
+                idClickTimer.current = setTimeout(() => {
+                  idClickTimer.current = null;
+                  navigator.clipboard.writeText(resolvedId);
+                  setIdCopied(true);
+                  setTimeout(() => setIdCopied(false), 1200);
+                }, 220);
               }}
-              title={
-                idCopied ? "copied" : `copy session id · ${resolvedId.slice(0, 8)}`
-              }
+              onDoubleClick={() => {
+                if (idClickTimer.current) { clearTimeout(idClickTimer.current); idClickTimer.current = null; }
+                setRenameDraft(customTitle || "");
+                setRenaming(true);
+              }}
+              title={idCopied ? "copied" : "click to copy · double-click to rename"}
               className={`cursor-pointer rounded px-1 py-0.5 font-mono text-[11px] transition-colors ${
                 idCopied
                   ? "bg-emerald-500/15 text-emerald-300"
@@ -2779,29 +2817,27 @@ export default function Terminal({
             >
               {customTitle || resolvedId.slice(0, 8)}
             </button>
-          ) : (
-            <span className="font-mono text-[11px] text-zinc-600">—</span>
-          )}
-        </SessionMenu>
-        {/* Ownership badge — MANAGER (hq is the driver: it spawned this session or
-            took the wheel) vs OBSERVER (a Claude Code terminal drives it, hq mirrors).
-            Fill = control, outline = observe (the design vocabulary — no hue, no
-            icon). Only on a real, resolved session. */}
-        {resolvedId && !staged && (
-          <span
-            title={
-              surface === "hq"
-                ? "Manager — this session is driven from hq"
-                : "Observer — hq is mirroring a Claude Code terminal it doesn't drive"
-            }
-            className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
-              surface === "hq"
-                ? "bg-zinc-700 text-zinc-100"
-                : "border border-zinc-700 text-zinc-400"
-            }`}
-          >
-            {surface === "hq" ? "Manager" : "Observer"}
-          </span>
+          )
+        ) : (
+          <span className="font-mono text-[11px] text-zinc-600">—</span>
+        )}
+        {/* Sessions ("logs") — the session switcher moved off the id to its own
+            kebab-style icon, just left of the panels kebab: hover for the search +
+            list of past sessions to swap this terminal to. */}
+        {resolvedId && (
+          <SessionMenu currentId={resolvedId}>
+            <button
+              type="button"
+              title="sessions — switch this terminal to another"
+              aria-label="sessions"
+              className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" />
+                <path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" />
+              </svg>
+            </button>
+          </SessionMenu>
         )}
         {/* Panels — the message-turn ⋮ kebab after the session id opens the nav menu
             (Activity · Console · Search · Metrics, each a flyout). */}
@@ -2962,6 +2998,25 @@ export default function Terminal({
           >
             resume in terminal
           </button>
+        )}
+        {/* Ownership badge — MANAGER (hq drives it) vs OBSERVER (a Claude Code
+            terminal drives it, hq mirrors). Fill = control, outline = observe. Moved
+            to the right cluster: ml-auto puts it just left of the layout toggle. */}
+        {resolvedId && !staged && (
+          <span
+            title={
+              surface === "hq"
+                ? "Manager — this session is driven from hq"
+                : "Observer — hq is mirroring a Claude Code terminal it doesn't drive"
+            }
+            className={`ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+              surface === "hq"
+                ? "bg-zinc-700 text-zinc-100"
+                : "border border-zinc-700 text-zinc-400"
+            }`}
+          >
+            {surface === "hq" ? "Manager" : "Observer"}
+          </span>
         )}
         {/* Layout toggle — flips this live session between two real modes: "focus
             mode" (the centered conversation shell, the DEFAULT) and "wide screen".
