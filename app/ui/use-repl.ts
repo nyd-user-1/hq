@@ -12,20 +12,46 @@ export type ReplPermission = {
   input: Record<string, unknown>;
 };
 
+// One streamed block of the in-flight assistant turn, in emit order — an
+// assistant text run or a tool call. The live overlay renders these in sequence
+// so text and the tools it calls interleave exactly like the committed
+// transcript (a faithful running view of the turn, not just its latest step).
+export type LiveBlock =
+  | { type: "text"; text: string }
+  | { type: "tool"; id: string; name: string };
+
 // Client side of the live REPL. Given a session id + an `enabled` flag (the
 // "live in HQ" status — true once HQ owns a warm process for this session, set
 // on the first send), it starts the warm process, opens the SSE feed, and
-// folds streaming events into a small live state: the in-flight assistant text
-// (token-by-token), the current turn's tool calls, and any pending permission
-// asks. Completed turns still land via the terminal's normal transcript poll —
-// this layer adds instant streaming + the approve/deny cards on top.
+// folds streaming events into the in-flight turn: an ordered list of assistant
+// text/tool blocks plus any pending permission asks. Completed turns still land
+// via the terminal's normal transcript poll — this layer adds instant streaming
+// + the approve/deny cards on top.
+//
+// The turn ACCUMULATES across the agentic loop (text → tool → text → tool …):
+// the block list is cleared only when a NEW user turn begins (`hq_sent`) or the
+// turn finishes (`result`, where the committed poll takes over). It is NOT
+// cleared on `message_start` — doing that wiped every earlier sub-message of a
+// multi-step turn from view before the poll (frozen mid-send) could commit it,
+// which read as "messages pop up while it's using tools, then disappear."
 export function useRepl(sessionId: string | null, enabled: boolean) {
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [liveText, setLiveText] = useState("");
-  const [liveTools, setLiveTools] = useState<{ id: string; name: string }[]>([]);
+  const [liveBlocks, setLiveBlocks] = useState<LiveBlock[]>([]);
   const [permissions, setPermissions] = useState<ReplPermission[]>([]);
   const esRef = useRef<EventSource | null>(null);
+
+  // Append a text delta to the open text block, or open a new one if the last
+  // block is a tool call (or the turn just started).
+  const appendText = useCallback((text: string) => {
+    if (!text) return;
+    setLiveBlocks((bs) => {
+      const last = bs[bs.length - 1];
+      if (last && last.type === "text")
+        return [...bs.slice(0, -1), { type: "text", text: last.text + text }];
+      return [...bs, { type: "text", text }];
+    });
+  }, []);
 
   const post = useCallback(
     (body: Record<string, unknown>) =>
@@ -42,8 +68,7 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
   const send = useCallback(
     async (text: string, images?: { data: string; mime: string }[], model?: string) => {
       if (!sessionId) return null;
-      setLiveText("");
-      setLiveTools([]);
+      setLiveBlocks([]);
       setBusy(true);
       // post() swallows fetch-layer failures (`.catch(() => null)`) and the route
       // returns `{ ok: false }` (200) when sendTurn can't write. In BOTH cases no
@@ -83,8 +108,7 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
       // its optimistic `sending`/`busyRef` flags — without it, those strand true
       // and the next session's transcript poll freezes (busyRef gates the commit).
       setBusy(false);
-      setLiveText("");
-      setLiveTools([]);
+      setLiveBlocks([]);
       setPermissions([]);
       return;
     }
@@ -102,8 +126,11 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
         const t = e.type;
         if (t === "system" && e.subtype === "init") return setRunning(true);
         if (t === "hq_exit") { setRunning(false); setBusy(false); return; }
-        if (t === "hq_sent") { setBusy(true); setLiveText(""); setLiveTools([]); return; }
-        if (t === "result") { setBusy(false); setLiveText(""); setLiveTools([]); return; }
+        // A NEW user turn — reset the in-flight block list (the previous turn is
+        // already committed via the poll).
+        if (t === "hq_sent") { setBusy(true); setLiveBlocks([]); return; }
+        // Turn finished — clear; the committed transcript poll renders it now.
+        if (t === "result") { setBusy(false); setLiveBlocks([]); return; }
         if (t === "hq_permission") {
           const req = (e.request ?? {}) as Record<string, unknown>;
           const id = String(e.tool_use_id);
@@ -124,11 +151,16 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
             content_block?: { type?: string; id?: string; name?: string };
             delta?: { type?: string; text?: string };
           };
-          if (ev.type === "message_start") { setBusy(true); setLiveText(""); setLiveTools([]); }
+          // NOTE: no clear on message_start — the turn accumulates across the
+          // agentic loop (see the header comment). Just mark busy.
+          if (ev.type === "message_start") setBusy(true);
           else if (ev.type === "content_block_start" && ev.content_block?.type === "tool_use") {
-            setLiveTools((tl) => [...tl, { id: String(ev.content_block!.id), name: String(ev.content_block!.name) }]);
+            setLiveBlocks((bs) => [
+              ...bs,
+              { type: "tool", id: String(ev.content_block!.id), name: String(ev.content_block!.name) },
+            ]);
           } else if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
-            setLiveText((s) => s + (ev.delta!.text ?? ""));
+            appendText(ev.delta!.text ?? "");
           }
         }
       };
@@ -139,7 +171,7 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
       esRef.current?.close();
       esRef.current = null;
     };
-  }, [enabled, sessionId, post]);
+  }, [enabled, sessionId, post, appendText]);
 
-  return { running, busy, liveText, liveTools, permissions, send, stop, answer };
+  return { running, busy, liveBlocks, permissions, send, stop, answer };
 }

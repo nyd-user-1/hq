@@ -2948,54 +2948,6 @@ export default function Terminal({
             </div>
           </details>
         )}
-        {/* "live in HQ" — shown ONLY while HQ owns this session's process (you drove
-            it / +new). No lock badge: the one fork-risk state — a non-channel-aware
-            session working in its own terminal — is signalled by the SEND BOX itself
-            (it disables + shows the lock placeholder). ml-auto pushes the right
-            cluster; when not live the focus toggle below carries ml-auto instead. */}
-        {live && resolvedId && !notConnected && (
-          <button
-            type="button"
-            onClick={() =>
-              setLive(() => {
-                repl.stop();
-                drivenSessionRef.current = null;
-                return false;
-              })
-            }
-            title="live in HQ — HQ owns this session's process. Click to release so the terminal can take over."
-            className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-1.5 py-px font-mono text-[10px] text-emerald-300 transition-colors"
-          >
-            <span
-              className={`size-1.5 rounded-full ${
-                repl.busy ? "animate-pulse bg-emerald-400" : "bg-emerald-400"
-              }`}
-            />
-            live in HQ
-          </button>
-        )}
-        {/* Resume in terminal — hand the wheel back to the TUI. Copies
-            `claude --resume <id>` AND stops HQ's warm process (the route's stop
-            action records the to-terminal handoff divider). Stopping is MANDATORY,
-            not optional: one active writer at a time (lib/repl.ts) — handing the
-            TUI the wheel while HQ still drives is the interleave-corruption the
-            whole design forbids. So Resume = stop + copy, and it flips `live` off
-            to match the pill-release path. Only while live + a real pinned session. */}
-        {live && resolvedId && !notConnected && paramKey === "session" && (
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(`claude --resume ${resolvedId}`);
-              repl.stop(); // POSTs stop → records to-terminal
-              setLive(false);
-              drivenSessionRef.current = null;
-            }}
-            title="copy `claude --resume <id>` and release HQ's process so the TUI can take over"
-            className="flex shrink-0 items-center gap-1 rounded-md border border-zinc-700 px-1.5 py-px font-mono text-[10px] text-zinc-500 transition-colors hover:border-zinc-500 hover:text-zinc-300"
-          >
-            resume in terminal
-          </button>
-        )}
         {/* Layout toggle — flips this live session between two real modes: "focus
             mode" (the centered conversation shell, the DEFAULT) and "wide screen".
             The choice persists in the hq-focus cookie (read server-side in
@@ -3007,7 +2959,7 @@ export default function Terminal({
           <Tooltip
             label={focusMode ? "Wide screen" : "Focus mode"}
             placement="bottom"
-            className={live ? undefined : "ml-auto"}
+            className="ml-auto"
           >
           <button
             type="button"
@@ -3250,27 +3202,30 @@ export default function Terminal({
             never silently swallowed. Completed turns still land via the
             transcript poll above; this is the instant layer on top. */}
         {live &&
-          (repl.liveText || repl.liveTools.length > 0 || repl.permissions.length > 0) && (
+          (repl.liveBlocks.length > 0 || repl.permissions.length > 0) && (
             <div className="flex flex-col gap-2">
-              {(repl.liveText || repl.liveTools.length > 0) && (
+              {repl.liveBlocks.length > 0 && (
                 <div className="flex flex-col gap-1">
                   <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
                     <span className="mr-1.5 normal-case text-emerald-400">●</span>
                     claude · live
                   </span>
-                  <div className="break-words rounded-md border border-emerald-500/30 bg-zinc-900/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
-                    {repl.liveText ? <Markdown text={repl.liveText} /> : null}
-                    {repl.liveTools.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {repl.liveTools.map((tl) => (
-                          <span
-                            key={tl.id}
-                            className="rounded border border-zinc-700 px-1.5 py-px font-mono text-[10px] text-zinc-400"
-                          >
-                            {tl.name}…
-                          </span>
-                        ))}
-                      </div>
+                  {/* The whole in-flight turn, in emit order: text runs and the
+                      tools they call, interleaved (a faithful running view, not
+                      just the latest step). Append-only + ephemeral, so the array
+                      index is a stable key. */}
+                  <div className="flex flex-col gap-2 break-words rounded-md border border-emerald-500/30 bg-zinc-900/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
+                    {repl.liveBlocks.map((b, i) =>
+                      b.type === "text" ? (
+                        b.text ? <Markdown key={i} text={b.text} /> : null
+                      ) : (
+                        <span
+                          key={i}
+                          className="self-start rounded border border-zinc-700 px-1.5 py-px font-mono text-[10px] text-zinc-400"
+                        >
+                          {b.name}…
+                        </span>
+                      ),
                     )}
                   </div>
                 </div>
