@@ -43,16 +43,15 @@ export default function ForkDialog({
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400" aria-hidden>
             <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
           </svg>
-          read-only → write
+          Continue this session in hq
         </div>
         <p className="mt-3 text-xs leading-relaxed text-zinc-400">
-          A terminal owns{" "}
-          <span className="text-zinc-200">{name || "this session"}</span> — this view is{" "}
-          <span className="text-zinc-200">read-only</span>. Sending resumes the current
-          transcript as your own <span className="text-zinc-200">write</span> branch.
-          The terminal stays live; type in both and they{" "}
-          <span className="text-amber-300">diverge</span> into branches of the same
-          session.
+          This session is being written in a{" "}
+          <span className="text-zinc-200">terminal</span>. For a clean hand-off,{" "}
+          <span className="text-zinc-200">close the terminal first</span> — hq then
+          continues it from the last turn, same id, one thread. Leave it open and
+          write in both and the transcript{" "}
+          <span className="text-amber-300">branches</span>.
         </p>
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
@@ -67,7 +66,7 @@ export default function ForkDialog({
             onClick={onConfirm}
             className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25"
           >
-            Fork &amp; write <span className="text-emerald-500/70">↵</span>
+            Continue here <span className="text-emerald-500/70">↵</span>
           </button>
         </div>
       </div>
