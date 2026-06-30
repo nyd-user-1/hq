@@ -78,6 +78,7 @@ import { CommandProvider } from "@/app/ui/command-state";
 import CommandPalette from "@/app/ui/command-palette";
 import { FocusProvider } from "@/app/ui/focus-state";
 import Terminal1Slot from "@/app/ui/terminal1-slot";
+import Terminal1Star from "@/app/ui/terminal-1-star";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import ReorderListener from "@/app/ui/reorder-listener";
 
@@ -166,6 +167,10 @@ export default async function Shell({
                   </Suspense>
                 }
               >
+                {/* Lead/anchor star — top-right of T1, where wall panes carry X. */}
+                <Suspense fallback={null}>
+                  <Terminal1Star />
+                </Suspense>
                 <Suspense
                   fallback={
                     <p className="text-sm text-zinc-600">loading terminal…</p>
