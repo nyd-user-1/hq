@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import Boundary from "@/app/ui/boundary";
 import Terminal from "@/app/ui/terminal";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
+import BoundaryChip from "@/app/ui/boundary-chip";
 import PaneView from "@/app/ui/pane-view";
 import PaneDropZone from "@/app/ui/pane-drop-zone";
 import { wallTokens, parseToken } from "@/app/ui/terminals";
@@ -69,9 +70,14 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
         const content = parseToken(tok);
         const slot = i + 2;
         const terminalKey = `t${slot}`;
-        // A teammate pane's chip shows the member name (the team roster label),
-        // not "terminal-N" — that's the "alpha-1 / bravo-2" boundary chip.
-        const label = content?.kind === "teammate" ? content.member : `terminal-${slot}`;
+        // Every wall pane keeps the "terminal-N" slot chip. A teammate pane adds a
+        // SECOND chip naming the member (scout/probe) right after it, so you can tell
+        // which teammate the pane holds — "terminal-2 · scout".
+        const label = `terminal-${slot}`;
+        const teammateChip =
+          content?.kind === "teammate" ? (
+            <BoundaryChip label={content.member} copyText={content.member} />
+          ) : undefined;
         // Key by the token (not the index) so closing a sibling never remounts the
         // others — preserves each pane's live state, as the wall did before.
         return (
@@ -81,6 +87,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
               copyText="app/ui/terminal.tsx"
               reorderSlot={slot}
               lead={content && content.kind !== "teammate" ? <TerminalChipMenu target={{ kind: "wall", index: i }} /> : undefined}
+              trail={teammateChip}
             >
               <Link
                 href={closeHref(i)}

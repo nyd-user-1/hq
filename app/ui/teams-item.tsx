@@ -79,7 +79,10 @@ export default function TeamsItem() {
       </svg>
       Teams
       {count > 0 && (
-        <span className="ml-auto shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-emerald-300">
+        <span
+          title={`${count} active agent team${count === 1 ? "" : "s"}`}
+          className="ml-auto shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-emerald-300"
+        >
           {count}
         </span>
       )}
