@@ -1286,8 +1286,8 @@ export default function Terminal({
   // box off the turn lifecycle. ORANGE while the user awaits a COMPLETE response
   // — `working` (the ✶ status: thinking / writing / tool calls / API, the whole
   // turn) OR a local send in flight. On a clean finish → GREEN, held until the
-  // user engages (mouse over the terminal, or any click / keypress / scroll), then
-  // it fades to gray. On a HARD INTERRUPT → RED, held until the user sends new
+  // user clicks into the send box (focuses the textarea), then it fades to gray.
+  // On a HARD INTERRUPT → RED, held until the user sends new
   // input (NOT dismissed by mere engagement — a stopped turn needs fresh
   // direction, so it stays loud until you give it). A short debounce on the clean
   // finish keeps brief gaps between phases from flashing green early. closest()
@@ -1334,20 +1334,16 @@ export default function Terminal({
       wasThinkingRef.current = false;
       box.classList.remove("is-thinking");
       box.classList.add("is-done"); // orange → held green (pulse + green chips)
-      const root = rootRef.current;
+      // Green HOLDS until you click into the send box (the textarea gains focus) —
+      // it is NOT dismissed by merely mousing / scrolling / typing-elsewhere over the
+      // terminal. You acknowledge a finished turn by going to reply to it.
       const dismiss = () => {
         box.classList.remove("is-done"); // → border transition fades green to gray
-        root?.removeEventListener("pointermove", dismiss);
-        window.removeEventListener("pointerdown", dismiss);
-        window.removeEventListener("keydown", dismiss);
-        window.removeEventListener("wheel", dismiss);
+        taRef.current?.removeEventListener("focus", dismiss);
         dismissRef.current = null;
       };
       dismissRef.current = dismiss;
-      root?.addEventListener("pointermove", dismiss); // mousing over the terminal
-      window.addEventListener("pointerdown", dismiss); // a click anywhere
-      window.addEventListener("keydown", dismiss); // a keypress anywhere
-      window.addEventListener("wheel", dismiss, { passive: true }); // a scroll
+      taRef.current?.addEventListener("focus", dismiss);
     }, 700);
 
     // Re-run (next turn) / unmount: cancel a pending finish + drop held-green.
