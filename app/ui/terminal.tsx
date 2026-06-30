@@ -2790,8 +2790,9 @@ export default function Terminal({
             {compose ? "new session" : home ? "sessions" : project || "session"}
           </span>
         </span>
-        {/* Session id / title — single click COPIES, double click RENAMES inline.
-            The session switcher moved to the "logs" icon (left of the kebab). */}
+        {/* Session id / title — HOVER opens the sessions switcher, single click
+            COPIES, double click RENAMES inline. The menu is suppressed while
+            renaming (the input branch isn't wrapped) so it can't pop over the box. */}
         {resolvedId ? (
           renaming ? (
             <input
@@ -2807,51 +2808,35 @@ export default function Terminal({
               className="w-56 max-w-full rounded bg-zinc-800 px-1 py-0.5 font-mono text-[11px] text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
             />
           ) : (
-            <button
-              onClick={() => {
-                if (idClickTimer.current) return; // a double-click is forming
-                idClickTimer.current = setTimeout(() => {
-                  idClickTimer.current = null;
-                  navigator.clipboard.writeText(resolvedId);
-                  setIdCopied(true);
-                  setTimeout(() => setIdCopied(false), 1200);
-                }, 220);
-              }}
-              onDoubleClick={() => {
-                if (idClickTimer.current) { clearTimeout(idClickTimer.current); idClickTimer.current = null; }
-                setRenameDraft(customTitle || "");
-                setRenaming(true);
-              }}
-              title={idCopied ? "copied" : "click to copy · double-click to rename"}
-              className={`cursor-pointer rounded px-1 py-0.5 font-mono text-[11px] transition-colors ${
-                idCopied
-                  ? "bg-emerald-500/15 text-emerald-300"
-                  : "text-green-400 hover:text-green-300"
-              }`}
-            >
-              {customTitle || resolvedId.slice(0, 8)}
-            </button>
+            <SessionMenu currentId={resolvedId}>
+              <button
+                onClick={() => {
+                  if (idClickTimer.current) return; // a double-click is forming
+                  idClickTimer.current = setTimeout(() => {
+                    idClickTimer.current = null;
+                    navigator.clipboard.writeText(resolvedId);
+                    setIdCopied(true);
+                    setTimeout(() => setIdCopied(false), 1200);
+                  }, 220);
+                }}
+                onDoubleClick={() => {
+                  if (idClickTimer.current) { clearTimeout(idClickTimer.current); idClickTimer.current = null; }
+                  setRenameDraft(customTitle || "");
+                  setRenaming(true);
+                }}
+                title={idCopied ? "copied" : "hover to switch · click to copy · double-click to rename"}
+                className={`cursor-pointer rounded px-1 py-0.5 font-mono text-[11px] transition-colors ${
+                  idCopied
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "text-green-400 hover:text-green-300"
+                }`}
+              >
+                {customTitle || resolvedId.slice(0, 8)}
+              </button>
+            </SessionMenu>
           )
         ) : (
           <span className="font-mono text-[11px] text-zinc-600">—</span>
-        )}
-        {/* Sessions ("logs") — the session switcher moved off the id to its own
-            kebab-style icon, just left of the panels kebab: hover for the search +
-            list of past sessions to swap this terminal to. */}
-        {resolvedId && (
-          <SessionMenu currentId={resolvedId}>
-            <button
-              type="button"
-              title="sessions — switch this terminal to another"
-              aria-label="sessions"
-              className="rounded p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" />
-                <path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" />
-              </svg>
-            </button>
-          </SessionMenu>
         )}
         {/* Panels — the message-turn ⋮ kebab after the session id opens the nav menu
             (Activity · Console · Search · Metrics, each a flyout). */}
