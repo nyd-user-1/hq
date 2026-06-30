@@ -1152,16 +1152,11 @@ export default function Terminal({
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // debounce orange→green
   const dismissRef = useRef<(() => void) | null>(null); // detaches the held-green engagement listeners
   const working = status !== null;
-  // Locked = a session HQ doesn't own that's mid-turn: sending would --resume a
-  // SECOND process and interleave/corrupt. The send box disables until it goes idle.
-  // EXEMPTIONS (all fork-free, so NEVER locked even while busy):
-  //   • live          — this instance is driving the warm REPL right now.
-  //   • hqOwned       — the daemon holds a warm REPL for it (DURABLE: survives a
-  //                     remount/reload that drops `live`), so sending routes through
-  //                     that same process, not a fork. Fixes the "I started it in HQ
-  //                     but it says locked while active" bug after a re-mount.
-  //   • channelConnected — driven by PUSH (POST /api/channel), not --resume.
-  const locked = !live && !hqOwned && !channelConnected && working;
+  // The send box is no longer LOCKED while a non-hq session is working. Retired in
+  // favor of the fork dialog: you can always type, and sending into a session a
+  // terminal owns pops the read-only→write warning (ForkDialog) before hq takes the
+  // wheel — a better gate than a hard disable. The divergence net still catches a
+  // real fork after the fact.
   itemsLenRef.current = items.length; // latest item count, for the scrollback anchor
   // CODE-REVIEW FE-5: the Esc handler used to bind on EVERY render (no deps) so
   // its closures stayed fresh, but the terminal re-renders every 1s while working
@@ -2373,9 +2368,9 @@ export default function Terminal({
       await birthAndDrive(target, first);
       return;
     }
-    // Locked: this session is working in its own terminal — sending would --resume a
-    // second process and interleave. The box is disabled; this guards the Enter path.
-    if (locked) return;
+    // (The old "locked while active" gate is retired — sending into a session a
+    // terminal owns is no longer blocked; it routes through the fork dialog below,
+    // which warns + asks before hq takes the wheel.)
     // CHANNEL-IN: a channel-connected session is driven by PUSH (no fork). Append the
     // optimistic user turn, POST /api/channel, and let the EXISTING transcript poll +
     // SSE render the reply — channel pushes PERSIST to the .jsonl as normal turns, so
@@ -2622,8 +2617,7 @@ export default function Terminal({
   // session; while a run is in flight it morphs into the red stop button.
   const canSend =
     (draft.trim() !== "" || attachments.length > 0) &&
-    (staged || !notConnected) &&
-    !locked;
+    (staged || !notConnected);
   // The send (↑) button morphs into the red stop while a run is in flight. Stop is
   // ALWAYS available whenever a turn is running (`working`) — even on a session HQ
   // doesn't own — so the user can interrupt ANY session from here and a locked box
@@ -3696,17 +3690,15 @@ export default function Terminal({
                     }
                   }}
                   rows={1}
-                  disabled={notConnected || locked}
+                  disabled={notConnected}
                   placeholder={
                     notConnected
                       ? "run HQ locally and open a session to chat here"
-                      : locked
-                        ? "🔒 locked while active"
-                        : staged
-                          ? selectedTarget
-                            ? `message ${selectedTarget.name} — ↵ launches it`
-                            : "write your first message — ↵ launches in ~/hq (or pick a project)"
-                          : "↵ send · ⇧↵ newline"
+                      : staged
+                        ? selectedTarget
+                          ? `message ${selectedTarget.name} — ↵ launches it`
+                          : "write your first message — ↵ launches in ~/hq (or pick a project)"
+                        : "↵ send · ⇧↵ newline"
                   }
                   className={`scrollbar-slim relative max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs placeholder:text-zinc-600 focus:outline-none ${
                     // command mode → text transparent so the colored overlay shows
