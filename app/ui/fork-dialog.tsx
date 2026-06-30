@@ -43,7 +43,7 @@ export default function ForkDialog({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel(); }
-      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); onConfirm(); }
+      else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); void closeAndContinue(); }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -67,19 +67,17 @@ export default function ForkDialog({
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400" aria-hidden>
             <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
           </svg>
-          Continue this session in hq
+          Handoff to hq
         </div>
         <p className="mt-3 text-xs leading-relaxed text-zinc-400">
           This session is being written in a{" "}
-          <span className="text-zinc-200">terminal</span>. For a clean hand-off,{" "}
-          <span className="text-zinc-200">close the terminal first</span> — hq then
-          continues it from the last turn, same id, one thread. Leave it open and
-          write in both and the transcript{" "}
-          <span className="text-amber-300">branches</span>.
+          <span className="text-zinc-200">terminal</span>. For a clean hand-off, hq
+          will <span className="text-zinc-200">close your terminal first</span> and
+          continue from the last turn — same id, same thread.
         </p>
         {err && (
           <p className="mt-3 rounded border border-amber-600/40 bg-amber-600/10 px-2 py-1 text-[11px] text-amber-300">
-            {err}. Use “Continue here” to fork instead.
+            {err}.
           </p>
         )}
         <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
@@ -92,18 +90,11 @@ export default function ForkDialog({
           </button>
           <button
             type="button"
-            onClick={onConfirm}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
-          >
-            Continue here <span className="text-zinc-600">↵</span>
-          </button>
-          <button
-            type="button"
             onClick={closeAndContinue}
             disabled={closing}
             className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25 disabled:opacity-50"
           >
-            {closing ? "Closing…" : "Close terminal & continue"}
+            {closing ? "Closing…" : "Close terminal & continue here"}
           </button>
         </div>
       </div>
