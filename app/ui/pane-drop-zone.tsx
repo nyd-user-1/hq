@@ -4,11 +4,18 @@ import { useRef, useState } from "react";
 
 const DND_TYPE = "application/x-hq-pane"; // matches boundary-chip's drag payload
 
-// Makes a whole terminal pane a drop target for reorder — drag a terminal's chip
-// and drop ANYWHERE on another pane (not just its chip). Shows a "move here" overlay
-// while hovering and dispatches the same "hq:reorder-pane" event the chip does, so
-// reorder-listener handles both paths. A depth counter keeps the overlay steady as
-// the drag crosses child elements (plain dragleave flickers).
+// Drag HANDLES live only on the boundary's padding ring (top / bottom / left /
+// right), so a drag from the edge moves the pane while the conversation has NO
+// draggable ancestor and stays fully selectable. The whole pane is still a drop
+// TARGET (the root handlers), showing a "move here" overlay while another pane
+// hovers it; both dispatch the same "hq:reorder-pane" event.
+const EDGES = [
+  "top-0 left-0 right-0 h-7", // top padding (pt-7)
+  "bottom-0 left-0 right-0 h-4 sm:h-5", // bottom padding (pb-4/5)
+  "top-7 bottom-4 sm:bottom-5 left-0 w-4 sm:w-5", // left padding (px-4/5)
+  "top-7 bottom-4 sm:bottom-5 right-0 w-4 sm:w-5", // right padding
+];
+
 export default function PaneDropZone({
   slot,
   className = "",
@@ -23,17 +30,7 @@ export default function PaneDropZone({
   const has = (e: React.DragEvent) => e.dataTransfer.types.includes(DND_TYPE);
   return (
     <div
-      // The pane's DEAD SPACE (the margins/padding around the conversation) is a drag
-      // handle too — grab it like a window title bar. The conversation content is
-      // marked draggable={false} (terminal.tsx), so a drag from it selects text;
-      // a drag from the empty space walks up to here and moves the pane. cursor-grab
-      // shows the affordance over that dead space.
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(DND_TYPE, String(slot));
-        e.dataTransfer.effectAllowed = "move";
-      }}
-      className={`relative cursor-grab active:cursor-grabbing ${className}`}
+      className={`relative ${className}`}
       onDragEnter={(e) => {
         if (!has(e)) return;
         e.preventDefault();
@@ -67,6 +64,20 @@ export default function PaneDropZone({
       }}
     >
       {children}
+      {/* Edge drag handles — z-10 sits above the conversation but below the chips
+          (z-20), so chips stay clickable and the padding ring is the grab zone. */}
+      {EDGES.map((pos) => (
+        <div
+          key={pos}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData(DND_TYPE, String(slot));
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          className={`absolute z-10 cursor-grab active:cursor-grabbing ${pos}`}
+          aria-hidden
+        />
+      ))}
       {over && (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400/70 bg-blue-500/10">
           <span className="rounded bg-blue-600 px-2 py-1 font-mono text-[11px] text-white shadow-lg">

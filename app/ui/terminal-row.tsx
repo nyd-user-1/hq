@@ -78,7 +78,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
                 scroll={false}
                 title={`close terminal ${slot}`}
                 aria-label={`close terminal ${slot}`}
-                className="absolute -top-2.5 right-3 z-10 flex shrink-0 items-center bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
+                className="absolute -top-2.5 right-3 z-20 flex shrink-0 items-center bg-zinc-800 px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 6 6 18M6 6l12 12" />

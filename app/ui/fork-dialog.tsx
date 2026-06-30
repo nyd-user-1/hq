@@ -43,17 +43,15 @@ export default function ForkDialog({
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400" aria-hidden>
             <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
           </svg>
-          Take the wheel on this session?
+          read-only → write
         </div>
         <p className="mt-3 text-xs leading-relaxed text-zinc-400">
-          A Claude Code terminal owns{" "}
-          <span className="text-zinc-200">{name || "this session"}</span>. Sending from
-          here makes hq the writer — this terminal goes from{" "}
-          <span className="text-zinc-200">read-only</span> to{" "}
-          <span className="text-zinc-200">write</span> and{" "}
-          <span className="text-amber-300">forks</span> from the current transcript.
-          The terminal keeps its own process; if you keep typing there too, the two
-          branch into separate threads from this point.
+          A terminal owns{" "}
+          <span className="text-zinc-200">{name || "this session"}</span>; this view is{" "}
+          <span className="text-zinc-200">read-only</span>. Sending{" "}
+          <span className="text-amber-300">forks</span> a separate{" "}
+          <span className="text-zinc-200">write</span> thread from the current
+          transcript — both keep running.
         </p>
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
@@ -68,7 +66,7 @@ export default function ForkDialog({
             onClick={onConfirm}
             className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25"
           >
-            Take control &amp; send <span className="text-emerald-500/70">↵</span>
+            Fork &amp; write <span className="text-emerald-500/70">↵</span>
           </button>
         </div>
       </div>
