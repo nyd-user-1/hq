@@ -369,6 +369,7 @@ function RecentSessions({
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
+  const { activeKey } = useFocus(); // focus-aware open (route a pick to the active pane)
   const pairParam = params.get("pair");
   const sessionParam = params.get("session");
 
@@ -551,8 +552,21 @@ function RecentSessions({
   const source = allMode ? allRows : sessions;
   if (!allMode && sessions.length === 0) return null;
 
-  const openHref = (id: string) =>
-    pairParam ? `${pathname}?session=${id}&pair=${pairParam}` : `${pathname}?session=${id}`;
+  // Focus-aware open: a session picked while a WALL pane (t2..t4) is active opens
+  // in THAT pane (rewrite its ?wall token); otherwise it drives T1's ?session. Lets
+  // a "new" sessions-view pane reopen a session into itself.
+  const openHref = (id: string) => {
+    const focusIdx = activeKey === "t1" ? -1 : Number.parseInt(activeKey.slice(1), 10) - 2;
+    const toks = (params.get("wall") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (focusIdx >= 0 && focusIdx < toks.length) {
+      const next = [...toks];
+      next[focusIdx] = id;
+      const sp = new URLSearchParams(params.toString());
+      sp.set("wall", next.join(","));
+      return `${pathname}?${sp.toString()}`;
+    }
+    return pairParam ? `${pathname}?session=${id}&pair=${pairParam}` : `${pathname}?session=${id}`;
+  };
 
   const q = filter.trim().toLowerCase();
   const rows = source
@@ -968,7 +982,7 @@ export default function Terminal({
   // stamped when `staged` flips true, so the picker never auto-flips to an existing
   // session — only to one BORN after you landed here.
   const staged = controlled
-    ? false // a grid pane always drives a concrete session — never the home picker
+    ? sessionId === "new" // a wall pane split as "new" shows the home picker (fast)
     : sessionParam === "new" || (paramKey === "session" && !sessionParam && !sibling && !wallParam);
   // Two faces of the staging surface — both have no pinned session and both launch a
   // newborn on send (shared via `staged`), they differ ONLY in what sits above the
@@ -3009,7 +3023,7 @@ export default function Terminal({
                 ? "Manager — this session is driven from hq"
                 : "Observer — hq is mirroring a Claude Code terminal it doesn't drive"
             }
-            className={`ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+            className={`${live ? "" : "ml-auto"} shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
               surface === "hq"
                 ? "bg-zinc-700 text-zinc-100"
                 : "border border-zinc-700 text-zinc-400"
@@ -3029,7 +3043,9 @@ export default function Terminal({
           <Tooltip
             label={focusMode ? "Wide screen" : "Focus mode"}
             placement="bottom"
-            className={live ? undefined : "ml-auto"}
+            // Right-cluster anchor only when nothing earlier carries ml-auto: the
+            // live badge (when live) or the ownership badge (when a session is shown).
+            className={!live && (!resolvedId || staged) ? "ml-auto" : undefined}
           >
           <button
             type="button"

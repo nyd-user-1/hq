@@ -11,6 +11,7 @@ import {
   type WallView,
 } from "@/app/ui/terminals";
 import SessionMenu from "@/app/ui/session-menu";
+import { useFocus } from "@/app/ui/focus-state";
 
 // The boundary-chip Switch/Split menu — a hover "▾" chip on a terminal's boundary.
 // SWITCH this terminal's content (a dashboard view or a session) or SPLIT a new
@@ -34,6 +35,7 @@ export default function TerminalChipMenu({ target }: { target: Target }) {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
+  const { setActive } = useFocus();
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -73,12 +75,15 @@ export default function TerminalChipMenu({ target }: { target: Target }) {
     }
     setOpen(false);
   };
-  // Split = add a fresh pane beside this one (a Fleet board by default; switch it
-  // from its own chip). Capped at MAX_TERMINALS total (T1 + 3).
+  // Split = add a fresh pane beside this one — a "new" sessions-view (the home
+  // picker: projects + recent sessions), which loads fast; switch it to a dashboard
+  // from its own chip. Focus the new pane so picking a session there opens it there
+  // (the picker is focus-aware). Capped at MAX_TERMINALS total (T1 + 3).
   const split = () => {
     const toks = wallTokens(params);
     if (toks.length >= MAX_TERMINALS - 1) return;
-    toks.push("@fleet");
+    toks.push("new");
+    setActive(`t${toks.length + 1}`); // new pane's slot = index + 2
     writeWall(toks);
     setOpen(false);
   };
