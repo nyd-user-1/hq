@@ -47,11 +47,12 @@ export default function ForkDialog({
         </div>
         <p className="mt-3 text-xs leading-relaxed text-zinc-400">
           A terminal owns{" "}
-          <span className="text-zinc-200">{name || "this session"}</span>; this view is{" "}
-          <span className="text-zinc-200">read-only</span>. Sending{" "}
-          <span className="text-amber-300">forks</span> a separate{" "}
-          <span className="text-zinc-200">write</span> thread from the current
-          transcript — both keep running.
+          <span className="text-zinc-200">{name || "this session"}</span> — this view is{" "}
+          <span className="text-zinc-200">read-only</span>. Sending resumes the current
+          transcript as your own <span className="text-zinc-200">write</span> branch.
+          The terminal stays live; type in both and they{" "}
+          <span className="text-amber-300">diverge</span> into branches of the same
+          session.
         </p>
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
