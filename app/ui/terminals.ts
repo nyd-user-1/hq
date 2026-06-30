@@ -15,13 +15,23 @@ export const WALL_VIEWS: readonly WallView[] = ["sessions", "fleet", "files", "p
 
 export type PaneContent =
   | { kind: "session"; sessionId: string }
-  | { kind: "view"; view: WallView };
+  | { kind: "view"; view: WallView }
+  // An agent-team TEAMMATE: an in-process subagent with no top-level session, so
+  // it can't be a `session` pane. Read-only, fed from its subagent transcript.
+  // Token form: "@tm:<teamId>:<member>" (e.g. "@tm:session-51fc766f:scout").
+  | { kind: "teammate"; teamId: string; member: string };
 
-// "@fleet" → a view token; anything else → a session id. View tokens lead with
-// "@" (no session id ever does), so the two never collide.
+// "@tm:…" → a teammate token; "@fleet" → a view token; anything else → a session
+// id. Tokens leading with "@" never collide with a session id.
 export function parseToken(tok: string): PaneContent | null {
   const t = tok.trim();
   if (!t) return null;
+  if (t.startsWith("@tm:")) {
+    const rest = t.slice(4);
+    const i = rest.indexOf(":");
+    if (i <= 0 || i >= rest.length - 1) return null;
+    return { kind: "teammate", teamId: rest.slice(0, i), member: rest.slice(i + 1) };
+  }
   if (t.startsWith("@")) {
     const v = t.slice(1) as WallView;
     return WALL_VIEWS.includes(v) ? { kind: "view", view: v } : null;
@@ -30,7 +40,9 @@ export function parseToken(tok: string): PaneContent | null {
 }
 
 export function tokenFor(content: PaneContent): string {
-  return content.kind === "view" ? `@${content.view}` : content.sessionId;
+  if (content.kind === "view") return `@${content.view}`;
+  if (content.kind === "teammate") return `@tm:${content.teamId}:${content.member}`;
+  return content.sessionId;
 }
 
 // The RAW wall tokens (sessions + views), in order — the source of truth for

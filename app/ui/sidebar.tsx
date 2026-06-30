@@ -6,6 +6,7 @@ import NewSessionItem from "@/app/ui/new-session-item";
 import ProjectsItem from "@/app/ui/projects-item";
 import FilesItem from "@/app/ui/files-item";
 import FleetItem from "@/app/ui/fleet-item";
+import TeamsItem from "@/app/ui/teams-item";
 import SidebarRecents from "@/app/ui/sidebar-recents";
 import AccountChip from "@/app/ui/account-chip";
 
@@ -33,6 +34,7 @@ export default function Sidebar() {
           <ProjectsItem />
           <FilesItem />
           <FleetItem />
+          <TeamsItem />
         </Suspense>
       </div>
 

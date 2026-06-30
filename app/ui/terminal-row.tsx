@@ -7,6 +7,7 @@ import Boundary from "@/app/ui/boundary";
 import Terminal from "@/app/ui/terminal";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import PaneView from "@/app/ui/pane-view";
+import TeammatePane from "@/app/ui/teammate-pane";
 import PaneDropZone from "@/app/ui/pane-drop-zone";
 import { wallTokens, parseToken } from "@/app/ui/terminals";
 
@@ -63,15 +64,18 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
         const content = parseToken(tok);
         const slot = i + 2;
         const terminalKey = `t${slot}`;
+        // A teammate pane's chip shows the member name (the team roster label),
+        // not "terminal-N" — that's the "alpha-1 / bravo-2" boundary chip.
+        const label = content?.kind === "teammate" ? content.member : `terminal-${slot}`;
         // Key by the token (not the index) so closing a sibling never remounts the
         // others — preserves each pane's live state, as the wall did before.
         return (
           <PaneDropZone key={tok} slot={slot} className="flex min-w-0 flex-1 flex-col">
             <Boundary
-              label={`terminal-${slot}`}
+              label={label}
               copyText="app/ui/terminal.tsx"
               reorderSlot={slot}
-              lead={content ? <TerminalChipMenu target={{ kind: "wall", index: i }} /> : undefined}
+              lead={content && content.kind !== "teammate" ? <TerminalChipMenu target={{ kind: "wall", index: i }} /> : undefined}
             >
               <Link
                 href={closeHref(i)}
@@ -86,6 +90,8 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
               </Link>
               {content?.kind === "view" ? (
                 <PaneView view={content.view} terminalKey={terminalKey} />
+              ) : content?.kind === "teammate" ? (
+                <TeammatePane teamId={content.teamId} member={content.member} label={content.member} />
               ) : (
                 <Terminal
                   sessionId={content?.kind === "session" ? content.sessionId : tok}
