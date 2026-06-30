@@ -534,7 +534,10 @@ export function timelineFor(
           step.resultTokens =
             (step.resultTokens ?? 0) + Math.round(out.length / 4);
           // Edit/Write/TodoWrite outputs are just confirmations — keep the diff.
-          if (out && !["Edit", "Write", "TodoWrite"].includes(step.tool))
+          // AskUserQuestion: keep `detail` as the pure questions JSON so the terminal
+          // can parse + render it as an interactive question card (the "answer" is the
+          // next user turn anyway).
+          if (out && !["Edit", "Write", "TodoWrite", "AskUserQuestion"].includes(step.tool))
             step.detail = trimDetail(`${step.detail}\n\n${out}`);
           if (tr.is_error) step.isError = true;
         }

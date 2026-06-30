@@ -2242,6 +2242,63 @@ export default function Terminal({
         </button>
       );
     }
+    // AskUserQuestion — render the picker as a real question card (the agent asked YOU
+    // something). Options are clickable: a click drafts that answer into the send box so
+    // you can confirm/elaborate and hit ↵. `detail` is the pure questions JSON (kept
+    // clean in transcript.ts), so this just parses + lays it out.
+    if (it.tool === "AskUserQuestion") {
+      type Opt = { label: string; description?: string };
+      type Q = { question: string; header?: string; options?: Opt[] };
+      let questions: Q[] = [];
+      try {
+        questions = (JSON.parse(it.detail)?.questions ?? []) as Q[];
+      } catch {
+        /* malformed — fall through to the default tool rendering */
+      }
+      if (questions.length) {
+        return (
+          <div
+            key={i}
+            className="rounded-md border border-blue-500/30 bg-blue-500/[0.04] px-3 py-2.5"
+          >
+            <div className="mb-2 font-mono text-[10px] uppercase tracking-wide text-blue-300/80">
+              question{questions.length > 1 ? "s" : ""}
+              <span className="ml-2 text-zinc-600">· click an option to draft your reply</span>
+            </div>
+            {questions.map((q, qi) => (
+              <div key={qi} className={qi > 0 ? "mt-3" : ""}>
+                {q.header && (
+                  <span className="mb-1 inline-block rounded bg-zinc-800 px-1.5 py-px font-mono text-[9px] uppercase tracking-wide text-zinc-400">
+                    {q.header}
+                  </span>
+                )}
+                <p className="mb-2 whitespace-pre-wrap text-sm text-zinc-200">{q.question}</p>
+                <div className="flex flex-col gap-1.5">
+                  {(q.options ?? []).map((o, oi) => (
+                    <button
+                      key={oi}
+                      type="button"
+                      onClick={() => {
+                        setDraft(o.label);
+                        taRef.current?.focus();
+                      }}
+                      className="rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1.5 text-left transition-colors hover:border-blue-500/50 hover:bg-blue-500/10"
+                    >
+                      <span className="block font-mono text-xs text-zinc-200">{o.label}</span>
+                      {o.description && (
+                        <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">
+                          {o.description}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
+    }
     return (
       <details
         key={i}
