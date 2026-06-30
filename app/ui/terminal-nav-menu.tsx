@@ -31,6 +31,12 @@ import { useFirehose } from "@/app/ui/firehose-state";
 import { useUsage } from "@/app/ui/usage-state";
 import { useCalls } from "@/app/ui/calls-state";
 import { useGuardrails } from "@/app/ui/guardrails-state";
+import { useSavings } from "@/app/ui/savings-state";
+import { useAudit } from "@/app/ui/audit-state";
+import { useCompose } from "@/app/ui/compose-state";
+import { useSettings } from "@/app/ui/settings-state";
+import { useEnvironment } from "@/app/ui/environment-state";
+import { useTrustedFolders } from "@/app/ui/trusted-folders-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 type Leaf = NavLeaf | { title: string; href: string };
@@ -121,6 +127,12 @@ export default function TerminalNavMenu({
     usagePanel: useUsage(),
     callsPanel: useCalls(),
     guardrailsPanel: useGuardrails(),
+    savingsPanel: useSavings(),
+    auditPanel: useAudit(),
+    composePanel: useCompose(),
+    settingsPanel: useSettings(),
+    environmentPanel: useEnvironment(),
+    trustedFoldersPanel: useTrustedFolders(),
   };
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";

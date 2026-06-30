@@ -84,6 +84,12 @@ export type ToggleKey =
   | "usagePanel"
   | "callsPanel"
   | "guardrailsPanel"
+  | "savingsPanel"
+  | "auditPanel"
+  | "composePanel"
+  | "settingsPanel"
+  | "environmentPanel"
+  | "trustedFoldersPanel"
   // standalone review-panels mirroring the @panel/(activity) routes (temporary
   // duplication while the route-vs-panel question is decided)
   | "componentsPanel"
@@ -108,7 +114,7 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Components", href: "/components" },
       { title: "Changelog", toggle: "changelog" },
       { title: "Issues", toggle: "issues" },
-      { title: "Compose", href: "/compose" },
+      { title: "Compose", toggle: "composePanel" },
       { title: "Text", toggle: "text" },
       { title: "Tree", toggle: "treePanel" },
       { title: "Preview", toggle: "preview" },
@@ -120,9 +126,9 @@ export const NAV_HEADERS: NavHeader[] = [
     // is live; the rest are the roadmap (settings.json, env, trusted folders).
     items: [
       { title: "Permissions", toggle: "permissions" },
-      { title: "Settings", soon: true },
-      { title: "Environment", soon: true },
-      { title: "Trusted Folders", soon: true },
+      { title: "Settings", toggle: "settingsPanel" },
+      { title: "Environment", toggle: "environmentPanel" },
+      { title: "Trusted Folders", toggle: "trustedFoldersPanel" },
     ],
   },
   {
@@ -146,8 +152,8 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Usage", toggle: "usagePanel" },
       { title: "Calls", toggle: "callsPanel" },
       { title: "Guardrails", toggle: "guardrailsPanel" },
-      { title: "Savings", href: "/savings" },
-      { title: "Memory Audit", href: "/audit" },
+      { title: "Savings", toggle: "savingsPanel" },
+      { title: "Memory Audit", toggle: "auditPanel" },
       { title: "KPIs", toggle: "kpis" },
       { title: "Planner", toggle: "planner" },
       { title: "API", toggle: "api" },

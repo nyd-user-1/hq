@@ -60,6 +60,18 @@ import { CallsProvider } from "@/app/ui/calls-state";
 import CallsPanel from "@/app/ui/calls-panel";
 import { GuardrailsProvider } from "@/app/ui/guardrails-state";
 import GuardrailsPanel from "@/app/ui/guardrails-panel";
+import { SavingsProvider } from "@/app/ui/savings-state";
+import SavingsPanel from "@/app/ui/savings-panel";
+import { AuditProvider } from "@/app/ui/audit-state";
+import AuditPanel from "@/app/ui/audit-panel";
+import { ComposeProvider } from "@/app/ui/compose-state";
+import ComposePanel from "@/app/ui/compose-panel";
+import { SettingsProvider } from "@/app/ui/settings-state";
+import SettingsPanel from "@/app/ui/settings-panel";
+import { EnvironmentProvider } from "@/app/ui/environment-state";
+import EnvironmentPanel from "@/app/ui/environment-panel";
+import { TrustedFoldersProvider } from "@/app/ui/trusted-folders-state";
+import TrustedFoldersPanel from "@/app/ui/trusted-folders-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditorPanel from "@/app/ui/text-editor-panel";
 import { CommandProvider } from "@/app/ui/command-state";
@@ -120,6 +132,12 @@ export default async function Shell({
       <UsageProvider>
       <CallsProvider>
       <GuardrailsProvider>
+      <SavingsProvider>
+      <AuditProvider>
+      <ComposeProvider>
+      <SettingsProvider>
+      <EnvironmentProvider>
+      <TrustedFoldersProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -220,6 +238,13 @@ export default async function Shell({
           <div id="usage-panel-root" className="flex h-full min-w-0" />
           <div id="calls-panel-root" className="flex h-full min-w-0" />
           <div id="guardrails-panel-root" className="flex h-full min-w-0" />
+          <div id="savings-panel-root" className="flex h-full min-w-0" />
+          <div id="audit-panel-root" className="flex h-full min-w-0" />
+          <div id="compose-panel-root" className="flex h-full min-w-0" />
+          {/* Config group — Settings · Environment · Trusted Folders. */}
+          <div id="settings-panel-root" className="flex h-full min-w-0" />
+          <div id="environment-panel-root" className="flex h-full min-w-0" />
+          <div id="trusted-folders-panel-root" className="flex h-full min-w-0" />
           <div id="text-editor-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
@@ -257,8 +282,20 @@ export default async function Shell({
       <UsagePanel />
       <CallsPanel />
       <GuardrailsPanel />
+      <SavingsPanel />
+      <AuditPanel />
+      <ComposePanel />
+      <SettingsPanel />
+      <EnvironmentPanel />
+      <TrustedFoldersPanel />
       <TextEditorPanel />
       </TextEditorProvider>
+      </TrustedFoldersProvider>
+      </EnvironmentProvider>
+      </SettingsProvider>
+      </ComposeProvider>
+      </AuditProvider>
+      </SavingsProvider>
       </GuardrailsProvider>
       </CallsProvider>
       </UsageProvider>
