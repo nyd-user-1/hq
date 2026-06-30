@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { teams } from "@/lib/teams";
+import { teams, type Team } from "@/lib/teams";
 
 // Driving agent-team agents that run in tmux split-pane mode. Verified on disk:
 // in `--teammate-mode tmux`, each teammate is a REAL `claude` TUI in its own tmux
@@ -43,11 +43,11 @@ function readSidecar(): Record<string, string> {
   }
 }
 
-export function recordTeamTmux(teamId: string, session: string): void {
+export function recordTeamTmux(leadUuid: string, session: string): void {
   try {
     mkdirSync(join(homedir(), ".claude", "hq"), { recursive: true });
     const m = readSidecar();
-    m[teamId] = session;
+    m[leadUuid] = session;
     const tmp = `${SIDECAR}.tmp`;
     writeFileSync(tmp, JSON.stringify(m));
     renameSync(tmp, SIDECAR);
@@ -56,9 +56,55 @@ export function recordTeamTmux(teamId: string, session: string): void {
   }
 }
 
+// hq records every team IT spawned as { [leadUuid]: tmuxSession } — keyed by the
+// FULL --session-id uuid it launched the lead with (which IS the lead's real
+// transcript). We can't key by teamId: Claude Code (v2.1.197+) gives the TEAM its
+// own internal id NOT derived from --session-id — the team dir + config.leadSessionId
+// are a separate "session-<internal>" with no transcript file, while the uuid hq
+// passed only names the lead's transcript. So we key by the one id hq controls and
+// correlate back to the real team via shared tmux panes.
+function spawnRecords(): Array<{ leadUuid: string; session: string }> {
+  return Object.entries(readSidecar()).map(([leadUuid, session]) => ({
+    leadUuid,
+    session: String(session),
+  }));
+}
+
+// The pane ids in a tmux session (across all its windows), or [].
+function panesOf(session: string): string[] {
+  try {
+    return tmux(["list-panes", "-s", "-t", session, "-F", "#{pane_id}"])
+      .trim()
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+// The spawn record (if any) whose tmux session hosts this team — matched by a
+// shared teammate pane. The bridge from a team on disk back to the hq-launched
+// lead transcript. A cheap no-op for a team with no tmux panes (in-process).
+function spawnRecordForTeam(team: Team): { leadUuid: string; session: string } | null {
+  const teamPanes = team.members.filter((m) => isPaneId(m.tmuxPaneId)).map((m) => m.tmuxPaneId);
+  if (!teamPanes.length) return null;
+  for (const rec of spawnRecords()) {
+    if (teamPanes.some((p) => panesOf(rec.session).includes(p))) return rec;
+  }
+  return null;
+}
+
+// The lead's REAL transcript id for a team. For an hq-spawned tmux team that's the
+// uuid hq launched with (config.leadSessionId is the transcript-less internal team
+// id); for every other team config.leadSessionId already IS the lead's transcript.
+export function leadTranscriptFor(team: Team): string {
+  return spawnRecordForTeam(team)?.leadUuid ?? team.leadSessionId;
+}
+
 // The tmux window that hosts a team — found via any teammate pane, else via the
-// tmux session hq recorded when it spawned the team.
-function teamWindow(teamId: string, teammatePanes: string[]): string | null {
+// tmux session hq recorded when it spawned the team (correlated by panes).
+function teamWindow(team: Team, teammatePanes: string[]): string | null {
   if (teammatePanes.length) {
     try {
       return tmux(["display-message", "-p", "-t", teammatePanes[0], "#{window_id}"]).trim() || null;
@@ -66,10 +112,10 @@ function teamWindow(teamId: string, teammatePanes: string[]): string | null {
       /* fall through */
     }
   }
-  const sess = readSidecar()[teamId];
-  if (sess) {
+  const rec = spawnRecordForTeam(team);
+  if (rec) {
     try {
-      return tmux(["display-message", "-p", "-t", sess, "#{window_id}"]).trim() || null;
+      return tmux(["display-message", "-p", "-t", rec.session, "#{window_id}"]).trim() || null;
     } catch {
       /* none */
     }
@@ -82,7 +128,7 @@ export function leadPaneId(teamId: string): string | null {
   const team = teams().find((t) => t.id === teamId);
   if (!team) return null;
   const teammatePanes = team.members.filter((m) => isPaneId(m.tmuxPaneId)).map((m) => m.tmuxPaneId);
-  const win = teamWindow(teamId, teammatePanes);
+  const win = teamWindow(team, teammatePanes);
   if (!win) return null;
   let panes: string[];
   try {
@@ -113,9 +159,13 @@ export function memberPaneId(teamId: string, member: string): string | null {
 // route the lead's send box to send-keys instead of a (forking) warm resume.
 export function tmuxLeadTeamId(leadSessionId: string | null): string | null {
   if (!leadSessionId) return null;
-  const team = teams().find((t) => t.leadSessionId === leadSessionId);
+  // Match the terminal's resolved session against a team's REAL lead transcript
+  // (the hq-spawned uuid) as well as config.leadSessionId (the in-process case).
+  const team = teams().find(
+    (t) => leadTranscriptFor(t) === leadSessionId || t.leadSessionId === leadSessionId,
+  );
   if (!team) return null;
-  const isTmux = team.members.some((m) => isPaneId(m.tmuxPaneId)) || !!readSidecar()[team.id];
+  const isTmux = team.members.some((m) => isPaneId(m.tmuxPaneId)) || !!spawnRecordForTeam(team);
   return isTmux ? team.id : null;
 }
 
@@ -148,10 +198,13 @@ export function sendToPane(paneId: string, text: string): { ok: boolean; error?:
 }
 
 // Spawn a brand-new team FROM hq: a detached tmux session running an interactive,
-// team-aware, split-pane `claude` with a known session id (so the teamId is
-// deterministic), then deliver the spawn prompt once it has booted. Returns the
-// ids; the team materializes on disk over the next ~30s and the Teams panel's
-// poll picks it up. The prompt fires from a timer so the request returns at once.
+// team-aware, split-pane `claude` with a known --session-id (the lead's real
+// TRANSCRIPT — Claude Code then mints the team its own internal id, so the team
+// dir is NOT session-<uuid8>; hq records the uuid→tmuxSession map and correlates
+// the real team back via tmux panes, see leadTranscriptFor). Delivers the prompt
+// once claude has booted; the team materializes on disk over ~30s and the Teams
+// panel's poll picks it up. The prompt fires from a timer so the request returns
+// at once. `teamId` in the result is a provisional hint, not the real team dir.
 export function spawnTeam(
   cwd: string,
   prompt: string,
@@ -171,7 +224,7 @@ export function spawnTeam(
       `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --teammate-mode tmux --permission-mode acceptEdits --session-id ${uuid}`,
     ]);
     tmux(["send-keys", "-t", session, "Enter"]);
-    recordTeamTmux(teamId, session);
+    recordTeamTmux(uuid, session); // key by the lead's real transcript uuid
     // Deliver the task once claude has booted (it can't accept input instantly).
     // `--` guards a task prompt that begins with "-" from being read as a flag.
     setTimeout(() => {

@@ -12,7 +12,7 @@ import { MAX_TERMINALS } from "@/app/ui/terminals";
 // live it just opens the Teams panel (which explains how to spawn one). It polls
 // /api/teams so it lights up the moment a team forms.
 type Member = { name: string; isLead: boolean };
-type Team = { id: string; leadSessionId: string; members: Member[] };
+type Team = { id: string; leadSessionId: string; leadTranscriptId?: string; members: Member[] };
 
 export default function TeamsItem() {
   const router = useRouter();
@@ -37,7 +37,10 @@ export default function TeamsItem() {
 
   const onClick = () => {
     const team = teams[0]; // /api/teams is newest-first
-    if (!team || !team.leadSessionId) {
+    // The lead's REAL transcript — the hq-spawned uuid for a tmux team, else
+    // config.leadSessionId. This is what actually resolves + is drivable in T1.
+    const lead = team?.leadTranscriptId || team?.leadSessionId;
+    if (!team || !lead) {
       setOpen(true); // no live team → open the panel (empty-state guidance)
       return;
     }
@@ -47,10 +50,10 @@ export default function TeamsItem() {
       .slice(0, MAX_TERMINALS - 1)
       .map((m) => `@tm:${team.id}:${m.name}`);
     const sp = new URLSearchParams(params.toString());
-    sp.set("session", team.leadSessionId);
+    sp.set("session", lead);
     // The LEAD anchor: marks this wall as a team and locks slot 1 to the lead so
     // T1 never snaps back to the newest session, and the ★ rides the lead pane.
-    sp.set("lead", team.leadSessionId);
+    sp.set("lead", lead);
     if (teammates.length) sp.set("wall", teammates.join(","));
     else {
       sp.delete("wall");

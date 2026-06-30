@@ -34,6 +34,7 @@ type Team = {
   id: string;
   name: string;
   leadSessionId: string;
+  leadTranscriptId?: string; // the lead's REAL transcript (== leadSessionId in-process)
   createdAt: number;
   members: TeamMember[];
 };
@@ -117,9 +118,10 @@ export default function TeamsPanel() {
   // locks to the lead and won't snap to newest), no teammate panes. Single-pane
   // focus on the lead thread. withPins keeps the URL down to ?session/?wall/?lead.
   const driveLead = (t: Team) => {
+    const lead = t.leadTranscriptId || t.leadSessionId;
     const sp = new URLSearchParams(params.toString());
-    sp.set("session", t.leadSessionId);
-    sp.set("lead", t.leadSessionId);
+    sp.set("session", lead);
+    sp.set("lead", lead);
     router.push(withPins(pathname, `?${sp.toString()}`), { scroll: false });
     setOpen(false);
   };
@@ -129,13 +131,14 @@ export default function TeamsPanel() {
   // teammate as a pane (a drivable tmux pane, or its read-only transcript when
   // in-process). Mirrors the sidebar Teams item.
   const openOnWall = (t: Team) => {
+    const lead = t.leadTranscriptId || t.leadSessionId;
     const teammates = t.members
       .filter((m) => !m.isLead)
       .slice(0, MAX_TERMINALS - 1)
       .map((m) => `@tm:${t.id}:${m.name}`);
     const sp = new URLSearchParams(params.toString());
-    sp.set("session", t.leadSessionId);
-    sp.set("lead", t.leadSessionId);
+    sp.set("session", lead);
+    sp.set("lead", lead);
     if (teammates.length) sp.set("wall", teammates.join(","));
     else {
       sp.delete("wall");
