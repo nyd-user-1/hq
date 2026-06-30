@@ -39,7 +39,11 @@ export type TeamMember = {
   color: string; // "" when the member declares none (the lead usually omits it)
   model: string; // e.g. "claude-opus-4-8"; "" when unset
   isLead: boolean; // name === "team-lead" || agentId === leadAgentId
-  backendType: string; // e.g. "in-process"
+  backendType: string; // "in-process" (default mode) | "tmux" (split-pane mode)
+  // The teammate's tmux pane id (e.g. "%2") in split-pane mode — its REAL stdin,
+  // so hq can `tmux send-keys -t <paneId>` to talk to it directly. In-process
+  // members carry a label ("in-process"/"leader"), not a "%" pane.
+  tmuxPaneId: string;
   cwd: string; // the member's working dir (drives the lead's project slug)
   prompt: string; // the teammate's spawn prompt; "" for the lead
 };
@@ -59,6 +63,7 @@ type RawMember = {
   color?: string;
   model?: string;
   backendType?: string;
+  tmuxPaneId?: string;
   cwd?: string;
   prompt?: string;
 };
@@ -100,6 +105,7 @@ export function teams(): Team[] {
       model: m?.model || "",
       isLead: m?.name === "team-lead" || (!!m?.agentId && m.agentId === leadAgentId),
       backendType: m?.backendType || "",
+      tmuxPaneId: m?.tmuxPaneId || "",
       cwd: m?.cwd || "",
       prompt: m?.prompt || "",
     }));
