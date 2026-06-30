@@ -24,6 +24,7 @@ import { useProjectsPanel } from "@/app/ui/projects-panel-state";
 import { useTodoPanel } from "@/app/ui/todo-panel-state";
 import { useTeams } from "@/app/ui/teams-state";
 import { useTasks } from "@/app/ui/tasks-state";
+import { useIssues } from "@/app/ui/issues-state";
 
 type Toggle = { open: boolean; toggle: () => void };
 type Leaf = NavLeaf | { title: string; href: string };
@@ -107,6 +108,7 @@ export default function TerminalNavMenu({
     todoPanel: useTodoPanel(),
     teamsPanel: useTeams(),
     tasksPanel: useTasks(),
+    issues: useIssues(),
   };
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";

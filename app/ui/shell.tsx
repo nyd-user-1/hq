@@ -46,6 +46,8 @@ import { TeamsProvider } from "@/app/ui/teams-state";
 import TeamsPanel from "@/app/ui/teams-panel";
 import { TasksProvider } from "@/app/ui/tasks-state";
 import TasksPanel from "@/app/ui/tasks-panel";
+import { IssuesProvider } from "@/app/ui/issues-state";
+import IssuesPanel from "@/app/ui/issues-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditor from "@/app/ui/text-editor";
 import { CommandProvider } from "@/app/ui/command-state";
@@ -99,6 +101,7 @@ export default async function Shell({
       <TodoPanelProvider>
       <TeamsProvider>
       <TasksProvider>
+      <IssuesProvider>
       <TextEditorProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
@@ -189,6 +192,9 @@ export default async function Shell({
               + ~/.claude/tasks). */}
           <div id="teams-panel-root" className="flex h-full min-w-0" />
           <div id="tasks-panel-root" className="flex h-full min-w-0" />
+          {/* GitHub Issues — a Changelog sibling (gh-backed), read straight from
+              the repo's issue tracker. */}
+          <div id="issues-panel-root" className="flex h-full min-w-0" />
         </div>
         {/* ⌘K launcher — portals to <body>; mounted here so it has the sidebar /
             planner / text-editor contexts its commands drive. */}
@@ -218,8 +224,10 @@ export default async function Shell({
       <TodoPanel />
       <TeamsPanel />
       <TasksPanel />
+      <IssuesPanel />
       <TextEditor />
       </TextEditorProvider>
+      </IssuesProvider>
       </TasksProvider>
       </TeamsProvider>
       </TodoPanelProvider>

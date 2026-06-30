@@ -77,6 +77,7 @@ export type ToggleKey =
   | "permissions"
   | "kpis"
   | "changelog"
+  | "issues"
   // standalone review-panels mirroring the @panel/(activity) routes (temporary
   // duplication while the route-vs-panel question is decided)
   | "componentsPanel"
@@ -100,6 +101,7 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "To Do", href: "/todo" },
       { title: "Components", href: "/components" },
       { title: "Changelog", toggle: "changelog" },
+      { title: "Issues", toggle: "issues" },
       { title: "Compose", href: "/compose" },
       { title: "Text", toggle: "text" },
       { title: "Tree", href: "/tree" },
