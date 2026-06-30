@@ -3469,6 +3469,7 @@ export default function Terminal({
       {forkWarn && (
         <ForkDialog
           name={headerName}
+          sessionId={resolvedId}
           onConfirm={confirmFork}
           onCancel={() => setForkWarn(null)}
         />

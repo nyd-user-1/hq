@@ -1,21 +1,45 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-// Full-screen acknowledgement at the read-only → write moment: hq is about to take
-// the wheel on a session a Claude Code terminal owns, which FORKS it from the
-// current transcript. Reuses the ⌘K modal pattern (backdrop + centered card +
-// pop-in) and portals to <body> so a pane never clips it. ↵ confirms, esc cancels.
+// Full-screen acknowledgement at the read-only → write moment. The clean path is a
+// HAND-OFF: close the terminal, then hq continues the same session (no fork). The
+// dialog can do that for you — "Close terminal & continue" SIGTERMs the terminal's
+// process (PID from the SessionStart hook sidecar) then continues. "Continue here"
+// continues without closing (and forks if you keep typing in the terminal). Reuses
+// the ⌘K modal pattern; portals to <body>. ↵ confirms, esc cancels.
 export default function ForkDialog({
   name,
+  sessionId,
   onConfirm,
   onCancel,
 }: {
   name: string;
+  sessionId: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const [closing, setClosing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const closeAndContinue = async () => {
+    setErr(null);
+    setClosing(true);
+    try {
+      const r = await (
+        await fetch("/api/terminal/close-tui", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session: sessionId }),
+        })
+      ).json();
+      if (r?.ok) { onConfirm(); return; }
+      setErr(r?.error ?? "couldn't close the terminal");
+    } catch {
+      setErr("couldn't reach hq to close the terminal");
+    }
+    setClosing(false);
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onCancel(); }
@@ -53,7 +77,12 @@ export default function ForkDialog({
           write in both and the transcript{" "}
           <span className="text-amber-300">branches</span>.
         </p>
-        <div className="mt-5 flex items-center justify-end gap-2">
+        {err && (
+          <p className="mt-3 rounded border border-amber-600/40 bg-amber-600/10 px-2 py-1 text-[11px] text-amber-300">
+            {err}. Use “Continue here” to fork instead.
+          </p>
+        )}
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
@@ -64,9 +93,17 @@ export default function ForkDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25"
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
           >
-            Continue here <span className="text-emerald-500/70">↵</span>
+            Continue here <span className="text-zinc-600">↵</span>
+          </button>
+          <button
+            type="button"
+            onClick={closeAndContinue}
+            disabled={closing}
+            className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25 disabled:opacity-50"
+          >
+            {closing ? "Closing…" : "Close terminal & continue"}
           </button>
         </div>
       </div>
