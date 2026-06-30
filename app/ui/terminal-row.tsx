@@ -7,7 +7,6 @@ import Boundary from "@/app/ui/boundary";
 import Terminal from "@/app/ui/terminal";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import PaneView from "@/app/ui/pane-view";
-import TeammatePane from "@/app/ui/teammate-pane";
 import PaneDropZone from "@/app/ui/pane-drop-zone";
 import { wallTokens, parseToken } from "@/app/ui/terminals";
 
@@ -96,9 +95,11 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
               </Link>
               {content?.kind === "view" ? (
                 <PaneView view={content.view} terminalKey={terminalKey} />
-              ) : content?.kind === "teammate" ? (
-                <TeammatePane teamId={content.teamId} member={content.member} />
               ) : (
+                // A teammate token ("@tm:…") rides straight into the Terminal as its
+                // sessionId — the turns API resolves the teammate's real transcript
+                // (tmux top-level / in-process subagent), so a teammate pane IS the
+                // full Terminal: same chrome, status, and a send box that drives it.
                 <Terminal
                   sessionId={content?.kind === "session" ? content.sessionId : tok}
                   initialFocus={initialFocus}

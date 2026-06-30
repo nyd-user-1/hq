@@ -1092,6 +1092,14 @@ export default function Terminal({
   // teamId when THIS session is the lead of a tmux-mode team — the send box then
   // drives it by typing into its tmux pane (send-keys), never a forking resume.
   const [tmuxLeadTeam, setTmuxLeadTeam] = useState<string | null>(null);
+  // Set when THIS pane is a team TEAMMATE ("@tm:<team>:<member>"): its real
+  // transcript renders like any session, and the send box drives it — a tmux
+  // teammate via send-keys, an in-process teammate via its mailbox inbox.
+  const [teammate, setTeammate] = useState<{
+    teamId: string;
+    member: string;
+    drive: "tmux" | "mailbox";
+  } | null>(null);
   const [hqBusy, setHqBusy] = useState(false);
   // The GLOBAL experimental channel toggle (account menu → lib/channel-mode.ts).
   // Separate from per-session channelConnected: drives the header flask so you can
@@ -1513,6 +1521,7 @@ export default function Terminal({
       setChannelConnected(d.channelConnected ?? false);
       setLiveTerminal(d.liveTerminal ?? false);
       setTmuxLeadTeam(d.tmuxLeadTeam ?? null);
+      setTeammate(d.teammate ?? null);
       // Durable daemon ownership — feeds `locked` (never lock an hq-owned session)
       // and the stop button (show it mid-turn even after a remount dropped `sending`).
       setHqOwned(d.hqOwned ?? false);
@@ -2430,6 +2439,42 @@ export default function Terminal({
           : undefined; // ~/hq default
       setSelectedTarget(null);
       await birthAndDrive(target, first);
+      return;
+    }
+    // TEAMMATE PANE: drive the team teammate this pane shows — a tmux teammate by
+    // typing into its real tmux pane (send-keys), an in-process teammate by writing
+    // its mailbox inbox. Append the optimistic turn; the transcript poll renders the
+    // reply. No fork, no warm resume. (Images aren't carried on either path yet.)
+    if (teammate) {
+      const prompt = draft.trim();
+      if (!prompt) return;
+      setItems((t) => [
+        ...t,
+        { kind: "turn", role: "user", text: prompt, at: new Date().toISOString() },
+      ]);
+      setDraft("");
+      setAttachments([]);
+      setError(null);
+      busyRef.current = true; // protect the optimistic turn across the working-tick poll
+      const res = await fetch(
+        teammate.drive === "tmux" ? "/api/teams/pane" : "/api/teams/mailbox",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            teammate.drive === "tmux"
+              ? { team: teammate.teamId, member: teammate.member, text: prompt }
+              : { team: teammate.teamId, to: teammate.member, text: prompt },
+          ),
+        },
+      ).catch(() => null);
+      busyRef.current = false;
+      if (!res || !res.ok)
+        setError(
+          teammate.drive === "tmux"
+            ? "couldn't reach the teammate's tmux pane — is the team still running?"
+            : "couldn't deliver to the teammate's inbox",
+        );
       return;
     }
     // TMUX-TEAM LEAD: this session is a live interactive lead running in a tmux

@@ -326,7 +326,13 @@ export function timelineFor(
   count: number,
   // full → read the WHOLE file (scrollback) instead of the last TAIL_BYTES and
   // return every item; cached by mtime so repeated/polled reads cost nothing.
-  full = false
+  full = false,
+  // TEAMMATE PANES read a transcript that ISN'T the standard top-level <id>.jsonl:
+  // an in-process teammate's subagent file (passed as fileOverride). Its rows are
+  // ALL sidechain, so includeSidechain must be true or every turn is dropped. A
+  // tmux teammate needs neither — its transcript IS a normal top-level session.
+  fileOverride?: string,
+  includeSidechain = false
 ): Timeline {
   const sid = id ?? latestSessionId();
   if (!sid)
@@ -334,9 +340,9 @@ export function timelineFor(
   let text: string;
   let partial = false;
   let lastWrite = 0;
-  const file = sessionFilePath(sid);
+  const file = fileOverride ?? sessionFilePath(sid);
   let size = 0;
-  const tkey = `${file}:${count}`;
+  const tkey = `${file}:${count}:${includeSidechain}`;
   try {
     const st = fs.statSync(file);
     lastWrite = st.mtimeMs;
@@ -428,7 +434,7 @@ export function timelineFor(
     }
     if (!project && typeof e.cwd === "string")
       project = e.cwd === os.homedir() ? "~" : path.basename(e.cwd);
-    if (e.isSidechain) continue;
+    if (e.isSidechain && !includeSidechain) continue; // teammate subagent rows ARE sidechain
     if (e.type !== "user" && e.type !== "assistant") continue;
     const c = e.message?.content;
     const at = e.timestamp ?? "";

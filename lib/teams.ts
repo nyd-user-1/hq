@@ -231,3 +231,96 @@ export function teamMemberTranscript(team: Team, memberName: string): string | n
 
   return null;
 }
+
+// The text of a transcript's FIRST user turn (reads a bounded head, not the whole
+// file). Skips meta/command rows. Used to tell a teammate's transcript (opens with
+// its spawn prompt) apart from the lead's (opens with "You are the LEAD…").
+function firstUserText(file: string): string {
+  let head: string;
+  try {
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(128 * 1024);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+    head = buf.toString("utf8", 0, n);
+  } catch {
+    return "";
+  }
+  for (const line of head.split("\n")) {
+    if (!line) continue;
+    let e: { type?: string; message?: { content?: unknown } };
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue; // a truncated trailing line — skip
+    }
+    if (e?.type !== "user") continue;
+    const c = e?.message?.content;
+    const t =
+      typeof c === "string"
+        ? c
+        : Array.isArray(c)
+          ? (c as { type?: string; text?: string }[])
+              .filter((b) => b?.type === "text")
+              .map((b) => b.text ?? "")
+              .join(" ")
+          : "";
+    if (t.trim()) return t;
+  }
+  return "";
+}
+
+// teamId:member → resolved top-level transcript id (stable once a teammate exists).
+const teammateIdCache = new Map<string, string>();
+
+// Resolve a TMUX teammate's REAL top-level transcript id. Unlike an in-process
+// teammate (whose transcript lives under subagents/, see teamMemberTranscript), a
+// tmux teammate is a genuine top-level claude session — but the team config records
+// only its pane, not its session id. We find it by content: the teammate's
+// transcript opens with its spawn prompt (the lead's prompt, wrapped in a
+// <teammate-message>), so we scan the lead's project dir for the top-level
+// <uuid>.jsonl whose FIRST user turn contains that prompt. The lead's own
+// transcript opens with "You are the LEAD…", so it never matches. "" when unresolved.
+export function teammateTranscriptId(team: Team, memberName: string): string {
+  const m = team.members.find((x) => x.name === memberName);
+  const prompt = (m?.prompt || "").trim();
+  if (!prompt) return "";
+  const key = `${team.id}:${memberName}`;
+  const hit = teammateIdCache.get(key);
+  if (hit) return hit;
+  // The teammate's top-level transcript lives in the team's cwd→slug project dir.
+  // Derive it from the member's cwd directly — leadProjectDir keys off leadSessionId,
+  // which for a spawned tmux team is a transcript-less internal id (the decoupling),
+  // so it would return null here.
+  const cwd = m?.cwd || team.members.find((x) => x.cwd)?.cwd || "";
+  const projDir = cwd
+    ? path.join(PROJECTS_ROOT, cwd.replace(/[/.]/g, "-"))
+    : leadProjectDir(team) ?? "";
+  if (!projDir) return "";
+  const needle = prompt.slice(0, 60);
+  let files: string[];
+  try {
+    files = fs.readdirSync(projDir).filter((f) => /^[0-9a-f-]{36}\.jsonl$/.test(f));
+  } catch {
+    return "";
+  }
+  // Newest first — a freshly-spawned teammate's transcript is recent.
+  files.sort((a, b) => {
+    try {
+      return (
+        fs.statSync(path.join(projDir, b)).mtimeMs - fs.statSync(path.join(projDir, a)).mtimeMs
+      );
+    } catch {
+      return 0;
+    }
+  });
+  for (const f of files) {
+    const id = f.replace(/\.jsonl$/, "");
+    if (id === team.leadSessionId) continue; // never the lead
+    if (firstUserText(path.join(projDir, f)).includes(needle)) {
+      teammateIdCache.set(key, id);
+      return id;
+    }
+  }
+  return "";
+}

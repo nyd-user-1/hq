@@ -15,6 +15,7 @@ import { isChannelEnabled } from "@/lib/channel-mode"; // the explicit experimen
 import { listRepls } from "@/lib/repl"; // the daemon's warm pool — durable "hq owns this session" truth
 import { stoppedAt } from "@/lib/stops"; // "stopped from hq" marker (a killed turn writes no result)
 import { tmuxLeadTeamId } from "@/lib/team-tmux"; // is this session a tmux-team LEAD? → drive via send-keys, not a fork
+import { teams, teammateTranscriptId, teamMemberTranscript } from "@/lib/teams"; // teammate-pane resolution (@tm: tokens)
 
 export const dynamic = "force-dynamic";
 
@@ -33,14 +34,41 @@ export async function GET(req: Request) {
   // session, skipping the one Terminal 2 is showing (?exclude). This is what the
   // unpinned terminal pins itself to — so it never lands on Terminal 2's session
   // or on an ephemeral SDK run (getRecentSessions is already cli-only).
-  let target = id;
-  if (!id && !staged) {
-    target = getRecentSessions(5).find((s) => s.id !== exclude)?.id ?? null;
-  }
   // ?full=1 = scrollback: the whole transcript (cached) instead of the last-24 tail.
   const full = url.searchParams.get("full") === "1";
-  const { id: resolved, items, project, contextTokens, model, lastWrite, more } =
-    timelineFor(target, 24, full);
+  // TEAMMATE PANE — ?session=@tm:<teamId>:<member> renders a team teammate in the
+  // real Terminal (not a hand-rolled pane). Resolve its transcript: a TMUX teammate
+  // is a genuine top-level session (resolved by prompt-match); an IN-PROCESS teammate
+  // writes an all-sidechain subagent file (read via fileOverride + includeSidechain).
+  // `teammate.drive` tells the send box how to talk to it (send-keys vs the mailbox).
+  let teammate: { teamId: string; member: string; drive: "tmux" | "mailbox" } | null = null;
+  let tl;
+  if (id && id.startsWith("@tm:")) {
+    const rest = id.slice(4);
+    const ci = rest.indexOf(":");
+    const teamId = ci > 0 ? rest.slice(0, ci) : "";
+    const member = ci > 0 ? rest.slice(ci + 1) : "";
+    const team = teamId ? teams().find((t) => t.id === teamId) : undefined;
+    const m = team?.members.find((x) => x.name === member);
+    if (team && m && /^%\d+$/.test(m.tmuxPaneId)) {
+      const tid = teammateTranscriptId(team, member);
+      tl = timelineFor(tid || `${teamId}:${member}`, 24, full);
+      teammate = { teamId, member, drive: "tmux" };
+    } else if (team && m) {
+      const file = teamMemberTranscript(team, member);
+      tl = timelineFor(`${teamId}:${member}`, 24, full, file ?? undefined, true);
+      teammate = { teamId, member, drive: "mailbox" };
+    } else {
+      tl = timelineFor(null, 24, full); // unknown member → empty
+    }
+  } else {
+    let target = id;
+    if (!id && !staged) {
+      target = getRecentSessions(5).find((s) => s.id !== exclude)?.id ?? null;
+    }
+    tl = timelineFor(target, 24, full);
+  }
+  const { id: resolved, items, project, contextTokens, model, lastWrite, more } = tl;
   // Merge HQ↔terminal handoff markers (sidecar) into the timeline by `at`. The
   // sidecar is the ONLY source — HQ never writes these into the .jsonl. When NOT
   // full, `items` is a tail, so floor markers at the tail's first `at` (older ones
@@ -157,6 +185,7 @@ export async function GET(req: Request) {
     hqBusy, // that warm REPL is mid-turn right now → show the stop button even after a remount
     interrupted,
     tmuxLeadTeam, // teamId when this session is a tmux-team lead → send box uses send-keys
+    teammate, // {teamId,member,drive} when this pane is a team teammate (send-keys | mailbox)
 
     diverged: rival.diverged,
     rivalLeafUuid: rival.rivalLeafUuid,
