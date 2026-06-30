@@ -13,6 +13,7 @@ import SendBoxSearch from "@/app/ui/send-box-search";
 import Tooltip from "@/app/ui/tooltip";
 import { useRepl } from "@/app/ui/use-repl";
 import { useFocus } from "@/app/ui/focus-state";
+import ForkDialog from "@/app/ui/fork-dialog";
 import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
 import SessionMenu from "@/app/ui/session-menu";
 import { OnboardingConversation } from "@/app/ui/landing-install";
@@ -3467,32 +3468,11 @@ export default function Terminal({
           hq takes the thread, since a Claude Code terminal is the live writer. On
           confirm the send records a "fork-hq" divider. Zinc, no ⚠. */}
       {forkWarn && (
-        <div className="flex flex-col gap-1.5 rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2.5 font-mono text-xs text-zinc-300">
-          <p className="font-semibold text-zinc-100">Continue this session in hq?</p>
-          <p className="leading-relaxed text-zinc-400">
-            This session looks active in a terminal. Continuing here makes hq the
-            writer and picks up where it left off — if you keep typing in the
-            terminal too, the two branch into separate threads from this point.
-          </p>
-          <div className="flex flex-wrap gap-2 pt-0.5">
-            <button
-              type="button"
-              onClick={confirmFork}
-              title="continue this session in hq (branches from the terminal's thread)"
-              className="rounded border border-emerald-600/50 bg-emerald-600/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25"
-            >
-              Continue here
-            </button>
-            <button
-              type="button"
-              onClick={() => setForkWarn(null)}
-              title="not now — leave your draft in the box and don’t send"
-              className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800"
-            >
-              Not now
-            </button>
-          </div>
-        </div>
+        <ForkDialog
+          name={headerName}
+          onConfirm={confirmFork}
+          onCancel={() => setForkWarn(null)}
+        />
       )}
       {/* Status / live-working indicator — decoupled from the message scroll so
           it sits as a bar DIRECTLY above the send box: always visible (never
