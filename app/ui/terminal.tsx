@@ -2698,7 +2698,12 @@ export default function Terminal({
       // Click anywhere in the pane → make it the active terminal (Chrome's "active
       // window"). Capture so it registers even if an inner handler stops the event.
       onPointerDownCapture={() => setActive(terminalKey)}
-      className="relative flex h-full min-h-0 flex-col gap-3"
+      // The CONVERSATION must be selectable, not a drag handle. draggable={false}
+      // opts this whole content root out of the pane's reorder-drag, so a drag from
+      // here selects text; only the boundary's padding edge (the box's own area,
+      // outside this root) starts a pane drag. cursor-auto cancels the inherited grab.
+      draggable={false}
+      className="relative flex h-full min-h-0 cursor-auto flex-col gap-3"
       // The whole pane is the catch basin: drop a screenshot anywhere in THIS
       // terminal and it attaches to THIS send box; drop a To Do card and its text
       // fills the message box as a prompt. Terminal 1 and Terminal 2 are separate
