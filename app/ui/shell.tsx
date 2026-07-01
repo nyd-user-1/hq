@@ -78,6 +78,7 @@ import CommandPalette from "@/app/ui/command-palette";
 import { FocusProvider } from "@/app/ui/focus-state";
 import Terminal1Slot from "@/app/ui/terminal1-slot";
 import Terminal1Star from "@/app/ui/terminal-1-star";
+import Terminal1ViewChip from "@/app/ui/terminal1-view-chip";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import ReorderListener from "@/app/ui/reorder-listener";
 
@@ -163,6 +164,7 @@ export default async function Shell({
                 lead={<SidebarToggle />}
                 trail={
                   <Suspense fallback={null}>
+                    <Terminal1ViewChip />
                     <TerminalChipMenu target={{ kind: "t1" }} />
                   </Suspense>
                 }
