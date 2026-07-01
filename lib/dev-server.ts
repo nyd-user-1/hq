@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import net from "node:net";
 import os from "node:os";
+import { claudeHome } from "./config";
 import { spawn, type ChildProcess } from "node:child_process";
 
 // hq-managed dev servers for the Preview panel. SINGLE-SLOT: at most one server
@@ -11,7 +12,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 // detected as already-live and reused, never killed. Spawned detached so it
 // survives an hq (Next) HMR restart; the last one is recorded in a sidecar so a
 // restarted hq can still see + stop it (by pid).
-const SIDECAR = path.join(os.homedir(), ".claude", "hq", "dev-servers.json");
+const SIDECAR = path.join(claudeHome(), "hq", "dev-servers.json");
 
 // A PATH that finds npm/node regardless of how hq was launched. A GUI-launched
 // app (the packaged desktop bundle) inherits a MINIMAL PATH — no homebrew, no

@@ -17,6 +17,7 @@ import { getFiles } from "./files";
 import { writeFileAtomicSync } from "./atomic";
 import { COMPONENTS, REGISTRY_CREATED_AT } from "./components";
 import { listDocs, docsText, DOCS_DIR } from "./docs";
+import { repoAsset, claudeHome } from "./config";
 
 // Universal search over everything HQ can see. Two flavors of corpus:
 //  • CONTENT — full text of the thing (transcripts via the persisted index;
@@ -38,15 +39,15 @@ import { listDocs, docsText, DOCS_DIR } from "./docs";
 // Adding a corpus = add it to SCOPES + the "all" fan-out, not gate it behind its
 // own chip.
 
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 const MEMORY_DIR = path.join(
   PROJECTS_ROOT,
   `-${os.homedir().slice(1).replaceAll("/", "-")}`,
   "memory"
 );
-// Repo automation scripts (scripts/*.mjs etc.). process.cwd() is the repo root
-// for the Next server — the same assumption lib/archive.ts makes for BUILD_SCRIPT.
-const SCRIPTS_DIR = path.join(process.cwd(), "scripts");
+// Repo automation scripts (scripts/*.mjs etc.). repoAsset resolves it under the
+// standalone/packaged server too; absent-dir reads degrade to an empty corpus.
+const SCRIPTS_DIR = repoAsset("scripts");
 const SCRIPT_EXTS = [".mjs", ".js", ".cjs", ".ts", ".sh", ".py"];
 const isScript = (name: string) => SCRIPT_EXTS.some((e) => name.endsWith(e));
 

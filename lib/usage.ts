@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { callCost } from "./pricing";
 
 // Token meter over Claude Code's local transcripts (~/.claude/projects/**/*.jsonl).
@@ -17,7 +17,7 @@ import { callCost } from "./pricing";
 // Files are append-only, so each is cached by byte offset and only new bytes
 // are parsed after the first load.
 
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 
 export type Totals = {
   input: number;
@@ -601,7 +601,7 @@ export type UsageStates = {
 // never otherwise hit disk) into this sidecar. When one is fresh we overlay its
 // true utilization/reset/status onto the modeled meters; otherwise the model
 // stands alone. See scripts/hooks/usage-capture.mjs.
-const SNAPSHOT = path.join(os.homedir(), ".claude", "hq", "usage-snapshot.json");
+const SNAPSHOT = path.join(claudeHome(), "hq", "usage-snapshot.json");
 const LIVE_TTL_MS = 2 * 60 * 60 * 1000; // older than this ⇒ fall back to the model
 
 type SnapWindow = { utilization?: number; resetsAt?: number; status?: string };
@@ -623,7 +623,7 @@ function readSnapshot(): Snapshot | null {
 // otherwise reach disk — fresher AND free vs the paid SessionStart probe above.
 // We read the raw CC schema and map it to the same window shape; freshness is
 // the file's mtime (the raw JSON has no timestamp of its own).
-const STATUSLINE_SNAP = path.join(os.homedir(), ".claude", "hq", "statusline-snapshot.json");
+const STATUSLINE_SNAP = path.join(claudeHome(), "hq", "statusline-snapshot.json");
 
 function readStatuslineSnapshot(): Snapshot | null {
   let raw: unknown;

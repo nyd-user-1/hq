@@ -7,9 +7,9 @@
 // the send box address a session the same way the rest of the terminal does.
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
+import { repoAsset, claudeHome } from "./config";
 import { writeFileAtomicSync } from "@/lib/atomic";
 
 export type ChannelInfo = { port: number; token: string };
@@ -26,7 +26,7 @@ let nextPort = 8800;
 // {id,port,token,...} file here so HQ can find their channel. HQ-spawned
 // sessions also write one (allocChannel) so both kinds are enumerable and
 // survive a Next restart.
-const CHANNELS_DIR = path.join(os.homedir(), ".claude", "hq", "channels");
+const CHANNELS_DIR = path.join(claudeHome(), "hq", "channels");
 
 export type Discovery = { id: string; port: number; token: string; cwd?: string; pid?: number; startedAt?: number };
 
@@ -64,9 +64,9 @@ export function listChannels(): Discovery[] {
 }
 
 export function channelServerPath(): string {
-  // Mirrors shimPath() in repl.ts — resolved from the running app's cwd so it
-  // works in the worktree and after merge alike.
-  return path.join(process.cwd(), "channel", "hq-channel.mjs");
+  // repoAsset so it resolves under the standalone/packaged server too, not only
+  // `next dev` (cwd = repo root) — mirrors daemonPath() in repl.ts.
+  return repoAsset("channel", "hq-channel.mjs");
 }
 
 export function allocChannel(key: string): ChannelInfo {

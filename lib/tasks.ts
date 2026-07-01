@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 
 // SHARED TASK LIST — the dependency-aware task board behind Claude Code's
 // TodoWrite / agent-teams work distribution. One dir per team (or per session,
@@ -27,7 +27,7 @@ import os from "node:os";
 // dependencies are expressed purely as blocks/blockedBy id graphs. The reader
 // returns [] gracefully when the dir is absent.
 
-const TASKS_ROOT = path.join(os.homedir(), ".claude", "tasks");
+const TASKS_ROOT = path.join(claudeHome(), "tasks");
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
 

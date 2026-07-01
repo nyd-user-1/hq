@@ -1,13 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { claudeHome } from "./config";
 import { liveSessionStatus, isLiveFresh } from "./session-status";
 
 // Live view of the current Claude Code session: the newest transcript in
 // ~/.claude/projects/<cwd-slug>/ is the active conversation. Read its tail,
 // keep only real user/assistant text (no tool calls, no command wrappers).
 
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 // Last-resort path for a session id not found on disk. Claude Code encodes a
 // cwd into its project-dir name by replacing path separators with "-"
 // (/Users/jane → -Users-jane), so derive the current user's home slug instead

@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import os from "node:os";
+import { claudeHome } from "./config";
 import path from "node:path";
 
 // HQ's durable HOOK-EVENT SINK — the real-time data layer. Claude Code hooks POST
@@ -21,7 +21,7 @@ import path from "node:path";
 // can't be an http hook (command bridge: scripts/hooks/session-events.mjs); every
 // other event below is a native type:"http" hook → /api/events. See the /cmd snippet.
 
-const HQ_DIR = path.join(os.homedir(), ".claude", "hq");
+const HQ_DIR = path.join(claudeHome(), "hq");
 const LOG = path.join(HQ_DIR, "events.ndjson");
 // Clip any stored string field — protects line size AND append atomicity (POSIX
 // only guarantees a torn-free O_APPEND under PIPE_BUF, 4KB; a PostCompact summary

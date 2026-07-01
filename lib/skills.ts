@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { parseFrontmatter } from "@/lib/frontmatter";
 
 // Discover the user's installed skills from disk — same "disk is the database"
@@ -9,7 +9,7 @@ import { parseFrontmatter } from "@/lib/frontmatter";
 // argument-hint / allowed-tools / disable-model-invocation). We parse that so the
 // Skills panel reflects REAL skills with their real trigger descriptions, not a
 // hardcoded list. Token count is the ~4 chars/token estimate (matches the audit).
-const SKILLS_DIR = path.join(os.homedir(), ".claude", "skills");
+const SKILLS_DIR = path.join(claudeHome(), "skills");
 
 export type Skill = {
   name: string; // folder slug = the slash command (/<name>)

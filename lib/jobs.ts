@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 
 // BACKGROUND / DISPATCHED AGENTS — the headless runs Claude Code launches into
 // the background (the "&"-style dispatched daemon agents). Each gets a dir:
@@ -13,7 +13,7 @@ import os from "node:os";
 // resumeSessionId, cwd, model? (sometimes only in respawnFlags), createdAt,
 // updatedAt. We read it straight off disk — never shell out to `claude agents`.
 
-const JOBS_DIR = path.join(os.homedir(), ".claude", "jobs");
+const JOBS_DIR = path.join(claudeHome(), "jobs");
 
 export type BackgroundAgent = {
   id: string; // the jobs/<id> dir name

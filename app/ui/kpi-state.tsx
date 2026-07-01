@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { MetricDef } from "@/lib/fleet";
 import type { SavedView, GridBox } from "@/lib/fleet-views";
 
@@ -74,11 +74,26 @@ function writeGridLayout(name: string, layout?: Record<string, GridBox>): void {
 export function KpiProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [placed, setPlacedState] = useState<string[] | null>(null);
-  const [catalog, setCatalog] = useState<MetricDef[]>([]);
+  const [catalog, setCatalogState] = useState<MetricDef[]>([]);
   const [project, setProject] = useState<string | null>(null);
   const [sessions, setSessions] = useState<string[]>([]);
   const [views, setViews] = useState<SavedView[]>([]);
   const [viewName, setViewName] = useState("Overview");
+
+  // The metrics poll (fleet-view) resends the full catalog on every response. It's
+  // the static metric registry — the same ids every time — so committing a fresh
+  // array identity per poll would re-render every consumer AND (because the poll
+  // effect lists this setter in its deps) reschedule the fetch immediately, turning
+  // an 8s poll into a request flood. Gate on a signature so the identity only
+  // changes when the registry actually changes; the useCallback keeps it stable so
+  // the poll effect's deps don't churn. (See AGENTS.md "⌘K data-load keying".)
+  const catalogSigRef = useRef("");
+  const setCatalog = useCallback((c: MetricDef[]) => {
+    const sig = c.map((m) => m.id).join(",");
+    if (sig === catalogSigRef.current) return;
+    catalogSigRef.current = sig;
+    setCatalogState(c);
+  }, []);
 
   useEffect(() => {
     try {
@@ -124,14 +139,14 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
 
   // Optimistic local update + persist the whole list to the disk sidecar (the client
   // owns ordering + dedupe). Fire-and-forget; a failed write just isn't durable.
-  const writeViews = (v: SavedView[]) => {
+  const writeViews = useCallback((v: SavedView[]) => {
     setViews(v);
     fetch("/api/fleet/views", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ views: v }),
     }).catch(() => {});
-  };
+  }, []);
   useEffect(() => {
     try {
       localStorage.setItem(OPEN, open ? "1" : "0");
@@ -140,43 +155,78 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
     }
   }, [open]);
 
-  const writePlaced = (ids: string[]) => {
+  const writePlaced = useCallback((ids: string[]) => {
     setPlacedState(ids);
     try {
       localStorage.setItem(PLACED, JSON.stringify(ids));
     } catch {
       /* ignore */
     }
-  };
+  }, []);
 
-  const value: KpiCtx = {
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+
+  const addMetric = useCallback((id: string) => {
+    setViewName("Custom");
+    setPlacedState((p) => {
+      const cur = p ?? [];
+      if (cur.includes(id)) return cur;
+      const next = [...cur, id];
+      try {
+        localStorage.setItem(PLACED, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const removeMetric = useCallback((id: string) => {
+    setViewName("Custom");
+    setPlacedState((p) => {
+      const next = (p ?? []).filter((x) => x !== id);
+      try {
+        localStorage.setItem(PLACED, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const saveView = useCallback((name: string) => {
+    const n = name.trim();
+    if (!n) return;
+    // snapshot the CURRENT board's grid arrangement (the live drags — e.g. a card
+    // pulled to full width) so the saved view restores exactly as it looks now.
+    const layout = readGridLayout(viewName);
+    const view: SavedView = { name: n, ids: placed ?? [], ...(layout ? { layout } : {}) };
+    writeViews([...views.filter((v) => v.name !== n), view]);
+    // carry the layout onto the new view's grid key so the rename doesn't drop it.
+    writeGridLayout(n, layout);
+    setViewName(n);
+  }, [placed, views, viewName, writeViews]);
+
+  const deleteView = useCallback((name: string) => {
+    writeViews(views.filter((v) => v.name !== name));
+    writeGridLayout(name, undefined); // drop its grid arrangement too
+  }, [views, writeViews]);
+
+  const applyView = useCallback((v: SavedView) => {
+    // restore the saved arrangement BEFORE the grid reads it (it keys off the view
+    // name); without this the grid would rebase to the balanced shelf-pack default.
+    writeGridLayout(v.name, v.layout);
+    writePlaced(v.ids);
+    setViewName(v.name);
+  }, [writePlaced]);
+
+  // Memoized so the object identity only changes when a value actually changes —
+  // without this every setCatalog/setMetrics poll response minted a fresh context
+  // value and re-rendered every consumer (kpi-panel, fleet-view, the nav menu).
+  const value = useMemo<KpiCtx>(() => ({
     open,
     setOpen,
-    toggle: () => setOpen((v) => !v),
+    toggle,
     placed,
     setPlaced: writePlaced,
-    addMetric: (id) => {
-      setViewName("Custom");
-      setPlacedState((p) => {
-        const cur = p ?? [];
-        if (cur.includes(id)) return cur;
-        const next = [...cur, id];
-        try {
-          localStorage.setItem(PLACED, JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-    },
-    removeMetric: (id) => {
-      setViewName("Custom");
-      setPlacedState((p) => {
-        const next = (p ?? []).filter((x) => x !== id);
-        try {
-          localStorage.setItem(PLACED, JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-    },
+    addMetric,
+    removeMetric,
     catalog,
     setCatalog,
     project,
@@ -184,31 +234,14 @@ export function KpiProvider({ children }: { children: React.ReactNode }) {
     sessions,
     setSessions,
     views,
-    saveView: (name) => {
-      const n = name.trim();
-      if (!n) return;
-      // snapshot the CURRENT board's grid arrangement (the live drags — e.g. a card
-      // pulled to full width) so the saved view restores exactly as it looks now.
-      const layout = readGridLayout(viewName);
-      const view: SavedView = { name: n, ids: placed ?? [], ...(layout ? { layout } : {}) };
-      writeViews([...views.filter((v) => v.name !== n), view]);
-      // carry the layout onto the new view's grid key so the rename doesn't drop it.
-      writeGridLayout(n, layout);
-      setViewName(n);
-    },
-    deleteView: (name) => {
-      writeViews(views.filter((v) => v.name !== name));
-      writeGridLayout(name, undefined); // drop its grid arrangement too
-    },
+    saveView,
+    deleteView,
     viewName,
-    applyView: (v) => {
-      // restore the saved arrangement BEFORE the grid reads it (it keys off the view
-      // name); without this the grid would rebase to the balanced shelf-pack default.
-      writeGridLayout(v.name, v.layout);
-      writePlaced(v.ids);
-      setViewName(v.name);
-    },
-  };
+    applyView,
+  }), [
+    open, toggle, placed, writePlaced, addMetric, removeMetric, catalog, setCatalog,
+    project, sessions, views, saveView, deleteView, viewName, applyView,
+  ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

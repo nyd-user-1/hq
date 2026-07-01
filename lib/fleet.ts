@@ -8,7 +8,7 @@
 // read straight off disk via the existing lib readers — no synthetic data.
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { getUsageStates, getSpend, tokensByDay, tokensByDayByTier, perFileDayWeights } from "@/lib/usage";
 import { getSessions, lifetimeByProject, tokensByDayByProject, sessionSpans, type SessionInfo } from "@/lib/sessions";
 import { getTodos } from "@/lib/todo";
@@ -17,7 +17,7 @@ import { timelineFor } from "@/lib/transcript";
 const CONTEXT_LIMIT = 1_000_000; // the Opus 1M window; 200k = the price cliff
 const CLIFF = 200_000;
 const HALF = CONTEXT_LIMIT / 2; // the "50% of window" mark
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ── the shape vocabulary ─────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ function sessionMtimes(): number[] {
 }
 
 function idleCount(sub: string, days: number): { idle: number; total: number } {
-  const root = path.join(os.homedir(), ".claude", sub);
+  const root = path.join(claudeHome(), sub);
   const cutoff = Date.now() - days * DAY_MS;
   let idle = 0;
   let total = 0;

@@ -28,8 +28,20 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import readline from "node:readline";
-import { DatabaseSync } from "node:sqlite";
 import { extractEntryText } from "./lib/extract-entry.mjs";
+
+// node:sqlite is a built-in only from Node 22.5+ (FTS5 needs 22.16+). On older
+// runtimes the bare import throws at startup; since this runs as a DETACHED child
+// (stdio ignored), that would look like a silent crash-loop and search would hang
+// at "indexing…" forever. Load it defensively and exit CLEAN (0) so the caller
+// treats it as "no index built" and falls back to the live-scan path instead.
+let DatabaseSync;
+try {
+  ({ DatabaseSync } = await import("node:sqlite"));
+} catch {
+  console.error("hq: search index requires Node >= 22.5 (node:sqlite); skipping build, live-scan will serve search.");
+  process.exit(0);
+}
 
 const ROOT = path.join(os.homedir(), ".claude", "projects");
 const HQ_DIR = path.join(os.homedir(), ".claude", "hq");

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { claudeHome } from "./config";
 import { cleanText } from "@/lib/sessions";
 
 // Session lineage: which sessions continue which. A /clear ends one session
@@ -9,7 +10,7 @@ import { cleanText } from "@/lib/sessions";
 // being written right up to that moment. No explicit edge exists in the
 // transcripts; this is the same-cwd + /clear-adjacency heuristic.
 
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // A predecessor must have been written to within this window before the
 // /clear — filters out long-dead same-project sessions.

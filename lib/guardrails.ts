@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import os from "node:os";
+import { claudeHome } from "./config";
 import path from "node:path";
 import { getRecentCalls } from "./calls";
 import { getSpend } from "./usage";
@@ -16,7 +16,7 @@ import { otelAvailable, weeklySpend as otelWeek, spendByWindow as otelWindow } f
 // live external session (the AGENTS.md HARD CEILING) — its only lever is stopping
 // an HQ-spawned REPL run.
 
-const HQ_DIR = path.join(os.homedir(), ".claude", "hq");
+const HQ_DIR = path.join(claudeHome(), "hq");
 const CONFIG = path.join(HQ_DIR, "guardrails.json");
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { randomUUID } from "node:crypto";
 
 // THE TEAM MAILBOX — the inter-agent messaging behind Claude Code's agent teams.
@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 // JSON string — we summarize those into a readable line. Defensive per-file so one
 // bad inbox never sinks the feed; returns [] when the team has no inboxes dir.
 
-const TEAMS_DIR = path.join(os.homedir(), ".claude", "teams");
+const TEAMS_DIR = path.join(claudeHome(), "teams");
 
 export type MailMessage = {
   to: string; // the inbox owner (the recipient) — the filename stem

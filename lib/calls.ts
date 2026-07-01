@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { claudeHome } from "./config";
 import { weighted, modelTier } from "./usage";
 import { callCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
@@ -13,8 +14,8 @@ import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
 // DEDUPED by requestId (last-wins = final streamed totals) so streaming partials
 // count once — the ledger shows real API round-trips and its $ totals line up with
 // the meter (which dedupes the same way).
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
-const HQ_DIR = path.join(os.homedir(), ".claude", "hq");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
+const HQ_DIR = path.join(claudeHome(), "hq");
 const SIDECAR = path.join(HQ_DIR, "calls-index.json");
 const SIDECAR_VERSION = 1;
 

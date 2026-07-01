@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { writeFileAtomicSync } from "./atomic";
 
 // HQ-native saved Fleet dashboard VIEWS — a board composition (metric ids) PLUS its
@@ -9,7 +9,7 @@ import { writeFileAtomicSync } from "./atomic";
 // sessions-meta.json), so views survive a browser-storage wipe, a device restart,
 // and a different browser — unlike the old localStorage-only store. NOT a write into
 // Claude Code's transcripts (it's HQ view state, no such concept in CC's data).
-const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
+const STORE_DIR = path.join(claudeHome(), "hq");
 const STORE = path.join(STORE_DIR, "fleet-views.json");
 
 export type GridBox = { x: number; y: number; w: number; h: number };

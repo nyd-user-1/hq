@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { writeFileAtomicSync } from "./atomic";
 
 // HQ↔terminal CONTROL-TRANSFER markers — the durable record of when HQ took the
@@ -17,7 +17,7 @@ import { writeFileAtomicSync } from "./atomic";
 // NOTE: lib/vault.ts also exports a `latestHandoff` — that's an UNRELATED vault
 // MEMO (a `kind: "handoff"` note), a different concept. This module is imported
 // by file path, so there's no symbol clash, but keep them mentally distinct.
-const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
+const STORE_DIR = path.join(claudeHome(), "hq");
 const STORE = path.join(STORE_DIR, "handoffs.json");
 
 // "to-hq" = hq took the wheel of a session that wasn't a live terminal (a cold

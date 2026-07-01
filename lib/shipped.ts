@@ -1,14 +1,14 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { codeRoot } from "./config";
 
 // Shipped: a cross-project commit feed. Reads `git log` from every repo under
 // ~/code and merges them newest-first, so HQ can answer "what got shipped, where,
 // when" across all projects at a glance — instead of being blind to its own
 // output. Local + fast (one `git log` per repo, capped).
 
-const CODE_ROOT = path.join(os.homedir(), "code");
+const CODE_ROOT = codeRoot();
 
 export type Ship = {
   repo: string;

@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import os from "node:os";
+import { claudeHome } from "./config";
 import path from "node:path";
 
 // AUTHORITATIVE live-session status. Claude Code writes one
@@ -11,7 +11,7 @@ import path from "node:path";
 // turn was seconds fresh). Reading this file is the truth source; the tail is the
 // fallback for sessions with no live process (retroactive history, crashed procs).
 
-const LIVE_SESSIONS_DIR = path.join(os.homedir(), ".claude", "sessions");
+const LIVE_SESSIONS_DIR = path.join(claudeHome(), "sessions");
 
 export type LiveSession = {
   pid: number;

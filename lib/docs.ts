@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { spawn } from "node:child_process";
+import { repoAsset, claudeHome } from "./config";
 
 // The Docs corpus: a local, cleaned mirror of Claude Code's documentation
 // (~/.claude/hq/docs), fetched by scripts/fetch-docs.mjs. HQ's offline
@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 // notes, and a reference HQ can surface contextually. All node:fs, zero network
 // (the fetcher handles refresh out of process).
 
-export const DOCS_DIR = path.join(os.homedir(), ".claude", "hq", "docs");
+export const DOCS_DIR = path.join(claudeHome(), "hq", "docs");
 
 export type DocPage = {
   id: string; // relative path, e.g. "agent-sdk/overview.md" (stable id)
@@ -97,7 +97,7 @@ export function docsManifest(): { fetchedAt: number; pageCount: number } {
 // same out-of-process / deduped pattern lib/archive.ts uses for the search
 // index. Cheap to call on every /search load — it no-ops while fresh. The
 // fetcher sends conditional GETs, so a refresh re-pulls only changed pages.
-const FETCH_SCRIPT = path.join(process.cwd(), "scripts", "fetch-docs.mjs");
+const FETCH_SCRIPT = repoAsset("scripts", "fetch-docs.mjs");
 const REFRESH_MS = 24 * 60 * 60 * 1000;
 let refreshing = false;
 export function warmDocs(): void {

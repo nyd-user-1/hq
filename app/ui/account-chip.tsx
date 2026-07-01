@@ -149,6 +149,10 @@ export default function AccountChip() {
   // Config — the four control panels, moved here from the terminal kebab. Expands
   // inline (like Language). Toggles come from the same panel-state providers.
   const [configOpen, setConfigOpen] = useState(false);
+  // The identity label. Derived from the running user's HOME (already surfaced by
+  // /api/environment's allowlist) rather than a hardcoded address, so every install
+  // shows its own account, not the author's. Falls back to a neutral label.
+  const [identity, setIdentity] = useState("hq · localhost");
   const permissions = usePermissions();
   const settings = useSettings();
   const environment = useEnvironment();
@@ -163,6 +167,17 @@ export default function AccountChip() {
     fetch("/api/channel-mode")
       .then((r) => r.json())
       .then((d) => { if (alive) setChannelOn(!!d?.enabled); })
+      .catch(() => {});
+    // Identity = the running user's home-dir basename (the username), read off the
+    // /api/environment allowlist. Keeps the label true for whoever installed hq.
+    fetch("/api/environment")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        const home = (d?.items ?? []).find((v: { key: string }) => v.key === "HOME")?.value;
+        const user = typeof home === "string" ? home.split("/").filter(Boolean).pop() : "";
+        if (user) setIdentity(`${user} · localhost`);
+      })
       .catch(() => {});
     return () => { alive = false; };
   }, [open]);
@@ -209,7 +224,7 @@ export default function AccountChip() {
           className="absolute bottom-full left-0 z-30 mb-2 w-[15rem] max-w-full rounded-lg border border-zinc-800 bg-zinc-950 p-1 shadow-2xl"
         >
           <div className="truncate px-2 py-1.5 font-mono text-[11px] text-zinc-500">
-            brendan@nysgpt.com
+            {identity}
           </div>
           {/* Config — moved out of the terminal kebab; expands inline into its four
               control panels, sitting just above Settings. */}

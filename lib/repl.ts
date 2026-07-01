@@ -13,9 +13,10 @@
 // so this client no longer brokers them; it only relays the operator's answer.
 import http from "node:http";
 import { spawn } from "node:child_process";
-import os from "node:os";
+import { claudeHome } from "./config";
 import path from "node:path";
 import { sessionCwd } from "@/lib/transcript";
+import { repoAsset } from "@/lib/config";
 
 export type ReplEvent = Record<string, unknown> & { type?: string; subtype?: string };
 
@@ -23,9 +24,11 @@ export type PermissionDecision =
   | { behavior: "allow"; updatedInput?: Record<string, unknown> }
   | { behavior: "deny"; message?: string };
 
-const SOCK = path.join(os.homedir(), ".claude", "hq", "repl-daemon.sock");
+const SOCK = path.join(claudeHome(), "hq", "repl-daemon.sock");
+// Resolved via repoAsset so the daemon is found when hq runs as the standalone/
+// packaged server (cwd = .next/standalone), not only under `next dev`.
 function daemonPath(): string {
-  return path.join(process.cwd(), "lib", "repl-daemon.mjs");
+  return repoAsset("lib", "repl-daemon.mjs");
 }
 
 // ── transport: HTTP over the daemon's unix socket ────────────────────────────

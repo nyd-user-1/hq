@@ -4,7 +4,7 @@ import os from "node:os";
 import { getUsage, perFileTotals, weighted, lifetimePerFileTotals, perFileDayWeights, fileSpans } from "./usage";
 import { baseCost } from "./pricing";
 import { getSessionsMeta, type SessionsMeta } from "./sessions-meta";
-import { projectsRoot } from "./config";
+import { projectsRoot, codeRoot, claudeHome } from "./config";
 import { listChannels } from "./channel";
 import { sessionFilePath } from "./transcript";
 
@@ -12,7 +12,7 @@ import { sessionFilePath } from "./transcript";
 // transcripts the token meter parses. Burn comes from the meter's file
 // cache; project + last exchange come from a cheap tail read per file.
 
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 const TAIL = 64 * 1024;
 // "Active" = written to within the prompt-cache TTL (5 min) — green means
 // "still cheap to continue", one definition of alive across the whole app.
@@ -350,7 +350,7 @@ export function recentFiles(maxAgeMs = 7 * 24 * 60 * 60 * 1000): { file: string;
 function hqDrivenIds(): Set<string> {
   try {
     const raw = fs.readFileSync(
-      path.join(os.homedir(), ".claude", "hq", "repl-sessions.json"),
+      path.join(claudeHome(), "hq", "repl-sessions.json"),
       "utf8",
     );
     return new Set<string>(JSON.parse(raw));
@@ -500,7 +500,7 @@ export function getAllSessionsFull(): TableSession[] {
 // can be started IN its project (`cd ~/code/<name> && claude`). That sets the
 // cwd, the authoritative project signal, so Recents sorts it with no text ref.
 export function listCodeProjects(): string[] {
-  const root = path.join(os.homedir(), "code");
+  const root = codeRoot();
   try {
     return fs
       .readdirSync(root, { withFileTypes: true })

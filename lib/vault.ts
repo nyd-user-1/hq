@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { codeRoot } from "./config";
 
 // The one data source in v0: the HQ vault on disk. Plain fs, zero deps.
 const VAULT_ROOT = path.join(os.homedir(), "vaults", "hq");
-const CODE_ROOT = path.join(os.homedir(), "code");
+const CODE_ROOT = codeRoot();
 
 export type Project = {
   /** Vault folder name, e.g. "!hq", "bank-it" */

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { writeFileAtomicSync } from "./atomic";
 
 // HQ-native per-FILE view metadata — favorite + custom title — keyed by a stable
@@ -10,7 +10,7 @@ import { writeFileAtomicSync } from "./atomic";
 // memory / transcripts / todos / commits / docs / files). favorite/title are HQ
 // *view* state — Claude Code has no such concept — so they belong here, not in
 // its data files.
-const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
+const STORE_DIR = path.join(claudeHome(), "hq");
 const STORE = path.join(STORE_DIR, "files-meta.json");
 
 export type FileMeta = { favorite?: boolean; title?: string };

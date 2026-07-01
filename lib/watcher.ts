@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { EventEmitter } from "node:events";
 
 // ONE shared recursive fs.watch over ~/.claude/projects, surfaced as a debounced
@@ -15,7 +15,7 @@ import { EventEmitter } from "node:events";
 // a platform without recursive watch), subscribers simply never get pushes and
 // fall back to their own slow backstop interval — so a dead watcher degrades to
 // "a little less instant", never to "broken".
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 const DEBOUNCE_MS = 120; // coalesce a burst of raw FS events into one tick
 
 const emitter = new EventEmitter();

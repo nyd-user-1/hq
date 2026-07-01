@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { codeRoot } from "./config";
 
 // The standing context tax: instruction files Claude Code loads into context
 // at the START of every session — global CLAUDE.md + the MEMORY.md index for
@@ -16,7 +17,7 @@ const MEMORY_DIR = path.join(
   `-${HOME.slice(1).replaceAll("/", "-")}`,
   "memory"
 );
-const CODE_DIR = path.join(HOME, "code");
+const CODE_DIR = codeRoot();
 const STALE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type AuditFile = {

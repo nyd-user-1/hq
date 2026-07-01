@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import os from "node:os";
+import { claudeHome } from "./config";
 import path from "node:path";
 import { getFilesMeta } from "./files-meta";
 import { getSessionsMeta } from "./sessions-meta";
@@ -21,7 +21,7 @@ export type FavItem = {
   meta?: string;
 };
 
-const BLOCK_META = path.join(os.homedir(), ".claude", "hq", "block-meta.json");
+const BLOCK_META = path.join(claudeHome(), "hq", "block-meta.json");
 
 function readBlocks(): Record<string, Record<string, { favorite?: boolean }>> {
   try {

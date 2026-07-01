@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { randomBytes } from "node:crypto";
 import { writeFileAtomicSync } from "./atomic";
 
@@ -9,7 +9,7 @@ import { writeFileAtomicSync } from "./atomic";
 // Do ships with ZERO dependency on a vault/Obsidian. A vault is now OPTIONAL: if
 // you kept your roadmap in one, migrate the items in once; HQ never reads it
 // again. New users get an empty store with no setup.
-const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
+const STORE_DIR = path.join(claudeHome(), "hq");
 const STORE = path.join(STORE_DIR, "todo.json");
 
 export type TodoItem = {

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 
 // AGENT TEAMS — an experimental Claude Code feature gated behind
 // CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1. When enabled, each team gets a dir
@@ -29,8 +29,8 @@ import os from "node:os";
 // surface a team the moment it appears, with zero cost when none do. Defensive
 // per-file so one bad config doesn't sink the rest.
 
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
-const TEAMS_DIR = path.join(os.homedir(), ".claude", "teams");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
+const TEAMS_DIR = path.join(claudeHome(), "teams");
 
 export type TeamMember = {
   name: string;

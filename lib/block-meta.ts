@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { writeFileAtomicSync } from "./atomic";
 
 // HQ-native per-MESSAGE-BLOCK view state — favorite (a ★ cue on the block),
@@ -9,7 +9,7 @@ import { writeFileAtomicSync } from "./atomic";
 // falling back to its timestamp). A sidecar under ~/.claude/hq, exactly like
 // sessions-meta — and like it, NEVER a write into Claude Code's transcript files.
 // Blocks are to a transcript what sessions are to Recents.
-const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
+const STORE_DIR = path.join(claudeHome(), "hq");
 const STORE = path.join(STORE_DIR, "block-meta.json");
 const FEEDBACK = path.join(STORE_DIR, "feedback.jsonl");
 

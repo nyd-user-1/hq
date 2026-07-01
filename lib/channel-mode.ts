@@ -12,12 +12,12 @@
 //
 // Pure node:fs/os/path. Zero browser deps. Mirrors the other lib/*.ts readers.
 import fs from "node:fs";
-import os from "node:os";
+import { claudeHome } from "./config";
 import path from "node:path";
 import { writeFileAtomicSync } from "@/lib/atomic";
 
 function filePath(): string {
-  return path.join(os.homedir(), ".claude", "hq", "channel-mode.json");
+  return path.join(claudeHome(), "hq", "channel-mode.json");
 }
 
 // Default OFF. A missing or corrupt file fails SAFE to the warm-REPL path.

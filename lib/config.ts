@@ -12,7 +12,51 @@ import path from "node:path";
 // home dir. With nothing selected, a chat starts in the DEFAULT WORKSPACE (~/hq),
 // which is created on first use. Claude Code fixes a session's cwd at launch and
 // can never re-anchor it, so the folder is always a birth-time decision.
-const DIR = path.join(os.homedir(), ".claude", "hq");
+// The Claude Code config root. Respects CLAUDE_CONFIG_DIR (Claude Code's own
+// relocation knob) so hq reads the SAME place the CLI writes; falls back to
+// ~/.claude. Use this instead of hardcoding os.homedir()/".claude" so a user who
+// relocated their config dir still gets a working Sessions/Transcripts/Teams/
+// Skills/Memory core, not empty panels.
+export function claudeHome(): string {
+  return process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+}
+
+// Resolve a repo-relative asset (a sidecar .mjs, an automation script, a source
+// dir) so it works in EVERY run mode, not just `next dev`:
+//   • dev / `next start` from the repo → process.cwd() IS the repo root.
+//   • standalone server (bin/hq-offline, npm global) → cwd is <pkg>/.next/standalone;
+//     the asset ships at the package root via package.json "files", i.e. cwd/../..
+//   • desktop .app → the packaging script copies the sidecars INTO the standalone
+//     dir, so cwd/<rel> resolves.
+// Returns the first existing candidate; falls back to the cwd-relative path so
+// existence-checking callers and error messages still point somewhere sane.
+export function repoAsset(...segments: string[]): string {
+  const rel = path.join(...segments);
+  for (const root of [process.cwd(), path.join(process.cwd(), "..", "..")]) {
+    const p = path.join(root, rel);
+    if (fs.existsSync(p)) return p;
+  }
+  return path.join(process.cwd(), rel);
+}
+
+// The user's projects root for the cross-repo readers (Shipped, Changelog, Memory
+// Audit, vault). Hardcoding lowercase "code" silently returned NOTHING on a
+// case-sensitive volume (or a user whose dir is "~/Code" — like this very repo),
+// with no error. Pick whichever case actually exists; default to ~/code.
+export function codeRoot(): string {
+  const home = os.homedir();
+  for (const name of ["code", "Code"]) {
+    const p = path.join(home, name);
+    try {
+      if (fs.statSync(p).isDirectory()) return p;
+    } catch {
+      /* not this case */
+    }
+  }
+  return path.join(home, "code");
+}
+
+const DIR = path.join(claudeHome(), "hq");
 const FILE = path.join(DIR, "config.json");
 
 type HqConfig = { projectsRoot?: string };

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import net from "node:net";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { listLaunchProjects } from "./sessions";
 
 // The universal project list for the Preview panel. The SET of projects comes
@@ -9,7 +9,7 @@ import { listLaunchProjects } from "./sessions";
 // same Claude-Code-native source the new-session chips use (NOT a hardcoded
 // ~/code glob, so it works for any user). The URL per project is inferred from
 // its package.json dev script, with a persisted per-project override on top.
-const OVERRIDES = path.join(os.homedir(), ".claude", "hq", "preview-urls.json");
+const OVERRIDES = path.join(claudeHome(), "hq", "preview-urls.json");
 
 export type PreviewProject = {
   name: string;

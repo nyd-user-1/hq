@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 import { spawn } from "node:child_process";
 import { sessionMeta, type RecentSession } from "./sessions";
 import { extractEntryText } from "../scripts/lib/extract-entry.mjs";
 import { scoreNorm, snippetAround, normalize } from "./text-search";
 import { openSearchDb } from "./sqlite";
+import { repoAsset, claudeHome } from "./config";
 
 // Index format version — bump to force a clean full rebuild when the stored
 // shape changes (incremental reuse keys on file mtime, not on extract logic,
@@ -26,7 +26,7 @@ export const INDEX_VERSION = 4; // v4: tool_use input paths/commands indexed (ex
 // the index is built incrementally (changed files only) and warmed in the
 // background while you browse, so searches are then instant.
 
-const PROJECTS_ROOT = path.join(os.homedir(), ".claude", "projects");
+const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 
 export type ArchiveSession = RecentSession & {
   sizeBytes: number;
@@ -92,7 +92,7 @@ export function getArchiveSessions(): ArchiveSession[] {
 
 // ---- Search: persisted FTS5 index, built by a detached child ---------------
 
-const BUILD_SCRIPT = path.join(process.cwd(), "scripts", "build-search-index.mjs");
+const BUILD_SCRIPT = repoAsset("scripts", "build-search-index.mjs");
 let building = false;
 
 // The stored format version of search.db (meta.version). Cached by db file mtime

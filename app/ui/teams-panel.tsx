@@ -63,7 +63,7 @@ export default function TeamsPanel() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [spawnOpen, setSpawnOpen] = useState(false);
-  const [spawnCwd, setSpawnCwd] = useState("/Users/brendanstanton/Code/hq");
+  const [spawnCwd, setSpawnCwd] = useState("");
   const [spawnPrompt, setSpawnPrompt] = useState("");
   const [spawning, setSpawning] = useState(false);
   const [spawnMsg, setSpawnMsg] = useState("");
@@ -195,7 +195,7 @@ export default function TeamsPanel() {
               <input
                 value={spawnCwd}
                 onChange={(e) => setSpawnCwd(e.target.value)}
-                placeholder="working dir"
+                placeholder="working dir — e.g. ~/code/my-project"
                 className="rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
               />
               <textarea

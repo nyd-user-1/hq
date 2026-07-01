@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { codeRoot } from "./config";
 
 // Changelog: the same cross-project commits lib/shipped reads, but presented as a
 // rich CARD TIMELINE instead of a flat row list. A Change carries what Shipped
@@ -10,7 +10,7 @@ import os from "node:os";
 // `git log --name-only` per repo, not N getCommit() calls. Diff reading reuses
 // lib/shipped's getCommit/findCommit. Local + fast; mirrors shipped's discovery.
 
-const CODE_ROOT = path.join(os.homedir(), "code");
+const CODE_ROOT = codeRoot();
 const FILE_CAP = 40; // a huge commit shouldn't bloat the feed payload
 
 export type Change = {

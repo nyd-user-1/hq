@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { writeFileAtomicSync } from "./atomic";
 
 // HQ-native per-session view metadata — favorite / hidden / custom title —
@@ -11,7 +11,7 @@ import { writeFileAtomicSync } from "./atomic";
 //   • a sidecar can't race the live CLI that may be appending to the transcript.
 // (Renaming could LATER also write a native custom_title into the transcript for
 // cross-tool integration — a deliberate upgrade, tracked separately.)
-const STORE_DIR = path.join(os.homedir(), ".claude", "hq");
+const STORE_DIR = path.join(claudeHome(), "hq");
 const STORE = path.join(STORE_DIR, "sessions-meta.json");
 
 export type SessionMeta = {

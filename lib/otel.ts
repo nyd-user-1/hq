@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import os from "node:os";
+import { claudeHome } from "./config";
 import path from "node:path";
 
 // OTel cost OVERLAY. When the user opts in (CLAUDE_CODE_ENABLE_TELEMETRY=1 +
@@ -20,7 +20,7 @@ import path from "node:path";
 // can only approximate. So OTel upgrades "HQ's estimate" → "Claude Code's
 // estimate + real tokens", not to invoice truth.
 
-const HQ_DIR = path.join(os.homedir(), ".claude", "hq");
+const HQ_DIR = path.join(claudeHome(), "hq");
 const LOG = path.join(HQ_DIR, "otel-cost.ndjson");
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 

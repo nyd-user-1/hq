@@ -13,10 +13,10 @@
 // background build writes one.
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { createRequire } from "node:module";
 
-export const SEARCH_DB = path.join(os.homedir(), ".claude", "hq", "search.db");
+export const SEARCH_DB = path.join(claudeHome(), "hq", "search.db");
 
 // `node:sqlite` is an experimental built-in. Resolve it through require so a Node
 // without it (or with the API behind a flag) degrades to null rather than a hard

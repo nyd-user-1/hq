@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { claudeHome } from "./config";
 import { randomBytes } from "node:crypto";
 import { writeFileAtomicSync } from "./atomic";
 
@@ -8,7 +8,7 @@ import { writeFileAtomicSync } from "./atomic";
 // as a specially-labeled .md under ~/.claude/hq/notes (HQ-native, same home as
 // todo.json) so HQ Search can surface it later. Frontmatter carries provenance;
 // the body is the block text verbatim. Distinct from the agent's memory dir.
-export const NOTES_DIR = path.join(os.homedir(), ".claude", "hq", "notes");
+export const NOTES_DIR = path.join(claudeHome(), "hq", "notes");
 
 export type NoteInput = {
   text: string;
