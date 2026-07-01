@@ -12,8 +12,9 @@ import type { Issue } from "@/lib/issues";
 // panel: AppPanel chrome, a live /api/issues fetch. Reads via `gh` (no DB). A
 // compact composer files a new issue (POST /api/issues) then refreshes the list.
 // Each card links out to the issue on GitHub.
-export default function IssuesPanel() {
+export default function IssuesPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useIssues();
+  const active = embedded || open;
   const [items, setItems] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -40,8 +41,8 @@ export default function IssuesPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const fileIssue = async () => {
     const t = title.trim();
@@ -67,14 +68,8 @@ export default function IssuesPanel() {
     }
   };
 
-  return (
-    <AppPanel
-      rootId="issues-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="issues-panel.tsx">
+  const content = (
+    <>
         {/* header — title + count + new + refresh */}
         <div className="flex shrink-0 items-center gap-2">
           <span className="font-mono text-[12px] text-zinc-300">Issues</span>
@@ -186,7 +181,17 @@ export default function IssuesPanel() {
             </p>
           )}
         </ul>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="issues-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(400px,40vw)]"
+    >
+      <Boundary label="issues-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

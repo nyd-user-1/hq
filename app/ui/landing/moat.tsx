@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Section, FileChip } from "./primitives";
+import { Section, SectionHead } from "./primitives";
 
 const STATS: { n: string; u: string; uc: string; d: ReactNode }[] = [
   { n: "3", u: "deps", uc: "text-green-400", d: <>The whole stack: <span className="font-mono text-zinc-300">next · react · react-dom</span>.</> },
@@ -13,10 +13,17 @@ const STATS: { n: string; u: string; uc: string; d: ReactNode }[] = [
 export default function Moat() {
   return (
     <Section id="moat">
-      <FileChip>lib/sqlite.ts</FileChip>
-      <h2 className="mt-6 text-3xl font-semibold leading-tight tracking-tight text-zinc-100 sm:text-5xl">
-        The architecture is the moat.
-      </h2>
+      <SectionHead
+        n="4.0"
+        name="Moat"
+        title="The architecture is the moat."
+        desc={
+          <>
+            Full-text search on <span className="font-mono text-[15px] text-zinc-200">node:sqlite</span> — a runtime
+            built-in, zero npm added. Your whole history indexed in seconds, on three dependencies, nothing to host.
+          </>
+        }
+      />
       <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800 sm:grid-cols-2 lg:grid-cols-4">
         {STATS.map((s) => (
           <div key={s.u} className="flex flex-col bg-zinc-950 p-8">

@@ -74,3 +74,70 @@ export function Ping({ color = "#34d399" }: { color?: string }) {
     </span>
   );
 }
+
+// The landing's structural spine, borrowed from Linear: a big two-tone headline on
+// the left, a short description + a numbered "N — NAME" index on the right. The index
+// is a real hq file path (the module the section is about), keeping it unmistakably
+// hq rather than a generic marketing counter.
+export function SectionHead({
+  n,
+  name,
+  title,
+  desc,
+}: {
+  n: string;
+  name: string;
+  title: ReactNode;
+  desc: ReactNode;
+}) {
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
+      <h2 className="max-w-2xl text-4xl font-semibold leading-[1.02] tracking-[-0.02em] text-zinc-50 sm:text-[52px]">
+        {title}
+      </h2>
+      <div className="lg:pt-2">
+        <p className="max-w-md text-lg leading-relaxed text-zinc-400">{desc}</p>
+        <div className="mt-6 inline-flex items-center gap-2.5 font-mono text-[13px] text-zinc-500">
+          <span className="text-zinc-600">{n}</span>
+          <span className="text-zinc-300">{name}</span>
+          <span className="text-blue-400">→</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A product-shot frame — the hq dashed boundary with a file-path chip, so every
+// screenshot sits inside hq's own visual identity (Linear frames its shots in a plain
+// dark card; hq's frame IS the boundary). `tone` colors the border by state.
+export function Shot({
+  chip,
+  tone = "#27272a",
+  chipBg = "#27272a",
+  children,
+  className = "",
+}: {
+  chip?: string;
+  tone?: string;
+  chipBg?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`relative rounded-xl border border-dashed p-3 pt-5 sm:p-4 sm:pt-5 ${className}`}
+      style={{ borderColor: tone, background: "#09090b" }}
+    >
+      {chip && (
+        <span
+          className="absolute -top-2.5 left-5 z-10 inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[11px] text-white"
+          style={{ background: chipBg }}
+        >
+          <span className="size-1.5 rounded-full bg-white/90" />
+          {chip}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}

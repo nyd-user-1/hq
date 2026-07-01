@@ -59,8 +59,11 @@ function DiffLine({ line }: { line: string }) {
 // standalone toggle panel (its own portal root #changelog-panel-root), mirroring
 // the Plugins panel: AppPanel chrome, a live /api/changelog fetch. A card opens
 // that commit's diff IN the panel (drill-down + back), never leaving it.
-export default function ChangelogPanel() {
+export default function ChangelogPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen, target, clearTarget } = useChangelog();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [items, setItems] = useState<Change[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -89,17 +92,17 @@ export default function ChangelogPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   // Deep-link: a chat-reply sha (CommitLink.openAt) opens the panel AND drills
   // straight to that commit. Consume the target once so it doesn't re-fire.
   useEffect(() => {
-    if (open && target) {
+    if (active && target) {
       setSel({ sha: target.sha, repo: target.repo });
       clearTarget();
     }
-  }, [open, target, clearTarget]);
+  }, [active, target, clearTarget]);
 
   // Drill-down: fetch the selected commit's diff (by repo+sha from a card, or by
   // sha alone from a chat-reply link → findCommit resolves the repo).
@@ -149,14 +152,8 @@ export default function ChangelogPanel() {
     });
   }, [items, q, repo]);
 
-  return (
-    <AppPanel
-      rootId="changelog-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="changelog-panel.tsx">
+  const content = (
+    <>
         {sel ? (
           // ── diff drill-down ──────────────────────────────────────────────
           <>
@@ -339,7 +336,17 @@ export default function ChangelogPanel() {
             </ul>
           </>
         )}
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="changelog-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="changelog-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

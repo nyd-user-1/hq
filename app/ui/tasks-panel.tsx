@@ -40,8 +40,11 @@ function statusLabel(status?: string): string {
   return (status ?? "pending").replace(/_/g, " ");
 }
 
-export default function TasksPanel() {
+export default function TasksPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useTasks();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [teamName, setTeamName] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -93,11 +96,23 @@ export default function TasksPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const sel = selected ? (tasks ?? []).find((t) => t.id === selected) ?? null : null;
 
+  const content = (
+    <>
+      {sel ? (
+        <TaskDetail task={sel} onBack={() => setSelected(null)} />
+      ) : tasks ? (
+        <TaskList tasks={tasks} teamName={teamName} onSelect={setSelected} />
+      ) : (
+        <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no tasks"}</p>
+      )}
+    </>
+  );
+  if (embedded) return content;
   return (
     <AppPanel
       rootId="tasks-panel-root"
@@ -108,15 +123,7 @@ export default function TasksPanel() {
       }}
       widthClass="sm:w-[min(360px,40vw)]"
     >
-      <Boundary label="tasks-panel.tsx">
-        {sel ? (
-          <TaskDetail task={sel} onBack={() => setSelected(null)} />
-        ) : tasks ? (
-          <TaskList tasks={tasks} teamName={teamName} onSelect={setSelected} />
-        ) : (
-          <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no tasks"}</p>
-        )}
-      </Boundary>
+      <Boundary label="tasks-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

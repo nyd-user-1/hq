@@ -1,4 +1,4 @@
-import { Section, FileChip } from "./primitives";
+import { Section, SectionHead } from "./primitives";
 
 const PATHS = [
   { p: "~/.claude/projects/", d: "**/*.jsonl" },
@@ -12,10 +12,22 @@ const PATHS = [
 export default function Insight() {
   return (
     <Section id="insight">
-      <FileChip>lib/sessions.ts</FileChip>
-      <h2 className="mt-6 max-w-3xl text-3xl font-semibold leading-tight tracking-tight text-zinc-100 sm:text-5xl">
-        No agent to instrument. No data to pipe. The disk <span className="text-green-400">is</span> the database.
-      </h2>
+      <SectionHead
+        n="01"
+        name="lib/sessions.ts"
+        title={
+          <>
+            The disk <span className="text-green-400">is</span> the database.
+          </>
+        }
+        desc={
+          <>
+            No agent to instrument, no data to pipe. hq is{" "}
+            <span className="font-mono text-[15px] text-zinc-200">node:fs</span> over the transcripts, memory, and
+            git logs Claude Code already writes.
+          </>
+        }
+      />
       <div className="mt-14 grid items-center gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-7 sm:p-9">
           <div className="font-mono text-xs uppercase tracking-wider text-zinc-500">

@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import QuickSearchItem from "@/app/ui/quick-search-item";
-import DownloadHqItem from "@/app/ui/download-hq-item";
 import NewSessionItem from "@/app/ui/new-session-item";
 import FilesItem from "@/app/ui/files-item";
 import ProjectsItem from "@/app/ui/projects-item";
@@ -42,9 +41,8 @@ export default function Sidebar() {
       {/* Quick search — opens the ⌘K command palette (the real search surface). */}
       <QuickSearchItem />
 
-      {/* Actions — get the app, or stage a fresh session. */}
+      {/* Action — stage a fresh session. */}
       <div className="flex shrink-0 flex-col gap-1">
-        <DownloadHqItem />
         <Suspense fallback={null}>
           <NewSessionItem />
         </Suspense>

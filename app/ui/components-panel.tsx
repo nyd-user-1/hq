@@ -12,8 +12,9 @@ import { useComponentsPanel } from "@/app/ui/components-panel-state";
 // fetch nonce re-keys the list so a reopen shows fresh data + order.
 type ListProps = ComponentProps<typeof ComponentsList>;
 
-export default function ComponentsPanel() {
+export default function ComponentsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useComponentsPanel();
+  const active = embedded || open;
   const [data, setData] = useState<{ items: ListProps["items"]; undiscovered: ListProps["undiscovered"] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [nonce, setNonce] = useState(0);
@@ -32,20 +33,24 @@ export default function ComponentsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
+  const content = (
+    <>
+      {data ? (
+        <div className="scrollbar-none -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+          <ComponentsList key={nonce} items={data.items} undiscovered={data.undiscovered} />
+        </div>
+      ) : (
+        <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no components"}</p>
+      )}
+    </>
+  );
+  if (embedded) return content;
   return (
     <AppPanel rootId="components-panel-root" open={open} onClose={() => setOpen(false)} widthClass="sm:w-[min(360px,40vw)]">
-      <Boundary label="components-panel.tsx">
-        {data ? (
-          <div className="scrollbar-none -mx-1 min-h-0 flex-1 overflow-y-auto px-1">
-            <ComponentsList key={nonce} items={data.items} undiscovered={data.undiscovered} />
-          </div>
-        ) : (
-          <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no components"}</p>
-        )}
-      </Boundary>
+      <Boundary label="components-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

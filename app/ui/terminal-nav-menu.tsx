@@ -17,6 +17,7 @@ import { useMcp } from "@/app/ui/mcp-state";
 import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { useConsole } from "@/app/ui/console-state";
+import { useActivity } from "@/app/ui/activity-state";
 import { usePermissions } from "@/app/ui/permissions-state";
 import { useKpis } from "@/app/ui/kpi-state";
 import { useChangelog } from "@/app/ui/changelog-state";
@@ -50,38 +51,25 @@ const ROW = "flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs tex
 const IP = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 const ActivityIcon = () => (<svg {...IP}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>);
 const ConsoleIcon = () => (<svg {...IP}><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>);
-const SearchIcon = () => (<svg {...IP}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>);
 const MetricsIcon = () => (<svg {...IP}><line x1="18" x2="18" y1="20" y2="10" /><line x1="12" x2="12" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="14" /></svg>);
 const Chevron = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600"><path d="m9 18 6-6-6-6" /></svg>);
 const Branch = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>);
-// Top-level review panels (standalone toggles mirroring the @panel/(activity) routes).
-const ComponentsIcon = () => (<svg {...IP}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>);
-const ProjectsIcon = () => (<svg {...IP}><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></svg>);
-const TodoIcon = () => (<svg {...IP}><polyline points="9 11 12 14 20 6" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>);
-const REVIEW = [
-  { title: "Components", toggle: "componentsPanel", Icon: ComponentsIcon },
-  { title: "Projects", toggle: "projectsPanel", Icon: ProjectsIcon },
-  { title: "To Do", toggle: "todoPanel", Icon: TodoIcon },
-] as const;
-// Tasks — the shared task list. Teams is NOT here: it's reached via the sidebar
-// Teams item (which opens the teams-panel), and Tasks/Mailbox drill in from a team
-// card there — so the kebab keeps only the standalone Tasks quick-toggle.
-const TasksIcon = () => (<svg {...IP}><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><line x1="13" y1="6" x2="21" y2="6" /><line x1="13" y1="12" x2="21" y2="12" /><line x1="13" y1="18" x2="21" y2="18" /></svg>);
-const TEAMS = [
-  { title: "Tasks", toggle: "tasksPanel", Icon: TasksIcon },
+// Standalone one-off toggles at the foot of the menu — moved out of the Activity
+// flyout now that Activity is a drill-down container.
+const ComposeIcon = () => (<svg {...IP}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>);
+const TextIcon = () => (<svg {...IP}><path d="M17 6.1H3" /><path d="M21 12.1H3" /><path d="M15.1 18H3" /></svg>);
+const TreeIcon = () => (<svg {...IP}><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="M7 11h4" /><path d="M7 7h6" /><path d="M7 15h8" /></svg>);
+const PreviewIcon = () => (<svg {...IP}><rect width="18" height="14" x="3" y="5" rx="2" /><path d="m10 9 3 2-3 2z" /></svg>);
+const STANDALONE = [
+  { title: "Compose", toggle: "composePanel", Icon: ComposeIcon },
+  { title: "Text", toggle: "text", Icon: TextIcon },
+  { title: "Tree", toggle: "treePanel", Icon: TreeIcon },
+  { title: "Preview", toggle: "preview", Icon: PreviewIcon },
 ] as const;
 
-const SEARCH_SCOPES: Leaf[] = [
-  { title: "All", href: "/search?scope=all" },
-  { title: "Transcripts", href: "/search?scope=transcripts" },
-  { title: "Memory", href: "/search?scope=memory" },
-  { title: "Notes", href: "/search?scope=notes" },
-  { title: "Files", href: "/search?scope=files" },
-];
 const ITEMS = [
   { key: "Activity", Icon: ActivityIcon },
   { key: "Console", Icon: ConsoleIcon },
-  { key: "Search", Icon: SearchIcon },
   { key: "Metrics", Icon: MetricsIcon },
 ];
 
@@ -133,6 +121,7 @@ export default function TerminalNavMenu({
     trustedFoldersPanel: useTrustedFolders(),
   };
   const consoleCtx = useConsole();
+  const activityCtx = useActivity();
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
@@ -157,7 +146,7 @@ export default function TerminalNavMenu({
     setFlyout(null);
   };
   const subItems = (key: string): Leaf[] =>
-    key === "Search" ? SEARCH_SCOPES : (NAV_HEADERS.find((h) => h.title === key)?.items ?? []);
+    NAV_HEADERS.find((h) => h.title === key)?.items ?? [];
   const renderLeaf = (it: Leaf) =>
     "soon" in it ? (
       <span key={it.title} className="flex items-center gap-2.5 rounded px-2 py-1.5 text-xs text-zinc-700">{it.title}</span>
@@ -195,19 +184,20 @@ export default function TerminalNavMenu({
             )}
           </div>
           <div className="my-1 h-px bg-zinc-800" />
-          {ITEMS.map(({ key, Icon }) =>
-            key === "Console" ? (
-              // Console opens DIRECTLY now (no sub-flyout) — the container's own "⌄"
-              // switches panels.
+          {ITEMS.map(({ key, Icon }) => {
+            // Activity + Console open their drill-down container DIRECTLY (no flyout);
+            // the container's own "⌄" switches panels. Metrics stays a flyout.
+            const container = key === "Console" ? consoleCtx : key === "Activity" ? activityCtx : null;
+            return container ? (
               <button
                 key={key}
                 type="button"
                 onMouseEnter={() => setFlyout(null)}
                 onClick={() => {
-                  consoleCtx.setOpen(true);
+                  container.setOpen(true);
                   close();
                 }}
-                className={`${ROW} w-full ${consoleCtx.open ? "bg-zinc-900 text-zinc-100" : ""}`}
+                className={`${ROW} w-full ${container.open ? "bg-zinc-900 text-zinc-100" : ""}`}
               >
                 <span className="flex items-center gap-2.5">
                   <Icon />
@@ -231,28 +221,12 @@ export default function TerminalNavMenu({
                   </div>
                 )}
               </div>
-            ),
-          )}
-          {/* top-level review panels — direct toggles (standalone Activity panels) */}
+            );
+          })}
+          {/* Standalone one-offs — Compose · Text · Tree · Preview (moved out of the
+              Activity flyout, which is a container now). */}
           <div className="my-1 h-px bg-zinc-800" />
-          {REVIEW.map(({ title, toggle, Icon }) => (
-            <button
-              key={title}
-              type="button"
-              onMouseEnter={() => setFlyout(null)}
-              onClick={() => {
-                toggles[toggle].toggle();
-                close();
-              }}
-              className={`${ROW} w-full ${toggles[toggle].open ? "bg-zinc-900 text-zinc-100" : ""}`}
-            >
-              <Icon />
-              {title}
-            </button>
-          ))}
-          {/* Agent Teams — direct toggles, the unambiguous entry into Teams/Tasks */}
-          <div className="my-1 h-px bg-zinc-800" />
-          {TEAMS.map(({ title, toggle, Icon }) => (
+          {STANDALONE.map(({ title, toggle, Icon }) => (
             <button
               key={title}
               type="button"

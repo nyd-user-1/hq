@@ -13,8 +13,9 @@ import { useProjectsPanel } from "@/app/ui/projects-panel-state";
 // click never leaves for the @panel/projects route. Data via GET /api/projects
 // (grid) and GET /api/projects?name=… (a project's sessions). Picking a session
 // pins it in the terminal (?session on the current URL — the panel stays open).
-export default function ProjectsPanel() {
+export default function ProjectsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useProjectsPanel();
+  const active = embedded || open;
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
@@ -36,8 +37,8 @@ export default function ProjectsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   // drill-down: fetch the selected project's sessions
   useEffect(() => {
@@ -74,6 +75,22 @@ export default function ProjectsPanel() {
     load();
   };
 
+  const content = (
+    <>
+      {selected ? (
+        sessions ? (
+          <ProjectSessions name={selected} sessions={sessions} onBack={() => setSelected(null)} onPick={pin} />
+        ) : (
+          <p className="font-mono text-[11px] text-zinc-600">loading…</p>
+        )
+      ) : projects ? (
+        <ProjectsView projects={projects} onSelect={setSelected} onDelete={remove} />
+      ) : (
+        <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no projects"}</p>
+      )}
+    </>
+  );
+  if (embedded) return content;
   return (
     <AppPanel
       rootId="projects-panel-root"
@@ -84,19 +101,7 @@ export default function ProjectsPanel() {
       }}
       widthClass="sm:w-[min(360px,40vw)]"
     >
-      <Boundary label="projects-panel.tsx">
-        {selected ? (
-          sessions ? (
-            <ProjectSessions name={selected} sessions={sessions} onBack={() => setSelected(null)} onPick={pin} />
-          ) : (
-            <p className="font-mono text-[11px] text-zinc-600">loading…</p>
-          )
-        ) : projects ? (
-          <ProjectsView projects={projects} onSelect={setSelected} onDelete={remove} />
-        ) : (
-          <p className="font-mono text-[11px] text-zinc-600">{loading ? "loading…" : "no projects"}</p>
-        )}
-      </Boundary>
+      <Boundary label="projects-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

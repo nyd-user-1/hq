@@ -6,8 +6,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useKpis, RECOMMENDED_VIEWS, type SavedView } from "@/app/ui/kpi-state";
 
 // Analytics nav item (formerly "Fleet") — the label opens the analytics dashboard
-// in Terminal 1 (?session=@fleet); the chevron expands the recommended + saved
-// board views, each of which applies the view (kpi-state) and opens the dashboard.
+// in Terminal 1 (?session=@fleet); the chevron expands the board views (recommended
+// + saved, flat), each of which applies the view (kpi-state) and opens the dashboard.
 export default function AnalyticsItem() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
@@ -33,6 +33,10 @@ export default function AnalyticsItem() {
     sp.set("session", "@fleet");
     router.push(`${pathname}?${sp}`, { scroll: false });
   };
+
+  // All board views, flat — recommended first, then any saved ones not already listed.
+  const allViews = [...RECOMMENDED_VIEWS];
+  for (const v of views) if (!allViews.some((x) => x.name === v.name)) allViews.push(v);
 
   return (
     <div className="flex flex-col">
@@ -62,8 +66,7 @@ export default function AnalyticsItem() {
       </div>
       {expanded && (
         <div className="mt-0.5 ml-[1.125rem] flex flex-col border-l border-zinc-800 pl-1.5">
-          <span className="px-2 pt-1 font-mono text-[9px] uppercase tracking-widest text-zinc-600">Recommended</span>
-          {RECOMMENDED_VIEWS.map((v) => (
+          {allViews.map((v) => (
             <button
               key={v.name}
               onClick={() => openView(v)}
@@ -72,20 +75,6 @@ export default function AnalyticsItem() {
               <span className="min-w-0 flex-1 truncate">{v.name}</span>
             </button>
           ))}
-          {views.length > 0 && (
-            <>
-              <span className="px-2 pt-1 font-mono text-[9px] uppercase tracking-widest text-zinc-600">Saved</span>
-              {views.map((v) => (
-                <button
-                  key={v.name}
-                  onClick={() => openView(v)}
-                  className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-                >
-                  <span className="min-w-0 flex-1 truncate">{v.name}</span>
-                </button>
-              ))}
-            </>
-          )}
         </div>
       )}
     </div>
