@@ -1350,9 +1350,12 @@ export default function Terminal({
       return;
     }
 
-    if (interrupted) {
+    if (interrupted && !searchMode) {
       // Hard interrupt → RED, held until the next input (the awaiting branch above
       // clears it). No engagement dismissal — the user must notice + redirect.
+      // SUPPRESSED while the send box is in SEARCH mode: it's a search bar then, not
+      // a message box, so "send a message to redirect" doesn't apply. Exiting search
+      // re-runs this effect (searchMode is a dep) and restores red if still interrupted.
       if (doneTimerRef.current) {
         clearTimeout(doneTimerRef.current);
         doneTimerRef.current = null;
@@ -1363,6 +1366,10 @@ export default function Terminal({
       wasThinkingRef.current = false; // consumed — don't also schedule green
       return;
     }
+
+    // Not showing red (interrupt cleared, or suppressed while searching) → tear down
+    // any prior red; otherwise is-interrupted is only removed by a new turn starting.
+    box.classList.remove("is-interrupted");
 
     if (!wasThinkingRef.current) return; // wasn't mid-turn → nothing to acknowledge
     if (doneTimerRef.current) return; // a finish is already pending
@@ -1394,7 +1401,7 @@ export default function Terminal({
       }
       dismissRef.current?.();
     };
-  }, [working, sending, interrupted, paramKey]);
+  }, [working, sending, interrupted, paramKey, searchMode]);
 
   // FOCUS — a blue resting boundary on the ACTIVE terminal. Only meaningful with 2+
   // terminals on screen: a lone terminal is trivially active, so showing blue then
@@ -1810,6 +1817,22 @@ export default function Terminal({
       loadTurns();
     }, 1000);
     return () => clearInterval(t);
+  }, [working, loadTurns]);
+
+  // POST-IDLE RE-READ: the 1s poll above stops the instant `working` drops, so a
+  // transcript marker flushed a beat LATE — e.g. "[Request interrupted by user]",
+  // written just after workingStatus goes idle — would never be re-read, freezing
+  // the border green even though the server now computes `interrupted`. Re-read a
+  // couple times right after the working→idle edge to catch it (→ red). Cheap +
+  // additive; fixes the "interrupt leaves the observer green" bug.
+  useEffect(() => {
+    if (working) return;
+    const a = setTimeout(() => loadTurns(), 400);
+    const b = setTimeout(() => loadTurns(), 1200);
+    return () => {
+      clearTimeout(a);
+      clearTimeout(b);
+    };
   }, [working, loadTurns]);
 
   // Slow tick while idle so the "last activity Nm ago" line stays honest even
