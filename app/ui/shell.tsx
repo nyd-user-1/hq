@@ -165,7 +165,7 @@ export default async function Shell({
                 trail={
                   <Suspense fallback={null}>
                     <Terminal1ViewChip />
-                    <TerminalChipMenu target={{ kind: "t1" }} />
+                    <TerminalChipMenu />
                   </Suspense>
                 }
               >

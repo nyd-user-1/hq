@@ -86,7 +86,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
               label={label}
               copyText="app/ui/terminal.tsx"
               reorderSlot={slot}
-              lead={content && content.kind !== "teammate" ? <TerminalChipMenu target={{ kind: "wall", index: i }} /> : undefined}
+              lead={content && content.kind !== "teammate" ? <TerminalChipMenu /> : undefined}
               trail={teammateChip}
             >
               <Link
