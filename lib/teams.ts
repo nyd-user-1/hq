@@ -117,8 +117,14 @@ export function teams(): Team[] {
       members,
     });
   }
-  // Newest team first (createdAt is ms epoch); 0 sinks to the bottom.
-  return out.sort((a, b) => b.createdAt - a.createdAt);
+  // A config.json exists the moment team-mode is enabled — with only the lead and
+  // no teammates. That's a solo session, NOT a team, and must not get yanked into
+  // the Agent Teams group. Require at least one non-lead member; real teams keep
+  // their roster after teardown, so this stays true for them. Newest team first
+  // (createdAt is ms epoch); 0 sinks to the bottom.
+  return out
+    .filter((t) => t.members.some((m) => !m.isLead))
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 // The lead member of a team (the one carrying the project cwd we slug from).
