@@ -56,8 +56,10 @@ export default function TasksPanel() {
         const arr: Team[] = tr?.teams ?? [];
         const newest = [...arr].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
         teamId = newest?.id ?? "";
-        setTeamName(newest?.name ?? "");
       }
+      // The owning team, shown at the top so it's unmistakable whose tasks these
+      // are: "Team c4921e42" from "session-c4921e42".
+      setTeamName(teamId ? `Team ${teamId.replace(/^session-/, "")}` : "");
       if (!teamId) {
         setTasks([]);
         return;
@@ -113,29 +115,32 @@ function TaskList({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
-      {/* header — Tasks · team name · count */}
+      {/* header — the OWNING TEAM is the hero, so it's clear whose tasks these are */}
       <div className="flex items-baseline gap-2">
-        <span className="shrink-0 font-mono text-xs text-zinc-300">Tasks</span>
-        {teamName && <span className="min-w-0 truncate font-mono text-[11px] text-zinc-500">{teamName}</span>}
-        <span className="ml-auto shrink-0 font-mono text-[11px] text-zinc-600">
+        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-zinc-200">
+          {teamName || "Tasks"}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-600">
           {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
         </span>
       </div>
+      <div className="font-mono text-[10px] text-zinc-600">shared task list</div>
 
       {tasks.length === 0 ? (
-        <p className="text-sm text-zinc-600">no tasks for this team</p>
+        <p className="mt-2 text-sm text-zinc-600">no tasks for this team</p>
       ) : (
-        <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="scrollbar-none mt-1 flex min-h-0 flex-1 flex-col overflow-y-auto">
           {tasks.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => onSelect(t.id)}
-              className="flex w-full items-baseline gap-3 border-b border-zinc-800/60 py-3 text-left transition-colors hover:bg-zinc-800/30"
+              className="flex w-full items-baseline gap-2.5 border-b border-zinc-800/60 py-3 text-left transition-colors hover:bg-zinc-800/30"
             >
               <span className={`shrink-0 text-[10px] leading-none ${statusDot(t.status)}`} aria-hidden>
                 ●
               </span>
+              <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-600">#{t.id}</span>
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-200">{t.subject}</span>
               {(t.blockedBy?.length ?? 0) > 0 && (
                 <span className="shrink-0 font-mono text-[11px] text-zinc-600" title="blocked by upstream tasks">
