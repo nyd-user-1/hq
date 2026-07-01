@@ -225,19 +225,6 @@ function KebabIcon() {
   );
 }
 
-// lucide "network" — a hub with three connected nodes; marks the Agent Teams group.
-function NetworkIcon() {
-  return (
-    <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="16" y="16" width="6" height="6" rx="1" />
-      <rect x="2" y="16" width="6" height="6" rx="1" />
-      <rect x="9" y="2" width="6" height="6" rx="1" />
-      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-      <path d="M12 12V8" />
-    </svg>
-  );
-}
-
 // lucide "arrow-up-right" — the "open this teammate as a wall pane" affordance.
 function ArrowUpRightIcon() {
   return (
@@ -264,7 +251,7 @@ function Sliders({ active }: { active: boolean }) {
   );
 }
 
-export default function SidebarRecents() {
+export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boolean }) {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const params = useSearchParams();
@@ -275,7 +262,6 @@ export default function SidebarRecents() {
   const { activeKey } = useFocus();
   const [sessions, setSessions] = useState<Recent[]>([]);
   const [teams, setTeams] = useState<TeamLite[]>([]); // live agent teams (their leads pin to the top)
-  const [teamsExpanded, setTeamsExpanded] = useState(true); // "Agent Teams" reveal toggle
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("date"); // default: grouped by day (claude.ai-style)
   const [showHidden, setShowHidden] = useState(false);
@@ -498,8 +484,11 @@ export default function SidebarRecents() {
       });
   }
   const teamLeadRows = visible.filter((s) => leadMap.has(s.id));
+  // When Agent Teams is open, the lead sessions live in their own block (rendered
+  // above the Recents groups) — exclude them here so they aren't listed twice. When
+  // collapsed, fold them back into Recents so a team lead is never hidden entirely.
   const groups = groupSessions(
-    visible.filter((s) => !leadMap.has(s.id)),
+    teamsOpen ? visible.filter((s) => !leadMap.has(s.id)) : visible,
     groupBy
   );
   const menuSession = menuFor ? sessions.find((s) => s.id === menuFor) : null;
@@ -632,6 +621,14 @@ export default function SidebarRecents() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
+      {/* Agent Teams — the live teams' LEAD sessions, revealed by the top-group
+          "Agent Teams" item. Full Recents rows (tooltip, live dot, and the shared
+          kebab, which additionally leads with the teammates). */}
+      {teamsOpen && teamLeadRows.length > 0 && (
+        <div className="flex shrink-0 flex-col gap-0.5 border-b border-zinc-800/50 pb-2">
+          {teamLeadRows.map(renderRow)}
+        </div>
+      )}
       <div className="flex items-center justify-between px-2.5">
         {/* The first group's label sits here next to the group-by control —
             "Today" / "Recents" / a thread title — so there's no redundant
@@ -670,25 +667,6 @@ export default function SidebarRecents() {
         <p className="px-2.5 text-xs text-zinc-600">no recent sessions</p>
       ) : (
         <div className="scrollbar-none mt-2.5 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          {/* Agent Teams — the live teams' LEAD sessions, pinned to the top. Same
-              row as any session (tooltip, live dot, kebab); the kebab additionally
-              leads with the teammate rows (see the menu block below). */}
-          {teamLeadRows.length > 0 && (
-            <div className="flex flex-col gap-0.5">
-              {/* Header styled like the Fleet/Files nav items; click to reveal the
-                  team lead sessions underneath. */}
-              <button
-                type="button"
-                onClick={() => setTeamsExpanded((v) => !v)}
-                title="Agent Teams — click to show/hide"
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-              >
-                <NetworkIcon />
-                Agent Teams
-              </button>
-              {teamsExpanded && teamLeadRows.map(renderRow)}
-            </div>
-          )}
           {groups.map((g, gi) => (
             <div key={g.label || `g${gi}`} className="flex flex-col gap-0.5">
               {/* first group's label is shown up in the top bar; only render
