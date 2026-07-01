@@ -7,9 +7,6 @@ import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import TerminalRow from "@/app/ui/terminal-row";
-import FilesOverlay from "@/app/ui/files-overlay";
-import ProjectOverlay from "@/app/ui/project-overlay";
-import FleetOverlay from "@/app/ui/fleet-overlay";
 import { PlannerProvider } from "@/app/ui/planner-state";
 import PlannerPanel from "@/app/ui/planner-panel";
 import { ApiProvider } from "@/app/ui/api-state";
@@ -184,13 +181,9 @@ export default async function Shell({
               </Boundary>
             </TerminalRow>
             {children}
-            {/* Files browser — covers the center when ?center=files; the terminal
-                stays mounted + live behind it. Suspense for useSearchParams. */}
-            <Suspense fallback={null}>
-              <FilesOverlay />
-              <ProjectOverlay />
-              <FleetOverlay />
-            </Suspense>
+            {/* Fleet / Files / Projects are no longer center overlays — they render
+                IN a terminal via the @fleet/@files/@projects view tokens (the tab
+                model: Terminal1Slot → PaneView). Nothing to mount here. */}
           </div>
 
           {/* min-w-0 (not shrink-0) so the panel yields when the row is tight —

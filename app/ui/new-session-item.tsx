@@ -11,11 +11,9 @@ export default function NewSessionItem() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
   // Exclusive-blue: New Session lights only when it's the surface actually showing.
-  // A center overlay (Projects/Files/Fleet via ?center) sits ON TOP of the staging
-  // terminal, so it owns the highlight — don't also light New Session, or two items
-  // read "open" at once (the bug). center overlays are single-valued, so at most one
-  // sidebar item is ever blue.
-  const staged = params.get("session") === "new" && !params.get("center");
+  // A view token (@fleet/@files/@projects) sets ?session to that token, so it's not
+  // "new" → New Session correctly stays unlit when a view fills Terminal 1.
+  const staged = params.get("session") === "new";
   const { open, toggle } = useSidebar();
   return (
     <button

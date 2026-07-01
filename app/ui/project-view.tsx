@@ -42,7 +42,7 @@ function openHref(r: FileRow, search: string): string {
     .map((k) => (cur.get(k) ? `${k}=${cur.get(k)}` : ""))
     .filter(Boolean)
     .join("&");
-  return `/search?center=project&scope=all&sort=new&${op}${pins ? `&${pins}` : ""}`;
+  return `/search?scope=all&sort=new&${op}${pins ? `&${pins}` : ""}`;
 }
 
 function Skeleton() {
@@ -116,7 +116,8 @@ export default function ProjectView() {
 
   const close = () => {
     const sp = new URLSearchParams(params.toString());
-    sp.delete("center");
+    sp.delete("session"); // close the view → home (the tab model)
+    sp.delete("lead");
     router.push(`${pathname}${sp.toString() ? `?${sp}` : ""}`, { scroll: false });
   };
   const onOpen = (r: FileRow) => router.push(openHref(r, `?${params.toString()}`), { scroll: false });

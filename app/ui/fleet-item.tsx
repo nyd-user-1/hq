@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-// Fleet nav item — sits under "Files" in the sidebar. Toggles ?center=fleet, the
-// full-width mission-control roster (fleet-overlay.tsx) over the center column. A
-// query toggle (not a route) so it preserves the open panel + the terminal pins;
-// clicking it again (or any session) drops it.
+// Fleet nav item — sits under "Files" in the sidebar. Shows the mission-control
+// roster IN Terminal 1 (the tab model: ?session=@fleet → Terminal1Slot → PaneView),
+// not a center overlay. A query toggle so it preserves the open panel + the wall;
+// clicking it again drops back to home.
 export default function FleetItem() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
-  const active = params.get("center") === "fleet";
+  const active = params.get("session") === "@fleet";
   const sp = new URLSearchParams(params.toString());
-  if (active) sp.delete("center");
-  else sp.set("center", "fleet");
+  sp.delete("center"); // legacy overlay param — retired
+  sp.delete("lead"); // a view isn't a team lead
+  if (active) sp.delete("session"); // toggle off → home
+  else sp.set("session", "@fleet"); // Fleet fills Terminal 1
   const href = `${pathname}${sp.toString() ? `?${sp}` : ""}`;
   return (
     <Link

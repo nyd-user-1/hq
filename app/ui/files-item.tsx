@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-// Files nav item — sits under "Projects" in the sidebar. Toggles ?center=files,
-// which opens the full-width Files browser (files-overlay.tsx) over the center
-// column. A query toggle (not a route) so it preserves the current panel + the
-// terminal pins; clicking it again (or any session) drops it.
+// Files nav item — sits under "Projects" in the sidebar. Shows the Files browser
+// IN Terminal 1 (the tab model: ?session=@files → Terminal1Slot → PaneView), not a
+// center overlay. A query toggle so it preserves the current panel + the wall;
+// clicking it again drops back to home.
 export default function FilesItem() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
-  const active = params.get("center") === "files";
+  const active = params.get("session") === "@files";
   const sp = new URLSearchParams(params.toString());
-  if (active) sp.delete("center");
-  else sp.set("center", "files");
+  sp.delete("center"); // legacy overlay param — retired
+  sp.delete("lead"); // a view isn't a team lead
+  if (active) sp.delete("session"); // toggle off → home
+  else sp.set("session", "@files"); // Files fills Terminal 1
   const href = `${pathname}${sp.toString() ? `?${sp}` : ""}`;
   return (
     <Link

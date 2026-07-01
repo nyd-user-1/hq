@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-// Projects nav item — sits directly under "New Session" in the sidebar. Opens the
-// full-width Projects browser (project-overlay.tsx) over the center column via
-// ?center=project, mirroring FilesItem: a query toggle (not a route) so it keeps
-// the current panel + the terminal pins; clicking again (or any session) drops it.
+// Projects nav item — sits directly under "New Session" in the sidebar. Shows the
+// Projects browser IN Terminal 1 (the tab model: ?session=@projects → Terminal1Slot
+// → PaneView), not a center overlay. A query toggle so it keeps the current panel +
+// the wall; clicking again drops back to home. (Token is PLURAL @projects.)
 export default function ProjectsItem() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
-  const active = params.get("center") === "project";
+  const active = params.get("session") === "@projects";
   const sp = new URLSearchParams(params.toString());
-  if (active) sp.delete("center");
-  else sp.set("center", "project");
+  sp.delete("center"); // legacy overlay param — retired
+  sp.delete("lead"); // a view isn't a team lead
+  if (active) sp.delete("session"); // toggle off → home
+  else sp.set("session", "@projects"); // Projects fills Terminal 1
   const href = `${pathname}${sp.toString() ? `?${sp}` : ""}`;
   return (
     <Link
