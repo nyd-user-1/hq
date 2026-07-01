@@ -275,6 +275,7 @@ export default function SidebarRecents() {
   const { activeKey } = useFocus();
   const [sessions, setSessions] = useState<Recent[]>([]);
   const [teams, setTeams] = useState<TeamLite[]>([]); // live agent teams (their leads pin to the top)
+  const [teamsExpanded, setTeamsExpanded] = useState(true); // "Agent Teams" reveal toggle
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("date"); // default: grouped by day (claude.ai-style)
   const [showHidden, setShowHidden] = useState(false);
@@ -674,11 +675,18 @@ export default function SidebarRecents() {
               leads with the teammate rows (see the menu block below). */}
           {teamLeadRows.length > 0 && (
             <div className="flex flex-col gap-0.5">
-              <span className="flex items-center gap-1.5 px-2.5 pb-0.5 pt-1 font-mono text-[10px] tracking-widest text-zinc-500">
+              {/* Header styled like the Fleet/Files nav items; click to reveal the
+                  team lead sessions underneath. */}
+              <button
+                type="button"
+                onClick={() => setTeamsExpanded((v) => !v)}
+                title="Agent Teams — click to show/hide"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+              >
                 <NetworkIcon />
                 Agent Teams
-              </span>
-              {teamLeadRows.map(renderRow)}
+              </button>
+              {teamsExpanded && teamLeadRows.map(renderRow)}
             </div>
           )}
           {groups.map((g, gi) => (
