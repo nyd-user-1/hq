@@ -993,10 +993,11 @@ export default function Terminal({
     : sessionParam === "new" || (paramKey === "session" && !sessionParam && !sibling && !wallParam);
   // Two faces of the staging surface — both have no pinned session and both launch a
   // newborn on send (shared via `staged`), they differ ONLY in what sits above the
-  // send box. COMPOSE = an explicit "+ new session": a blank header + send box, cursor
-  // focused, like beginning a Claude chat (the "/new" face). HOME = a cold open of
-  // Terminal 1: the sessions-view index (projects band + every transcript) over that
-  // same box (the "/" face). Anything else that keys off `staged` covers both.
+  // send box. COMPOSE = the "New Session" button (?session=new): the sessions-view
+  // index (projects band + every transcript) over the send box — the picker you
+  // launch from. HOME = the same index as a wall-pane "new" split. Both render the
+  // index (see `home || compose` below). The "/" cold open is NOT here anymore — it
+  // shows the pitch landing (Terminal1Slot intercepts root before <Terminal> mounts).
   const compose = !controlled && sessionParam === "new";
   const home = staged && !compose;
   const pinned = staged ? null : sessionParam; // null = newest session
@@ -2942,7 +2943,7 @@ export default function Terminal({
             }`}
           />
           <span className="font-mono text-zinc-300">
-            {compose ? "new session" : home ? "sessions" : project || "session"}
+            {home || compose ? "sessions" : project || "session"}
           </span>
         </span>
         {/* Session id / title — HOVER opens the sessions switcher, single click
@@ -3203,11 +3204,12 @@ export default function Terminal({
         {/* The "+" staging view: nothing exists yet — say how a session is
             born, offer the recent list, and auto-flip when one appears. No
             handoff kickoff here: that belongs to /clear-born continuations. */}
-        {home && (
-          // The sessions-view index — Terminal 1's "/" face. Top-aligned, full-width
-          // (matches the header rule above). Two ruled sections — PROJECTS (pick a
-          // launch target) then SESSIONS (reopen one). COMPOSE skips this entirely:
-          // just the blank box below.
+        {(home || compose) && (
+          // The sessions-view index — the "New Session" (?session=new) face and the
+          // wall-pane "new" face. Top-aligned, full-width (matches the header rule
+          // above). Two ruled sections — PROJECTS (pick a launch target) then
+          // SESSIONS (reopen one). (The "/" cold open now shows the pitch landing via
+          // Terminal1Slot, not this — it never reaches the terminal.)
           <div className="flex w-full flex-col gap-6 pb-8 pt-6 font-mono">
             {/* PROJECTS — click to SELECT a launch target (the session starts only on
                 send, never on a stray click). An even grid, clamped to 2 rows; the

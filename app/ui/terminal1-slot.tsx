@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import Terminal from "@/app/ui/terminal";
 import PaneView from "@/app/ui/pane-view";
+import RootLanding from "@/app/ui/root-landing";
 import { parseToken } from "@/app/ui/terminals";
 
 // Terminal 1's content chooser. T1 is the ANCHOR — its content rides ?session, the
@@ -13,7 +14,14 @@ import { parseToken } from "@/app/ui/terminals";
 // session/panel navigation never crosses that boundary — T1 still never remounts.
 export default function Terminal1Slot({ initialFocus }: { initialFocus: boolean }) {
   const ses = useSearchParams().get("session");
-  const content = ses ? parseToken(ses) : null;
+  // "/" cold open (no ?session) is the front door: the scrolling pitch landing.
+  // The working sessions index moved to the "New Session" button (?session=new),
+  // which falls through to <Terminal> below. Swapping T1 to the landing is the same
+  // deliberate content change as a view token — the session <Terminal> unmounts.
+  if (!ses) {
+    return <RootLanding />;
+  }
+  const content = parseToken(ses);
   if (content?.kind === "view") {
     return <PaneView view={content.view} terminalKey="t1" />;
   }
