@@ -51,17 +51,6 @@ function KebabIcon() {
     </svg>
   );
 }
-// lucide "users" — the section header glyph.
-function UsersIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
 
 export default function TeamsItem() {
   const pathname = usePathname() ?? "/";
@@ -138,14 +127,8 @@ export default function TeamsItem() {
         title="Agent Teams — live teams; click a team to pin its lead"
         className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
       >
-        <UsersIcon />
+        <NetworkIcon />
         Agent Teams
-        <span className="ml-auto flex items-center gap-1.5">
-          {teams.length > 0 && (
-            <span className="font-mono text-[9px] tabular-nums text-zinc-600">{teams.length}</span>
-          )}
-          <span className={`text-[10px] text-zinc-600 transition-transform ${expanded ? "rotate-90" : ""}`}>›</span>
-        </span>
       </button>
 
       {/* team rows — each team's LEAD session, styled like a Recents row */}
@@ -164,13 +147,10 @@ export default function TeamsItem() {
                 <Link
                   href={leadHref(lead)}
                   scroll={false}
-                  className={`flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-sm transition-colors ${
+                  className={`flex min-w-0 flex-1 items-center py-1.5 pl-2.5 text-sm transition-colors ${
                     active ? "text-zinc-100" : "text-zinc-400 group-hover:text-zinc-200"
                   }`}
                 >
-                  <span className={active ? "text-zinc-300" : "text-zinc-500"}>
-                    <NetworkIcon />
-                  </span>
                   <span className="min-w-0 flex-1 truncate font-mono text-xs">{lead.slice(0, 8)}</span>
                 </Link>
                 <button
