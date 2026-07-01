@@ -7,11 +7,35 @@ import { useFocus } from "@/app/ui/focus-state";
 import { useTeams } from "@/app/ui/teams-state";
 
 // The boundary-chip "▾" menu on a terminal. Two actions:
-//   • Split — open a fresh pane beside this one (a "new" home picker).
-//   • Team  — open the Teams panel (the single entry to the team surface); pick a
-//             card there to fill the wall with a team.
+//   • Split       — open a fresh pane beside this one (a "new" home picker).
+//   • Agent Teams — open the Teams panel (the single entry to the team surface);
+//                   pick a card there to fill the wall with a team.
 // Fleet/Files/Projects and session-switching moved OUT: those now come from the
 // sidebar and render in a terminal (the tab model), so this menu stays lean.
+
+// lucide "columns-2" — the Split glyph (a pane beside a pane).
+function Columns2Icon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M12 3v18" />
+    </svg>
+  );
+}
+// lucide "network" — the Agent Teams glyph (a hub over three nodes), matching the
+// sidebar Agent Teams item.
+function NetworkIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+      <rect x="16" y="16" width="6" height="6" rx="1" />
+      <rect x="2" y="16" width="6" height="6" rx="1" />
+      <rect x="9" y="2" width="6" height="6" rx="1" />
+      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+      <path d="M12 12V8" />
+    </svg>
+  );
+}
+
 export default function TerminalChipMenu() {
   const router = useRouter();
   const pathname = usePathname() ?? "/";
@@ -74,11 +98,17 @@ export default function TerminalChipMenu() {
             title={atCap ? "max 4 terminals" : "open a new terminal beside this one"}
             className={`${ROW} ${atCap ? "cursor-not-allowed text-zinc-700 hover:bg-transparent" : ""}`}
           >
-            <span>Split</span>
+            <span className="flex items-center gap-2.5">
+              <Columns2Icon />
+              Split
+            </span>
             <span className="text-zinc-600">＋</span>
           </button>
           <button type="button" onClick={openTeams} className={ROW}>
-            <span>Team</span>
+            <span className="flex items-center gap-2.5">
+              <NetworkIcon />
+              Agent Teams
+            </span>
           </button>
         </div>
       )}
