@@ -16,9 +16,45 @@ export type ReplPermission = {
 // assistant text run or a tool call. The live overlay renders these in sequence
 // so text and the tools it calls interleave exactly like the committed
 // transcript (a faithful running view of the turn, not just its latest step).
+// A tool block accumulates its input JSON from the stream (input_json_delta)
+// and gains a `title` once the block closes — the same one-line summary the
+// committed timeline shows (`cd /Users/…`, a file basename, a pattern) — so
+// live tool rows read like the real rows they'll become, not bare names.
 export type LiveBlock =
   | { type: "text"; text: string }
-  | { type: "tool"; id: string; name: string };
+  | { type: "tool"; id: string; name: string; inputJson: string; title?: string };
+
+// Client-side twin of lib/transcript.ts:toolTitle (that module is node:fs-bound,
+// so it can't be imported here). Keep the two in step.
+function liveToolTitle(name: string, input: Record<string, unknown>): string {
+  const s = (v: unknown) => (typeof v === "string" ? v : "");
+  const base = (p: unknown) => s(p).split("/").filter(Boolean).pop() ?? "";
+  switch (name) {
+    case "Edit":
+    case "MultiEdit":
+    case "Write":
+    case "Read":
+    case "NotebookEdit":
+      return base(input.file_path ?? input.notebook_path) || name;
+    case "Bash":
+      return s(input.command).split("\n")[0].slice(0, 90);
+    case "Grep":
+    case "Glob":
+      return s(input.pattern) || name;
+    case "Task":
+      return s(input.description) || s(input.subagent_type) || name;
+    case "WebFetch":
+      return s(input.url) || name;
+    case "WebSearch":
+      return s(input.query) || name;
+    case "TodoWrite":
+      return "todos";
+    default: {
+      const v = Object.values(input).find((x) => typeof x === "string");
+      return typeof v === "string" ? v.slice(0, 90) : name;
+    }
+  }
+}
 
 // Client side of the live REPL. Given a session id + an `enabled` flag (the
 // "live in HQ" status — true once HQ owns a warm process for this session, set
@@ -157,10 +193,35 @@ export function useRepl(sessionId: string | null, enabled: boolean) {
           else if (ev.type === "content_block_start" && ev.content_block?.type === "tool_use") {
             setLiveBlocks((bs) => [
               ...bs,
-              { type: "tool", id: String(ev.content_block!.id), name: String(ev.content_block!.name) },
+              { type: "tool", id: String(ev.content_block!.id), name: String(ev.content_block!.name), inputJson: "" },
             ]);
           } else if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") {
             appendText(ev.delta!.text ?? "");
+          } else if (ev.type === "content_block_delta" && ev.delta?.type === "input_json_delta") {
+            // Tool input streams as partial JSON right after its block starts;
+            // blocks are sequential within a message, so the open tool block is
+            // always the LAST one (same assumption appendText makes for text).
+            const part = String((ev.delta as { partial_json?: unknown }).partial_json ?? "");
+            if (part)
+              setLiveBlocks((bs) => {
+                const last = bs[bs.length - 1];
+                if (!last || last.type !== "tool" || last.title !== undefined) return bs;
+                return [...bs.slice(0, -1), { ...last, inputJson: last.inputJson + part }];
+              });
+          } else if (ev.type === "content_block_stop") {
+            // Close the open tool block: parse the accumulated input and stamp
+            // the committed-style title. No-op for text blocks.
+            setLiveBlocks((bs) => {
+              const last = bs[bs.length - 1];
+              if (!last || last.type !== "tool" || last.title !== undefined) return bs;
+              let title = last.name;
+              try {
+                title = liveToolTitle(last.name, JSON.parse(last.inputJson || "{}"));
+              } catch {
+                /* partial/malformed input — keep the bare name */
+              }
+              return [...bs.slice(0, -1), { ...last, title }];
+            });
           }
         }
       };

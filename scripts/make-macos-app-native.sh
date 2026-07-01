@@ -109,9 +109,22 @@ PLIST
 swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit -framework Carbon -framework CoreSpotlight
 chmod +x "$APP/Contents/MacOS/hq"
 
-# ad-hoc code signature — required for CoreSpotlight's XPC (an unsigned binary
-# fails with NSCocoaErrorDomain 4097). Free, local, no Apple account.
-codesign --force --sign - "$APP" 2>/dev/null && echo "ad-hoc signed" || echo "WARN: codesign failed"
+# Code signature. A signature is required for CoreSpotlight's XPC (an unsigned
+# binary fails with NSCocoaErrorDomain 4097) — but WHICH signature matters for
+# TCC: macOS keys privacy grants (Full Disk Access, Desktop/Documents/Downloads,
+# Photos, "data from other apps") on the app's designated requirement. An ad-hoc
+# signature (-) has none — its identity IS the build's cdhash — so every rebuild
+# looks like a brand-new app and TCC re-prompts / drops the grants. A STABLE
+# identity (any self-signed code-signing cert in the keychain) gives the bundle
+# a durable identity: grant Full Disk Access once and it survives app:rebuild.
+#   Create one (one-time): Keychain Access → Certificate Assistant → Create a
+#   Certificate… → name "hq-codesign", type "Code Signing" — or set
+#   HQ_SIGN_IDENTITY to any identity `security find-identity -v -p codesigning`
+#   lists. Falls back to ad-hoc (the old behavior) when neither exists.
+IDENTITY="${HQ_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/hq-codesign/ {print $2; exit}')}"
+codesign --force --sign "${IDENTITY:--}" "$APP" 2>/dev/null \
+  && echo "signed (${IDENTITY:-ad-hoc — TCC grants won't survive rebuilds; create an 'hq-codesign' cert, see comment})" \
+  || echo "WARN: codesign failed"
 
 # register so Spotlight indexes it now
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"

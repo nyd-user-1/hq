@@ -1535,7 +1535,12 @@ export default function Terminal({
       setHqOwned(d.hqOwned ?? false);
       setHqBusy(d.hqBusy ?? false);
       setChannelMode(d.channelMode ?? false);
-      setInterrupted(d.interrupted ?? false);
+      // Latched red while the local stop stands: the server needs a beat to see
+      // the stop marker (stops.ts write vs this 1s poll race), so an early read
+      // returning interrupted:false must not clobber stopSend's optimistic red.
+      // stoppedRef resets on the next doSend / a session switch — then the
+      // server value rules again.
+      setInterrupted(stoppedRef.current ? true : (d.interrupted ?? false));
       // LATCH the divergence net: raise on a rival, but NEVER clear on !diverged
       // here — HQ's next write advances knownLeaf past the rival, so a server
       // recompute returns diverged:false while the fork still exists. The latch
@@ -2704,6 +2709,12 @@ export default function Terminal({
     const target = sendTargetRef.current ?? pinned ?? resolvedId;
     if (!target) return;
     stoppedRef.current = true;
+    // Optimistic RED: the server does compute `interrupted` after a stop (the
+    // lib/stops.ts marker), but only a poll later — while `working` drops HERE,
+    // NOW. Without this, the border effect sees "turn finished, not interrupted"
+    // and plays the green done-flash before the red state ever lands. The poll
+    // below latches on stoppedRef so a pre-marker read can't flip it back.
+    setInterrupted(true);
     setItems((t) => [
       ...t,
       {
@@ -3362,32 +3373,46 @@ export default function Terminal({
             transcript poll above; this is the instant layer on top. */}
         {live &&
           (repl.liveBlocks.length > 0 || repl.permissions.length > 0) && (
-            <div className="flex flex-col gap-2">
-              {repl.liveBlocks.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
-                    <span className="mr-1.5 normal-case text-emerald-400">●</span>
-                    claude · live
-                  </span>
-                  {/* The whole in-flight turn, in emit order: text runs and the
-                      tools they call, interleaved (a faithful running view, not
-                      just the latest step). Append-only + ephemeral, so the array
-                      index is a stable key. */}
-                  <div className="flex flex-col gap-2 break-words rounded-md border border-emerald-500/30 bg-zinc-900/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
-                    {repl.liveBlocks.map((b, i) =>
-                      b.type === "text" ? (
-                        b.text ? <Markdown key={i} text={b.text} /> : null
-                      ) : (
-                        <span
-                          key={i}
-                          className="self-start rounded border border-zinc-700 px-1.5 py-px font-mono text-[10px] text-zinc-400"
-                        >
-                          {b.name}…
-                        </span>
-                      ),
-                    )}
+            <div className="flex flex-col gap-4">
+              {/* The in-flight turn, streamed as INDIVIDUAL boxes in emit order —
+                  each text run a claude box, each tool call its own row — styled
+                  to match the committed timeline they'll become when the poll
+                  commits the turn (the transcript poll is frozen while hq drives,
+                  so this overlay IS the turn until it lands). One green box with
+                  inline chips read as "everything crammed into the pending
+                  response"; this reads as the turn streaming in one step at a
+                  time. Append-only + ephemeral, so the array index is a stable
+                  key. */}
+              {repl.liveBlocks.map((b, i) =>
+                b.type === "text" ? (
+                  b.text ? (
+                    <div key={i} className="flex flex-col gap-1">
+                      <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500">
+                        <span className="mr-1.5 normal-case text-emerald-400">●</span>
+                        claude · live
+                      </span>
+                      <div className="break-words rounded-md border border-zinc-800 bg-zinc-900/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
+                        <Markdown text={b.text} />
+                      </div>
+                    </div>
+                  ) : null
+                ) : (
+                  // Mirrors the committed renderTool summary row (no menu/expand —
+                  // the input is still streaming; the real row replaces this on
+                  // commit). Title stamps in when the tool's input block closes.
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/30 px-3 py-1.5 font-mono text-xs"
+                  >
+                    <span className="text-zinc-600">›</span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-zinc-500">
+                      {b.name}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-zinc-300">
+                      {b.title ?? "…"}
+                    </span>
                   </div>
-                </div>
+                ),
               )}
               {repl.permissions.map((p) => (
                 <div

@@ -104,7 +104,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok });
   }
   if (action === "stop") {
-    recordHandoff(session, "to-terminal"); // wheel released to the TUI (deliberate stop only; reaper/grace bypass this route)
+    // NO handoff record here. A stop is an INTERRUPT — the wheel stays with hq
+    // (the next send re-resumes from disk); it is not a "resumed in terminal"
+    // edge. Recording "to-terminal" here drew a bogus divider on every
+    // interrupt — even on hq-born sessions no terminal ever touched — and made
+    // the NEXT send draw a matching bogus "resumed in hq". A terminal actually
+    // taking the wheel back is observed on the next send (isLiveTerminal →
+    // "fork-hq"), not asserted here.
     return NextResponse.json({ ok: await stopRepl(session) });
   }
   if (action === "answer") {
