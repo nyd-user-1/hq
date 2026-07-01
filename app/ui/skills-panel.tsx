@@ -24,8 +24,11 @@ function prefill(cmd: string) {
   );
 }
 
-export default function SkillsPanel() {
+export default function SkillsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useSkills();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [skills, setSkills] = useState<LibrarySkill[]>([]);
   const [q, setQ] = useState("");
   const [src, setSrc] = useState("all");
@@ -47,8 +50,8 @@ export default function SkillsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const query = q.trim().toLowerCase();
   const matchesQuery = useCallback(
@@ -75,14 +78,8 @@ export default function SkillsPanel() {
     .filter((s) => (src === "all" || s.sourceLabel === src) && matchesQuery(s))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return (
-    <AppPanel
-      rootId="skills-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="skills-panel.tsx">
+  const content = (
+    <>
         {/* header — search+refresh, or back+name in the drill-down */}
         {selected ? (
           <div className="flex shrink-0 items-center">
@@ -173,7 +170,17 @@ export default function SkillsPanel() {
             ? "Run loads the command into the terminal — hit enter to fire it."
             : `${skills.length} skills · yours, plugin-shipped, and built-in. Click one to open it.`}
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="skills-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="skills-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

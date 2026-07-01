@@ -13,8 +13,11 @@ import { useRoutines } from "@/app/ui/routines-state";
 // happens server-side (/api/routines) so lib/routines' node:fs never reaches the
 // browser; the existing RoutinePanel does the render + dispatch (on-demand fires
 // the prompt now, the rest hand off to /schedule, both via /api/terminal).
-export default function RoutinesPanel() {
+export default function RoutinesPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useRoutines();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [groups, setGroups] = useState<RoutineGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -35,17 +38,11 @@ export default function RoutinesPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
-  return (
-    <AppPanel
-      rootId="routines-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="routines-panel.tsx">
+  const content = (
+    <>
         {/* header — label + refresh, fixed above the scroll area */}
         <div className="flex shrink-0 items-center justify-between gap-2">
           <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">
@@ -97,7 +94,17 @@ export default function RoutinesPanel() {
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
           reads !hq/*launchpad/004 Routines.md live
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="routines-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="routines-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

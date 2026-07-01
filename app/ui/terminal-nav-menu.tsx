@@ -16,6 +16,7 @@ import { useHooks } from "@/app/ui/hooks-state";
 import { useMcp } from "@/app/ui/mcp-state";
 import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
+import { useConsole } from "@/app/ui/console-state";
 import { usePermissions } from "@/app/ui/permissions-state";
 import { useKpis } from "@/app/ui/kpi-state";
 import { useChangelog } from "@/app/ui/changelog-state";
@@ -131,6 +132,7 @@ export default function TerminalNavMenu({
     environmentPanel: useEnvironment(),
     trustedFoldersPanel: useTrustedFolders(),
   };
+  const consoleCtx = useConsole();
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
@@ -193,24 +195,44 @@ export default function TerminalNavMenu({
             )}
           </div>
           <div className="my-1 h-px bg-zinc-800" />
-          {ITEMS.map(({ key, Icon }) => (
-            <div key={key} className="relative" onMouseEnter={() => setFlyout(key)}>
-              <div className={`${ROW} justify-between ${flyout === key ? "bg-zinc-900 text-zinc-100" : ""}`}>
+          {ITEMS.map(({ key, Icon }) =>
+            key === "Console" ? (
+              // Console opens DIRECTLY now (no sub-flyout) — the container's own "⌄"
+              // switches panels.
+              <button
+                key={key}
+                type="button"
+                onMouseEnter={() => setFlyout(null)}
+                onClick={() => {
+                  consoleCtx.setOpen(true);
+                  close();
+                }}
+                className={`${ROW} w-full ${consoleCtx.open ? "bg-zinc-900 text-zinc-100" : ""}`}
+              >
                 <span className="flex items-center gap-2.5">
                   <Icon />
                   {key}
                 </span>
-                <Chevron />
-              </div>
-              {flyout === key && (
-                <div className="absolute top-0 z-50 pl-1" style={{ left: "100%" }}>
-                  <div className="flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
-                    {subItems(key).map(renderLeaf)}
-                  </div>
+              </button>
+            ) : (
+              <div key={key} className="relative" onMouseEnter={() => setFlyout(key)}>
+                <div className={`${ROW} justify-between ${flyout === key ? "bg-zinc-900 text-zinc-100" : ""}`}>
+                  <span className="flex items-center gap-2.5">
+                    <Icon />
+                    {key}
+                  </span>
+                  <Chevron />
                 </div>
-              )}
-            </div>
-          ))}
+                {flyout === key && (
+                  <div className="absolute top-0 z-50 pl-1" style={{ left: "100%" }}>
+                    <div className="flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+                      {subItems(key).map(renderLeaf)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ),
+          )}
           {/* top-level review panels — direct toggles (standalone Activity panels) */}
           <div className="my-1 h-px bg-zinc-800" />
           {REVIEW.map(({ title, toggle, Icon }) => (

@@ -22,8 +22,11 @@ function prefill(cmd: string) {
   );
 }
 
-export default function OutputStylesPanel() {
+export default function OutputStylesPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useOutputStyles();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [styles, setStyles] = useState<LibraryStyle[]>([]);
   const [q, setQ] = useState("");
   const [src, setSrc] = useState("all");
@@ -45,8 +48,8 @@ export default function OutputStylesPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const query = q.trim().toLowerCase();
   const matchesQuery = useCallback(
@@ -71,14 +74,8 @@ export default function OutputStylesPanel() {
     .filter((s) => (src === "all" || s.sourceLabel === src) && matchesQuery(s))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return (
-    <AppPanel
-      rootId="output-styles-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="output-styles-panel.tsx">
+  const content = (
+    <>
         {selected ? (
           <div className="flex shrink-0 items-center">
             <button
@@ -165,7 +162,17 @@ export default function OutputStylesPanel() {
             ? "Apply loads /output-style into the terminal — hit enter to switch the session."
             : `${styles.length} styles · yours, plugin-shipped, and built-in. Click one to open it.`}
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="output-styles-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="output-styles-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

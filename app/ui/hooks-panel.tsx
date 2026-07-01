@@ -25,8 +25,11 @@ const EVENT_ORDER = [
   "SessionEnd",
 ];
 
-export default function HooksPanel() {
+export default function HooksPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useHooks();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [hooks, setHooks] = useState<HookEntry[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,8 +49,8 @@ export default function HooksPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const query = q.trim().toLowerCase();
   const filtered = hooks.filter(
@@ -72,14 +75,8 @@ export default function HooksPanel() {
     });
   }, [filtered]);
 
-  return (
-    <AppPanel
-      rootId="hooks-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="hooks-panel.tsx">
+  const content = (
+    <>
         <div className="flex shrink-0 items-center gap-2">
           <input
             value={q}
@@ -130,7 +127,17 @@ export default function HooksPanel() {
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
           {hooks.length} hooks · user + project settings. Read-only — hooks load at session init.
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="hooks-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="hooks-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

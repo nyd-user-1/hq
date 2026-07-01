@@ -25,8 +25,11 @@ function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export default function PluginsPanel() {
+export default function PluginsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = usePlugins();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [catalog, setCatalog] = useState<CatalogPlugin[]>([]);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
@@ -53,8 +56,8 @@ export default function PluginsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   // fetch detail when a card is opened (or after a toggle bumps the nonce).
   useEffect(() => {
@@ -114,14 +117,8 @@ export default function PluginsPanel() {
     setDetailNonce((n) => n + 1);
   }, [load]);
 
-  return (
-    <AppPanel
-      rootId="plugins-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="plugins-panel.tsx">
+  const content = (
+    <>
         {/* header — search+refresh, or back+name in the drill-down */}
         {selected ? (
           <div className="flex shrink-0 items-center">
@@ -214,7 +211,17 @@ export default function PluginsPanel() {
             ? "The switch enables/disables it · changes apply next session."
             : `${catalog.length} plugins across your marketplaces · install enables it, the switch toggles it, changes apply next session.`}
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="plugins-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="plugins-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

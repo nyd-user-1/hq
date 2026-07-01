@@ -16,8 +16,11 @@ import type { LibraryCommand } from "@/lib/commands-library";
 
 const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
 
-export default function CommandsPanel() {
+export default function CommandsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useCommands();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [commands, setCommands] = useState<LibraryCommand[]>([]);
   const [q, setQ] = useState("");
   const [src, setSrc] = useState("all");
@@ -39,8 +42,8 @@ export default function CommandsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const query = q.trim().toLowerCase();
   const matchesQuery = useCallback(
@@ -66,14 +69,8 @@ export default function CommandsPanel() {
     .filter((c) => (src === "all" || c.sourceLabel === src) && matchesQuery(c))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return (
-    <AppPanel
-      rootId="commands-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="commands-panel.tsx">
+  const content = (
+    <>
         {selected ? (
           <div className="flex shrink-0 items-center">
             <button
@@ -160,7 +157,17 @@ export default function CommandsPanel() {
             ? "Run stages /name in the send box (in command color) — hit ↵ to run it."
             : `${commands.length} commands · built-in, yours, and plugin-shipped. Click one to open it.`}
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="commands-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="commands-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

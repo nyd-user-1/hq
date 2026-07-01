@@ -14,8 +14,11 @@ import type { LibraryAgent } from "@/lib/agents";
 // to drill in (model + tools + the agent's full system prompt). Agents are
 // dispatched by the model, not typed, so the action is Copy (the agent name).
 
-export default function AgentsPanel() {
+export default function AgentsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useAgents();
+  // Embedded = hosted inside the Console container (console-panel.tsx), which owns
+  // the AppPanel + Boundary and swaps panels in place. Standalone otherwise.
+  const active = embedded || open;
   const [agents, setAgents] = useState<LibraryAgent[]>([]);
   const [q, setQ] = useState("");
   const [src, setSrc] = useState("all");
@@ -37,8 +40,8 @@ export default function AgentsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const query = q.trim().toLowerCase();
   const matchesQuery = useCallback(
@@ -63,14 +66,8 @@ export default function AgentsPanel() {
     .filter((a) => (src === "all" || a.sourceLabel === src) && matchesQuery(a))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return (
-    <AppPanel
-      rootId="agents-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="agents-panel.tsx">
+  const content = (
+    <>
         {selected ? (
           <div className="flex shrink-0 items-center">
             <button
@@ -157,7 +154,17 @@ export default function AgentsPanel() {
             ? "Agents are dispatched by the model — Copy the name, then ask Claude to use it."
             : `${agents.length} agents · yours, plugin-shipped, and built-in. Click one to open it.`}
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="agents-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="agents-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }
