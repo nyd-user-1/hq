@@ -4,6 +4,7 @@ import Manifesto from "@/app/ui/landing/manifesto";
 import Observe from "@/app/ui/landing/observe";
 import Cost from "@/app/ui/landing/cost";
 import Control from "@/app/ui/landing/control";
+import Scale from "@/app/ui/landing/scale";
 import Moat from "@/app/ui/landing/moat";
 import Pricing from "@/app/ui/landing/pricing";
 import CTA from "@/app/ui/landing/cta";
@@ -28,6 +29,7 @@ export default function RootLanding() {
         <Observe />
         <Cost />
         <Control />
+        <Scale />
         <Moat />
         <Pricing />
         <CTA />

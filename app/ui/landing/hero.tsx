@@ -2,31 +2,28 @@ import Link from "next/link";
 import { Ping } from "./primitives";
 import TerminalDemo from "./terminal-demo";
 
-// Section 1 — the thesis, shown not told. Linear-grade craft: the wordmark as the
-// mark, one tight value headline, one concrete line, two real actions. Right: a
-// faithful, LIVE hq terminal running one turn on a loop, so the product IS the hero
-// image. Deliberately spare — nothing that isn't load-bearing.
+// Section 1 — the thesis, shown not told. Headline-led, Linear's structure: one
+// giant value headline (the green block cursor keeps the wordmark's identity),
+// one concrete line, two real actions, a mono trust strip — then the product IS
+// the hero image: a faithful, LIVE hq terminal running one turn on a loop, wide
+// beneath the headline. (The wordmark-led variant lives at 084d458 if we revert.)
 export default function Hero() {
   return (
     <section id="top" className="px-5 sm:px-8">
-      <div className="mx-auto grid max-w-6xl items-center gap-10 pb-20 pt-14 sm:pt-20 lg:grid-cols-[1fr_1.05fr] lg:gap-16">
-        <div>
+      <div className="mx-auto max-w-6xl pb-20 pt-16 sm:pt-24">
+        <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2.5 font-mono text-sm text-zinc-500">
             <Ping /> reading <span className="text-zinc-400">~/.claude</span>
           </div>
-          <div className="mt-7 flex items-end gap-2">
-            <h1 className="text-[88px] font-semibold leading-[0.78] tracking-[-0.05em] text-zinc-50 sm:text-[128px]">
-              hq
-            </h1>
+          <h1 className="mt-7 text-5xl font-semibold leading-[1.02] tracking-[-0.03em] text-zinc-50 sm:text-7xl">
+            Observability &amp; control for Claude&nbsp;Code.
             <span
-              className="mb-2.5 h-12 w-3 bg-green-500 sm:mb-5 sm:h-[70px] sm:w-4"
+              aria-hidden
+              className="ml-2 inline-block h-[0.8em] w-[0.42em] translate-y-[0.06em] bg-green-500"
               style={{ animation: "hq-cursor 1.1s steps(1) infinite" }}
             />
-          </div>
-          <h2 className="mt-7 max-w-xl text-4xl font-semibold leading-[1.02] tracking-[-0.02em] text-zinc-50 sm:text-5xl">
-            Observability &amp; control for Claude Code.
-          </h2>
-          <p className="mt-6 max-w-lg text-lg leading-relaxed text-zinc-400">
+          </h1>
+          <p className="mt-6 max-w-xl text-lg leading-relaxed text-zinc-400">
             Every session writes to disk — transcripts, tokens, tool calls, git. hq reads it back
             live, prices every turn, and types straight into the running terminal.{" "}
             <span className="text-zinc-200">No fork. One transcript.</span>
@@ -42,7 +39,7 @@ export default function Hero() {
               <span className="text-zinc-600">$</span> npm i -g <span className="text-green-400">@nysgpt/hq</span>
             </div>
           </div>
-          <div className="mt-9 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-900 pt-5 font-mono text-xs text-zinc-600">
+          <div className="mt-9 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-xs text-zinc-600">
             <span>localhost-only</span>
             <span className="text-zinc-800">·</span>
             <span>no DB</span>
@@ -55,7 +52,14 @@ export default function Hero() {
           </div>
         </div>
 
-        <div className="lg:pl-2">
+        <div className="relative mx-auto mt-16 max-w-4xl">
+          <div
+            aria-hidden
+            className="absolute -inset-x-10 -top-12 bottom-0 -z-10"
+            style={{
+              background: "radial-gradient(55% 55% at 50% 0%, rgba(37,99,235,0.14), transparent)",
+            }}
+          />
           <TerminalDemo />
         </div>
       </div>

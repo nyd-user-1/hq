@@ -1,4 +1,30 @@
 import { Section, SectionHead, Shot } from "./primitives";
+import type { Spec } from "./spec-drawer";
+
+const SPECS: Spec[] = [
+  {
+    n: "2.1",
+    title: "Priced on your machine",
+    desc: <>Per-model rates applied to the token counts on disk — including the ~2× long-context premium past the 200k cliff. An estimate by design; the math is yours to read.</>,
+    file: "lib/pricing.ts",
+  },
+  {
+    n: "2.2",
+    title: "The real limits",
+    desc: <>The five-hour window, the weekly cap, and the Opus sub-limit come from the usage data Claude Code itself reports — the same numbers the CLI statusline shows.</>,
+    file: "lib/usage.ts",
+  },
+  {
+    n: "2.3",
+    title: "Burn forecast",
+    desc: <>The current block projected to your next reset, so you see the wall before you hit it — not after the turn that crossed it.</>,
+  },
+  {
+    n: "2.4",
+    title: "The ledger",
+    desc: <>Every turn stamped the moment it lands: time · model · tokens · cumulative context · dollars. Cost while the session runs, not after the bill.</>,
+  },
+];
 
 // COST — the $ observability surfaces (api-panel + calls ledger), faithful to the
 // real thing with real numbers. Left: the live usage meters + 5h burn forecast.
@@ -70,6 +96,7 @@ export default function Cost() {
             and does the math on your machine.
           </>
         }
+        specs={SPECS}
       />
       <div className="mt-14 grid items-start gap-6 lg:grid-cols-2">
         <Shot chip="api-panel">

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import SpecDrawer, { type Spec } from "./spec-drawer";
 
 // Shared building blocks for the "/" landing (app/ui/landing/*). The whole page is
 // rendered in hq's own visual vocabulary — dashed boundary boxes, file-path chips,
@@ -78,17 +79,20 @@ export function Ping({ color = "#34d399" }: { color?: string }) {
 // The landing's structural spine, borrowed from Linear: a big two-tone headline on
 // the left, a short description + a numbered "N — NAME" index on the right. The index
 // is a real hq file path (the module the section is about), keeping it unmistakably
-// hq rather than a generic marketing counter.
+// hq rather than a generic marketing counter. Pass `specs` and the index line becomes
+// the TECH SPECS drawer trigger (Linear's numbered sub-spec drill-down).
 export function SectionHead({
   n,
   name,
   title,
   desc,
+  specs,
 }: {
   n: string;
   name: string;
   title: ReactNode;
   desc: ReactNode;
+  specs?: Spec[];
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
@@ -97,11 +101,15 @@ export function SectionHead({
       </h2>
       <div className="lg:pt-2">
         <p className="max-w-md text-lg leading-relaxed text-zinc-400">{desc}</p>
-        <div className="mt-6 inline-flex items-center gap-2.5 font-mono text-[13px] text-zinc-500">
-          <span className="text-zinc-600">{n}</span>
-          <span className="text-zinc-300">{name}</span>
-          <span className="text-blue-400">→</span>
-        </div>
+        {specs ? (
+          <SpecDrawer n={n} name={name} specs={specs} />
+        ) : (
+          <div className="mt-6 inline-flex items-center gap-2.5 font-mono text-[13px] text-zinc-500">
+            <span className="text-zinc-600">{n}</span>
+            <span className="text-zinc-300">{name}</span>
+            <span className="text-blue-400">→</span>
+          </div>
+        )}
       </div>
     </div>
   );

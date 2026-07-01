@@ -1,5 +1,32 @@
 import { Section, SectionHead } from "./primitives";
 import TerminalPane, { ToolStep } from "./terminal-pane";
+import type { Spec } from "./spec-drawer";
+
+const SPECS: Spec[] = [
+  {
+    n: "1.1",
+    title: "The reader",
+    desc: <>Turns, tool steps, and live working status parsed straight off the transcripts Claude Code already writes to <span className="font-mono text-zinc-300">~/.claude/projects</span>. No agent instrumentation, no SDK hooks.</>,
+    file: "lib/transcript.ts",
+  },
+  {
+    n: "1.2",
+    title: "The border is the status",
+    desc: <>Turn-state colors on the pane&apos;s own boundary — active <span className="font-mono text-blue-400">#2563eb</span>, thinking <span className="font-mono text-orange-400">#f97316</span>, done <span className="font-mono text-green-400">#22c55e</span> — with a traveling conic pulse while the model is writing.</>,
+    file: "terminal.tsx",
+  },
+  {
+    n: "1.3",
+    title: "The wall",
+    desc: <>Up to four controlled terminals side by side, each pinned to a live session. Agent-team teammates ride in as panes too, resolved to their real transcripts.</>,
+    file: "?wall",
+  },
+  {
+    n: "1.4",
+    title: "Costs nothing at rest",
+    desc: <>A 1s poll while a session is working; idle sessions are just files. There is no watcher fleet to babysit.</>,
+  },
+];
 
 // OBSERVE — hq's signature "money shot", the multi-session wall (the real ?wall view).
 // Two live panes side by side in different turn-states so the value reads instantly:
@@ -24,6 +51,7 @@ export default function Observe() {
             green just shipped, red stopped — the pane&apos;s own border carries the state, no dashboard to read.
           </>
         }
+        specs={SPECS}
       />
       <div className="mt-14 grid gap-6 lg:grid-cols-2">
         <TerminalPane
