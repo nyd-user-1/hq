@@ -235,6 +235,28 @@ function ArrowUpRightIcon() {
   );
 }
 
+// lucide "network" — the Agent Teams glyph, reused for the Teammates flyout item.
+function NetworkIcon() {
+  return (
+    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="16" y="16" width="6" height="6" rx="1" />
+      <rect x="2" y="16" width="6" height="6" rx="1" />
+      <rect x="9" y="2" width="6" height="6" rx="1" />
+      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+      <path d="M12 12V8" />
+    </svg>
+  );
+}
+
+// lucide "chevron-right" — marks a row that opens a flyout submenu.
+function ChevronRightIcon() {
+  return (
+    <svg className="size-3 text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
 function Sliders({ active }: { active: boolean }) {
   return (
     <svg className={`size-3.5 transition-colors ${active ? "text-zinc-300" : "text-zinc-600"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -276,6 +298,7 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
     width: number;
   } | null>(null);
   const [copiedId, setCopiedId] = useState(false); // ⋮-menu "copy id" feedback
+  const [menuFlyout, setMenuFlyout] = useState<string | null>(null); // ⋮-menu open flyout (e.g. "teammates")
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const menuRef = useRef<HTMLDetailsElement>(null);
 
@@ -458,10 +481,12 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
     const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
     setMenuPos({ top: r.bottom + 4, left, width: w });
     setMenuFor(id);
+    setMenuFlyout(null);
   };
   const closeMenu = () => {
     setMenuFor(null);
     setMenuPos(null);
+    setMenuFlyout(null);
   };
 
   // Archived sessions leave Recents for the browsable "Archived" group (still on
@@ -734,72 +759,91 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
         <div
           role="menu"
           onClick={(e) => e.stopPropagation()}
+          onMouseOver={() => setMenuFlyout(null)}
           style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
           className="fixed z-50 flex flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
         >
-          {/* read-only context. When the session is open in a terminal, lead with
-              "Terminal N" and drop the project down beside the branch (same small
-              font, inline); otherwise the project leads and the branch sits below. */}
-          <div className="flex flex-col gap-0.5 px-2 pb-1.5 pt-1">
-            <span className="min-w-0 truncate text-xs text-zinc-300">
-              {menuSlot > 0 ? `Terminal ${menuSlot}` : menuSession.project || "Unassigned"}
+          {/* identity leads: the session id (click to copy the full uuid) */}
+          <button
+            role="menuitem"
+            onClick={() => {
+              navigator.clipboard.writeText(menuSession.id);
+              setCopiedId(true);
+              window.setTimeout(() => setCopiedId(false), 1200);
+            }}
+            title={`click to copy ${menuSession.id}`}
+            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left font-mono text-[10px] text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-300"
+          >
+            {/* show the first segment; the click copies the FULL id */}
+            <span className="min-w-0 truncate">
+              {copiedId ? "copied ✓" : `${menuSession.id.slice(0, 8)}…`}
             </span>
-            {(menuSlot > 0 || menuSession.branch) && (
-              <span className="flex items-center gap-2 font-mono text-[10px] text-zinc-500">
-                {menuSlot > 0 && (
-                  <span className="min-w-0 truncate">{menuSession.project || "Unassigned"}</span>
-                )}
-                {menuSession.branch && (
-                  <span className="flex items-center gap-1" title={`branch: ${menuSession.branch}`}>
-                    <BranchIcon />
-                    <span className="min-w-0 truncate">{menuSession.branch}</span>
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
+          </button>
           <div className="my-1 h-px bg-zinc-800" />
-          {/* Teammate rows — only when this session is a team LEAD. Each opens the
-              teammate as the NEXT wall pane (Terminal 2/3/4); ↗ marks "opens beside".
-              At the very top, before Favorite, per the roster-first read. */}
+          {/* Teammates — a single row that opens a flyout submenu (mirrors the panel
+              nav menu's Activity/Console flyouts). Each teammate opens as the NEXT
+              wall pane (Terminal 2/3/4); the ↗ reveals on row hover. Only when this
+              session is a team LEAD. */}
           {menuTeam && menuTeam.teammates.length > 0 && (
             <>
-              <div className="px-2 pb-1 pt-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-                teammates
+              <div
+                className="relative"
+                onMouseOver={(e) => {
+                  e.stopPropagation();
+                  setMenuFlyout("teammates");
+                }}
+              >
+                <div
+                  className={`flex items-center justify-between gap-2.5 rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                    menuFlyout === "teammates" ? "bg-zinc-900 text-zinc-100" : "text-zinc-300"
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <NetworkIcon />
+                    Teammates
+                  </span>
+                  <ChevronRightIcon />
+                </div>
+                {menuFlyout === "teammates" && (
+                  <div className="absolute top-0 z-50 pl-1" style={{ left: "100%" }}>
+                    <div className="flex min-w-[9rem] flex-col whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+                      {menuTeam.teammates.map((tm) => {
+                        const ids = wallParam
+                          ? wallParam.split(",").map((x) => x.trim()).filter(Boolean)
+                          : [];
+                        const full = 1 + ids.length >= 4;
+                        return (
+                          <button
+                            key={tm.name}
+                            role="menuitem"
+                            disabled={full}
+                            onClick={() => {
+                              if (full) return;
+                              const sp = new URLSearchParams();
+                              if (current) sp.set("session", current);
+                              sp.set("wall", [...ids, `@tm:${menuTeam.teamId}:${tm.name}`].join(","));
+                              router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+                              closeMenu();
+                            }}
+                            title={full ? "max 4 terminals" : `open ${tm.name} as a wall pane`}
+                            className={`group flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                              full ? "cursor-not-allowed text-zinc-700" : "text-zinc-300 hover:bg-zinc-900"
+                            }`}
+                          >
+                            <span className={`text-[10px] leading-none ${TEAM_COLOR[tm.color] ?? "text-zinc-400"}`} aria-hidden>
+                              ●
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">{tm.name}</span>
+                            <span className="shrink-0 text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100">
+                              <ArrowUpRightIcon />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              {menuTeam.teammates.map((tm) => {
-                const ids = wallParam
-                  ? wallParam.split(",").map((x) => x.trim()).filter(Boolean)
-                  : [];
-                const full = 1 + ids.length >= 4;
-                return (
-                  <button
-                    key={tm.name}
-                    role="menuitem"
-                    disabled={full}
-                    onClick={() => {
-                      if (full) return;
-                      const sp = new URLSearchParams();
-                      if (current) sp.set("session", current);
-                      sp.set("wall", [...ids, `@tm:${menuTeam.teamId}:${tm.name}`].join(","));
-                      router.push(`${pathname}?${sp.toString()}`, { scroll: false });
-                      closeMenu();
-                    }}
-                    title={full ? "max 4 terminals" : `open ${tm.name} as a wall pane`}
-                    className={`flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs transition-colors ${
-                      full ? "cursor-not-allowed text-zinc-700" : "text-zinc-300 hover:bg-zinc-900"
-                    }`}
-                  >
-                    <span className={`text-[10px] leading-none ${TEAM_COLOR[tm.color] ?? "text-zinc-400"}`} aria-hidden>
-                      ●
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{tm.name}</span>
-                    <span className="shrink-0 text-zinc-500">
-                      <ArrowUpRightIcon />
-                    </span>
-                  </button>
-                );
-              })}
               <div className="my-1 h-px bg-zinc-800" />
             </>
           )}
@@ -823,10 +867,13 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
                   router.push(`${pathname}?${sp.toString()}`, { scroll: false });
                   closeMenu();
                 }}
-                className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+                className="group flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
               >
                 <SplitIcon />
-                Terminal {total + 1}
+                <span className="min-w-0 flex-1 truncate">Terminal {total + 1}</span>
+                <span className="shrink-0 text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100">
+                  <ArrowUpRightIcon />
+                </span>
               </button>
             );
           })()}
@@ -900,21 +947,25 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
             {menuSession.archived ? "Unarchive" : "Archive"}
           </button>
           <div className="my-1 h-px bg-zinc-800" />
-          <button
-            role="menuitem"
-            onClick={() => {
-              navigator.clipboard.writeText(menuSession.id);
-              setCopiedId(true);
-              window.setTimeout(() => setCopiedId(false), 1200);
-            }}
-            title={`click to copy ${menuSession.id}`}
-            className="flex items-center gap-2.5 rounded px-2 py-1.5 text-left font-mono text-[10px] text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-300"
-          >
-            {/* show the first segment; the click copies the FULL id */}
-            <span className="min-w-0 truncate">
-              {copiedId ? "copied ✓" : `${menuSession.id.slice(0, 8)}…`}
+          {/* context sits at the foot now: Terminal N (if open), then project + branch */}
+          <div className="flex flex-col gap-0.5 px-2 pb-1 pt-0.5">
+            <span className="min-w-0 truncate text-xs text-zinc-300">
+              {menuSlot > 0 ? `Terminal ${menuSlot}` : menuSession.project || "Unassigned"}
             </span>
-          </button>
+            {(menuSlot > 0 || menuSession.branch) && (
+              <span className="flex items-center gap-2 font-mono text-[10px] text-zinc-500">
+                {menuSlot > 0 && (
+                  <span className="min-w-0 truncate">{menuSession.project || "Unassigned"}</span>
+                )}
+                {menuSession.branch && (
+                  <span className="flex items-center gap-1" title={`branch: ${menuSession.branch}`}>
+                    <BranchIcon />
+                    <span className="min-w-0 truncate">{menuSession.branch}</span>
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>

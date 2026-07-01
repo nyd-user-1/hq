@@ -2,11 +2,16 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-// The account chip at the bottom of the sidebar — the Claude.ai account row, in
-// HQ's dark theme: avatar · name / plan · a get-apps button · a ▲▼ chevron that
-// opens an UPWARD menu (Settings · Language · Get help — View all plans · Get apps
-// · Learn more — Log out). Purely presentational for now (every item is a no-op
-// that just closes) — wired up later.
+import { usePermissions } from "@/app/ui/permissions-state";
+import { useSettings } from "@/app/ui/settings-state";
+import { useEnvironment } from "@/app/ui/environment-state";
+import { useTrustedFolders } from "@/app/ui/trusted-folders-state";
+
+// The account chip at the bottom of the sidebar. A lean "hq/settings" trigger + a
+// ▲▼ chevron that opens an UPWARD menu: Config (the four control panels, moved here
+// from the terminal kebab) · Settings · Channel (experimental) · Language · Get help
+// — View all plans · Get apps · Learn more — Log out. The Config toggles are live;
+// the rest is presentational for now.
 
 const SVG = {
   width: 15,
@@ -36,6 +41,16 @@ const IconSettings = () => (
   <svg {...SVG}>
     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
     <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+// lucide "sliders-horizontal" — the Config group, moved here from the terminal kebab.
+const IconConfig = () => (
+  <svg {...SVG}>
+    <line x1="21" y1="4" x2="14" y2="4" /><line x1="10" y1="4" x2="3" y2="4" />
+    <line x1="21" y1="12" x2="12" y2="12" /><line x1="8" y1="12" x2="3" y2="12" />
+    <line x1="21" y1="20" x2="16" y2="20" /><line x1="12" y1="20" x2="3" y2="20" />
+    <line x1="14" y1="2" x2="14" y2="6" /><line x1="8" y1="10" x2="8" y2="14" />
+    <line x1="16" y1="18" x2="16" y2="22" />
   </svg>
 );
 const IconGlobe = () => (
@@ -131,6 +146,13 @@ export default function AccountChip() {
   // local-only for now (presentational, like the rest of this menu).
   const [langOpen, setLangOpen] = useState(false);
   const [lang, setLang] = useState("English");
+  // Config — the four control panels, moved here from the terminal kebab. Expands
+  // inline (like Language). Toggles come from the same panel-state providers.
+  const [configOpen, setConfigOpen] = useState(false);
+  const permissions = usePermissions();
+  const settings = useSettings();
+  const environment = useEnvironment();
+  const trustedFolders = useTrustedFolders();
   const ref = useRef<HTMLDivElement>(null);
 
   // Pull the live toggle state each time the menu opens (cheap; reflects edits made
@@ -189,6 +211,42 @@ export default function AccountChip() {
           <div className="truncate px-2 py-1.5 font-mono text-[11px] text-zinc-500">
             brendan@nysgpt.com
           </div>
+          {/* Config — moved out of the terminal kebab; expands inline into its four
+              control panels, sitting just above Settings. */}
+          <button
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded={configOpen}
+            onClick={() => setConfigOpen((v) => !v)}
+            className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <span className="shrink-0 text-zinc-400"><IconConfig /></span>
+            <span className="min-w-0 flex-1 truncate">Config</span>
+            <span className={`shrink-0 text-zinc-600 transition-transform ${configOpen ? "rotate-90" : ""}`}>
+              <IconChevronRight />
+            </span>
+          </button>
+          {configOpen && (
+            <div role="menu" className="ml-[1.0625rem] border-l border-zinc-800 pl-1">
+              {[
+                { label: "Permissions", t: permissions },
+                { label: "Settings", t: settings },
+                { label: "Environment", t: environment },
+                { label: "Trusted Folders", t: trustedFolders },
+              ].map(({ label, t }) => (
+                <button
+                  key={label}
+                  role="menuitem"
+                  onClick={() => { t.toggle(); close(); }}
+                  className={`flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-900 ${
+                    t.open ? "text-zinc-100" : "text-zinc-300"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <MenuRow icon={<IconSettings />} label="Settings" hint="⇧⌘," onClick={close} />
           {/* The experimental channel-in toggle. A single stateful row (not two
               On/Off items) so the pill always reflects reality. Stays open on click
@@ -258,34 +316,19 @@ export default function AccountChip() {
         </div>
       )}
 
+      {/* Trigger — a lean "hq/settings" chip (avatar, name, plan, and the get-apps
+          button removed). The chevron opens the upward account menu. */}
       <div className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/40 p-1">
         <button
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="menu"
           aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1.5 py-1 transition-colors hover:bg-zinc-900"
+          className="flex min-w-0 flex-1 items-center justify-between gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-zinc-900"
         >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-zinc-700 text-xs font-semibold text-zinc-100">
-            B
+          <span className="truncate text-xs text-zinc-300">
+            hq<span className="text-zinc-600">/</span>settings
           </span>
-          <span className="flex min-w-0 flex-1 flex-col text-left leading-tight">
-            <span className="truncate text-xs font-semibold text-zinc-100">Brendan</span>
-            <span className="truncate text-[10px] text-zinc-500">Max plan</span>
-          </span>
-        </button>
-        <button
-          title="Get apps and extensions"
-          aria-label="Get apps and extensions"
-          className="flex shrink-0 items-center rounded-md border border-zinc-800 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
-        >
-          <IconDownload />
-        </button>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Account menu"
-          className="flex shrink-0 items-center rounded-md p-1 text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
-        >
-          <IconChevrons />
+          <span className="shrink-0 text-zinc-500"><IconChevrons /></span>
         </button>
       </div>
     </div>

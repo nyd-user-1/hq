@@ -971,8 +971,15 @@ export default function CommandPalette() {
       className="fixed inset-0 z-[70] flex items-start justify-center bg-black/30 px-4 pt-[11vh] backdrop-blur-[2px]"
     >
       <div
-        style={{ animation: "cmdk-pop-in 170ms cubic-bezier(0.16, 1, 0.3, 1)" }}
-        className={`relative flex ${editing ? "h-[78vh]" : "max-h-[72vh]"} w-[720px] max-w-[94vw] flex-col rounded-xl bg-zinc-950 shadow-2xl ring-1 ring-zinc-800/60`}
+        style={{
+          animation: "cmdk-pop-in 170ms cubic-bezier(0.16, 1, 0.3, 1)",
+          // Pinned inline (not Tailwind arbitrary classes) so the size holds even
+          // before the dev server regenerates CSS for new w-/h- values.
+          width: 756,
+          maxWidth: "94vw",
+          ...(editing ? { height: "78vh" } : { height: 489, maxHeight: "85vh" }),
+        }}
+        className="relative flex flex-col rounded-xl bg-zinc-950 shadow-2xl ring-1 ring-zinc-800/60"
       >
         <Boundary label="command-palette.tsx">
           {viewing ? (
