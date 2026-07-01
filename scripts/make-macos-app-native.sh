@@ -122,9 +122,14 @@ chmod +x "$APP/Contents/MacOS/hq"
 #   HQ_SIGN_IDENTITY to any identity `security find-identity -v -p codesigning`
 #   lists. Falls back to ad-hoc (the old behavior) when neither exists.
 IDENTITY="${HQ_SIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/hq-codesign/ {print $2; exit}')}"
-codesign --force --sign "${IDENTITY:--}" "$APP" 2>/dev/null \
-  && echo "signed (${IDENTITY:-ad-hoc — TCC grants won't survive rebuilds; create an 'hq-codesign' cert, see comment})" \
-  || echo "WARN: codesign failed"
+if [ -n "$IDENTITY" ]; then
+  codesign --force --sign "$IDENTITY" "$APP" 2>/dev/null \
+    && echo "signed ($IDENTITY)" || echo "WARN: codesign failed"
+else
+  codesign --force --sign - "$APP" 2>/dev/null \
+    && echo "ad-hoc signed (no hq-codesign cert found; TCC grants will NOT survive rebuilds)" \
+    || echo "WARN: codesign failed"
+fi
 
 # register so Spotlight indexes it now
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
