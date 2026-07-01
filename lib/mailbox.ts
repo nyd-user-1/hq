@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { randomUUID } from "node:crypto";
 
 // THE TEAM MAILBOX — the inter-agent messaging behind Claude Code's agent teams.
 // Every member has an inbox file; messages land there and are consumed (marked
@@ -147,7 +148,7 @@ export function sendMail(
       type: "message",
       read: false,
     });
-    const tmp = `${file}.tmp`;
+    const tmp = `${file}.${randomUUID().slice(0, 8)}.tmp`; // unique — concurrent sends can't race the temp
     fs.writeFileSync(tmp, JSON.stringify(list));
     fs.renameSync(tmp, file);
     return { ok: true };

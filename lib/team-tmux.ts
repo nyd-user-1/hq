@@ -48,7 +48,7 @@ export function recordTeamTmux(leadUuid: string, session: string): void {
     mkdirSync(join(homedir(), ".claude", "hq"), { recursive: true });
     const m = readSidecar();
     m[leadUuid] = session;
-    const tmp = `${SIDECAR}.tmp`;
+    const tmp = `${SIDECAR}.${randomUUID().slice(0, 8)}.tmp`; // unique — concurrent spawns can't race the temp
     writeFileSync(tmp, JSON.stringify(m));
     renameSync(tmp, SIDECAR);
   } catch {
@@ -225,16 +225,30 @@ export function spawnTeam(
     ]);
     tmux(["send-keys", "-t", session, "Enter"]);
     recordTeamTmux(uuid, session); // key by the lead's real transcript uuid
-    // Deliver the task once claude has booted (it can't accept input instantly).
-    // `--` guards a task prompt that begins with "-" from being read as a flag.
-    setTimeout(() => {
+    // Deliver the task once claude's interactive TUI is READY — POLL capture-pane
+    // for the input prompt rather than a fixed timer, so a slow boot never leaks the
+    // task into the shell (it'd run as commands) and a fast boot isn't made to wait.
+    // `--` guards a task that begins with "-". Caps at ~40s, then delivers anyway.
+    const READY = /accept edits on|for shortcuts|❯|│\s*>|bypassing permissions/i;
+    const deliver = (attempt: number) => {
+      let ready = false;
       try {
-        tmux(["send-keys", "-t", session, "-l", "--", task]);
-        tmux(["send-keys", "-t", session, "Enter"]);
+        ready = READY.test(tmux(["capture-pane", "-p", "-t", session]));
       } catch {
-        /* the team is still spawned; the prompt just didn't land */
+        /* pane not capturable yet */
       }
-    }, 13000);
+      if (ready || attempt >= 18) {
+        try {
+          tmux(["send-keys", "-t", session, "-l", "--", task]);
+          tmux(["send-keys", "-t", session, "Enter"]);
+        } catch {
+          /* the team is still spawned; the prompt just didn't land */
+        }
+        return;
+      }
+      setTimeout(() => deliver(attempt + 1), 2000);
+    };
+    setTimeout(() => deliver(0), 2500);
     return { ok: true, teamId, tmuxSession: session, leadSessionId: uuid };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "tmux spawn failed" };
