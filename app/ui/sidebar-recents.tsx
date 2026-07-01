@@ -35,6 +35,14 @@ type Recent = {
   related: string[];
 };
 
+// A live agent team, lite — enough to mark its lead session + list its teammates.
+type TeamLite = {
+  id: string;
+  leadSessionId: string;
+  leadTranscriptId?: string;
+  members: { name: string; color: string; isLead: boolean }[];
+};
+
 type GroupBy = "none" | "date" | "project" | "tree";
 const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
   { value: "none", label: "None" },
@@ -43,6 +51,16 @@ const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
   { value: "tree", label: "Tree" },
 ];
 const STORAGE_KEY = "hq:recents-group";
+
+// CC team `color` → a text-<color>-400 dot; unknown/blank → muted zinc.
+const TEAM_COLOR: Record<string, string> = {
+  blue: "text-blue-400",
+  green: "text-green-400",
+  red: "text-red-400",
+  yellow: "text-yellow-400",
+  magenta: "text-fuchsia-400",
+  cyan: "text-cyan-400",
+};
 
 function dateBucket(ts: number, now: number): string {
   const d = new Date(now);
@@ -207,6 +225,29 @@ function KebabIcon() {
   );
 }
 
+// lucide "network" — a hub with three connected nodes; marks the Agent Teams group.
+function NetworkIcon() {
+  return (
+    <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="16" y="16" width="6" height="6" rx="1" />
+      <rect x="2" y="16" width="6" height="6" rx="1" />
+      <rect x="9" y="2" width="6" height="6" rx="1" />
+      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+      <path d="M12 12V8" />
+    </svg>
+  );
+}
+
+// lucide "arrow-up-right" — the "open this teammate as a wall pane" affordance.
+function ArrowUpRightIcon() {
+  return (
+    <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 17 17 7" />
+      <path d="M7 7h10v10" />
+    </svg>
+  );
+}
+
 function Sliders({ active }: { active: boolean }) {
   return (
     <svg className={`size-3.5 transition-colors ${active ? "text-zinc-300" : "text-zinc-600"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -233,6 +274,7 @@ export default function SidebarRecents() {
   // T1 → ?session; a focused wall pane → rewrite that pane's ?wall token.
   const { activeKey } = useFocus();
   const [sessions, setSessions] = useState<Recent[]>([]);
+  const [teams, setTeams] = useState<TeamLite[]>([]); // live agent teams (their leads pin to the top)
   const [loaded, setLoaded] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("date"); // default: grouped by day (claude.ai-style)
   const [showHidden, setShowHidden] = useState(false);
@@ -295,6 +337,26 @@ export default function SidebarRecents() {
       alive = false;
       es?.close();
       window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
+  // Live agent teams — polled so their lead sessions surface in the Agent Teams
+  // group at the top and their kebab gains the teammate rows.
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/teams", { cache: "no-store" }).then((x) => x.json());
+        if (alive) setTeams(r?.teams ?? []);
+      } catch {
+        /* offline / no teams */
+      }
+    };
+    load();
+    const iv = setInterval(load, 10_000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
     };
   }, []);
 
@@ -422,11 +484,29 @@ export default function SidebarRecents() {
   const live = sessions.filter((s) => !s.archived);
   const hiddenCount = live.filter((s) => s.hidden).length;
   const visible = showHidden ? live : live.filter((s) => !s.hidden);
-  const groups = groupSessions(visible, groupBy);
+  // Agent Teams — the lead session of each live team pins to a group at the top and
+  // is excluded from the normal Recents groups (so it isn't listed twice). Keyed by
+  // the lead's REAL transcript id (== the Recent's session id).
+  const leadMap = new Map<string, { teamId: string; teammates: { name: string; color: string }[] }>();
+  for (const t of teams) {
+    const lead = t.leadTranscriptId || t.leadSessionId;
+    if (lead)
+      leadMap.set(lead, {
+        teamId: t.id,
+        teammates: t.members.filter((m) => !m.isLead).map((m) => ({ name: m.name, color: m.color })),
+      });
+  }
+  const teamLeadRows = visible.filter((s) => leadMap.has(s.id));
+  const groups = groupSessions(
+    visible.filter((s) => !leadMap.has(s.id)),
+    groupBy
+  );
   const menuSession = menuFor ? sessions.find((s) => s.id === menuFor) : null;
   // Which terminal (slot) this session is open in, 0 if not on screen. When open,
   // the menu header leads with "Terminal N" instead of the project.
   const menuSlot = menuSession ? slotOf(params, menuSession.id) : 0;
+  // If the kebab's session is a team LEAD, its teammates lead the menu.
+  const menuTeam = menuSession ? leadMap.get(menuSession.id) : null;
 
   // One session row — extracted so the Archived group reuses the exact same row
   // (label, favorite star, live dot, kebab) and the inline rename/project editor.
@@ -589,6 +669,18 @@ export default function SidebarRecents() {
         <p className="px-2.5 text-xs text-zinc-600">no recent sessions</p>
       ) : (
         <div className="scrollbar-none mt-2.5 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+          {/* Agent Teams — the live teams' LEAD sessions, pinned to the top. Same
+              row as any session (tooltip, live dot, kebab); the kebab additionally
+              leads with the teammate rows (see the menu block below). */}
+          {teamLeadRows.length > 0 && (
+            <div className="flex flex-col gap-0.5">
+              <span className="flex items-center gap-1.5 px-2.5 pb-0.5 pt-1 font-mono text-[10px] tracking-widest text-zinc-500">
+                <NetworkIcon />
+                Agent Teams
+              </span>
+              {teamLeadRows.map(renderRow)}
+            </div>
+          )}
           {groups.map((g, gi) => (
             <div key={g.label || `g${gi}`} className="flex flex-col gap-0.5">
               {/* first group's label is shown up in the top bar; only render
@@ -681,6 +773,50 @@ export default function SidebarRecents() {
             )}
           </div>
           <div className="my-1 h-px bg-zinc-800" />
+          {/* Teammate rows — only when this session is a team LEAD. Each opens the
+              teammate as the NEXT wall pane (Terminal 2/3/4); ↗ marks "opens beside".
+              At the very top, before Favorite, per the roster-first read. */}
+          {menuTeam && menuTeam.teammates.length > 0 && (
+            <>
+              <div className="px-2 pb-1 pt-0.5 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+                teammates
+              </div>
+              {menuTeam.teammates.map((tm) => {
+                const ids = wallParam
+                  ? wallParam.split(",").map((x) => x.trim()).filter(Boolean)
+                  : [];
+                const full = 1 + ids.length >= 4;
+                return (
+                  <button
+                    key={tm.name}
+                    role="menuitem"
+                    disabled={full}
+                    onClick={() => {
+                      if (full) return;
+                      const sp = new URLSearchParams();
+                      if (current) sp.set("session", current);
+                      sp.set("wall", [...ids, `@tm:${menuTeam.teamId}:${tm.name}`].join(","));
+                      router.push(`${pathname}?${sp.toString()}`, { scroll: false });
+                      closeMenu();
+                    }}
+                    title={full ? "max 4 terminals" : `open ${tm.name} as a wall pane`}
+                    className={`flex items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                      full ? "cursor-not-allowed text-zinc-700" : "text-zinc-300 hover:bg-zinc-900"
+                    }`}
+                  >
+                    <span className={`text-[10px] leading-none ${TEAM_COLOR[tm.color] ?? "text-zinc-400"}`} aria-hidden>
+                      ●
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{tm.name}</span>
+                    <span className="shrink-0 text-zinc-500">
+                      <ArrowUpRightIcon />
+                    </span>
+                  </button>
+                );
+              })}
+              <div className="my-1 h-px bg-zinc-800" />
+            </>
+          )}
           {(() => {
             // Add this session to the WALL as the next pane ("Terminal 2 → 3 → 4"
             // by how many are already up; 4 panes = the cap). Hidden if it's
