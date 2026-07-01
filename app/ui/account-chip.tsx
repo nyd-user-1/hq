@@ -108,6 +108,15 @@ const IconFlask = () => (
     <path d="M7 16h10" />
   </svg>
 );
+// lucide Server — the :3002 dev-server launchd agent (see lib/hq-dev.ts).
+const IconServer = () => (
+  <svg {...SVG}>
+    <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+    <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+    <line x1="6" x2="6.01" y1="6" y2="6" />
+    <line x1="6" x2="6.01" y1="18" y2="18" />
+  </svg>
+);
 
 function MenuRow({
   icon,
@@ -142,6 +151,9 @@ export default function AccountChip() {
   // proven warm-REPL "MVP" path. This menu is the ONLY way to turn it on, so it
   // can never engage by accident. Synced from /api/channel-mode when the menu opens.
   const [channelOn, setChannelOn] = useState(false);
+  // The :3002 dev-server toggle (lib/hq-dev.ts) — the UI face of /hq-dev. Same
+  // stateful-row pattern as Channel; synced from /api/hq-dev when the menu opens.
+  const [devOn, setDevOn] = useState(false);
   // Language sub-menu: expands inline under the Language row. Selection is
   // local-only for now (presentational, like the rest of this menu).
   const [langOpen, setLangOpen] = useState(false);
@@ -164,8 +176,29 @@ export default function AccountChip() {
       .then((r) => r.json())
       .then((d) => { if (alive) setChannelOn(!!d?.enabled); })
       .catch(() => {});
+    fetch("/api/hq-dev")
+      .then((r) => r.json())
+      .then((d) => { if (alive) setDevOn(!!d?.enabled); })
+      .catch(() => {});
     return () => { alive = false; };
   }, [open]);
+
+  const toggleDev = async () => {
+    const next = !devOn;
+    setDevOn(next); // optimistic; turning OFF from :3002 kills this very server
+    try {
+      const r = await fetch("/api/hq-dev", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const d = await r.json();
+      setDevOn(!!d?.enabled);
+    } catch {
+      // a failed fetch after "off" is expected when we ARE the dev server —
+      // keep the optimistic state rather than lying back to On
+    }
+  };
 
   const toggleChannel = async () => {
     const next = !channelOn;
@@ -269,6 +302,30 @@ export default function AccountChip() {
               }`}
             >
               {channelOn ? "On" : "Off"}
+            </span>
+          </button>
+          {/* The :3002 dev-server toggle (launchd com.hq.dev, lib/hq-dev.ts) — the
+              UI face of /hq-dev. Same stateful-row pattern as Channel above.
+              Emerald = running; zinc = off. Turning it OFF from the :3002 browser
+              kills the very server you're on — the desktop app is the cockpit. */}
+          <button
+            role="menuitemcheckbox"
+            aria-checked={devOn}
+            onClick={toggleDev}
+            className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+          >
+            <span className={`shrink-0 ${devOn ? "text-emerald-400" : "text-zinc-400"}`}>
+              <IconServer />
+            </span>
+            <span className="min-w-0 flex-1 truncate">
+              Dev server <span className="text-zinc-600">· :3002</span>
+            </span>
+            <span
+              className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                devOn ? "bg-emerald-500/15 text-emerald-300" : "bg-zinc-800 text-zinc-500"
+              }`}
+            >
+              {devOn ? "On" : "Off"}
             </span>
           </button>
           {/* Language expands inline into its options. The chevron rotates down
