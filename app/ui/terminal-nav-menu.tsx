@@ -63,12 +63,11 @@ const REVIEW = [
   { title: "Projects", toggle: "projectsPanel", Icon: ProjectsIcon },
   { title: "To Do", toggle: "todoPanel", Icon: TodoIcon },
 ] as const;
-// Agent Teams — the live team roster + the shared task list. A dedicated
-// top-level block (not a flyout leaf) so the entry into Teams is unambiguous.
-const TeamsIcon = () => (<svg {...IP}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>);
+// Tasks — the shared task list. Teams is NOT here: it's reached via the sidebar
+// Teams item (which opens the teams-panel), and Tasks/Mailbox drill in from a team
+// card there — so the kebab keeps only the standalone Tasks quick-toggle.
 const TasksIcon = () => (<svg {...IP}><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><line x1="13" y1="6" x2="21" y2="6" /><line x1="13" y1="12" x2="21" y2="12" /><line x1="13" y1="18" x2="21" y2="18" /></svg>);
 const TEAMS = [
-  { title: "Teams", toggle: "teamsPanel", Icon: TeamsIcon },
   { title: "Tasks", toggle: "tasksPanel", Icon: TasksIcon },
 ] as const;
 

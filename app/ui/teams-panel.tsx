@@ -4,12 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
-import MailboxFeed from "@/app/ui/mailbox-feed";
 import { withPins } from "@/app/ui/keep-pins";
 import { MAX_TERMINALS } from "@/app/ui/terminals";
 import { ago } from "@/lib/ago";
 import { useTeams } from "@/app/ui/teams-state";
 import { useTasks } from "@/app/ui/tasks-state";
+import { useMailbox } from "@/app/ui/mailbox-state";
 
 // hq's Teams panel — a standalone client-state portal, cloned from
 // skills-panel.tsx. ONE surface over the active agent teams spawned from your
@@ -55,6 +55,7 @@ function memberColor(c: string): string {
 export default function TeamsPanel() {
   const { open, setOpen } = useTeams();
   const { setOpen: setTasksOpen } = useTasks();
+  const { setOpen: setMailboxOpen } = useMailbox();
   const router = useRouter();
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
@@ -114,23 +115,11 @@ export default function TeamsPanel() {
     }
   };
 
-  // Drive lead — pin the lead session in Terminal 1 with the ?lead anchor (so T1
-  // locks to the lead and won't snap to newest), no teammate panes. Single-pane
-  // focus on the lead thread. withPins keeps the URL down to ?session/?wall/?lead.
-  const driveLead = (t: Team) => {
-    const lead = t.leadTranscriptId || t.leadSessionId;
-    const sp = new URLSearchParams(params.toString());
-    sp.set("session", lead);
-    sp.set("lead", lead);
-    router.push(withPins(pathname, `?${sp.toString()}`), { scroll: false });
-    setOpen(false);
-  };
-
-  // Open on wall — the full team across the wall: the lead anchored in T1 (drivable
-  // — send-keys for a tmux lead, the live session for an in-process one) and each
-  // teammate as a pane (a drivable tmux pane, or its read-only transcript when
-  // in-process). Mirrors the sidebar Teams item.
-  const openOnWall = (t: Team) => {
+  // Open the team on the wall — the WHOLE card is the affordance now (no buttons).
+  // Lead anchored in T1 (drivable — send-keys for a tmux lead, the live session for
+  // an in-process one) + each teammate as a pane. The Teams panel STAYS OPEN
+  // alongside the wall (the card is the switcher), so no setOpen(false).
+  const openWall = (t: Team) => {
     const lead = t.leadTranscriptId || t.leadSessionId;
     const teammates = t.members
       .filter((m) => !m.isLead)
@@ -145,10 +134,10 @@ export default function TeamsPanel() {
       sp.delete("lead");
     }
     router.push(withPins(pathname, `?${sp.toString()}`), { scroll: false });
-    setOpen(false);
   };
 
-  // Open the Tasks panel for this team — stash the id so the Tasks panel reads it.
+  // Drill into this team's Tasks / Mailbox — stash the team id so the drill-down
+  // panel reads it, then open the panel (the Teams panel stays open beside it).
   const openTasks = (t: Team) => {
     try {
       localStorage.setItem("hq-tasks-team", t.id);
@@ -156,6 +145,14 @@ export default function TeamsPanel() {
       /* ignore */
     }
     setTasksOpen(true);
+  };
+  const openMailbox = (t: Team) => {
+    try {
+      localStorage.setItem("hq-mailbox-team", t.id);
+    } catch {
+      /* ignore */
+    }
+    setMailboxOpen(true);
   };
 
   return (
@@ -241,7 +238,7 @@ export default function TeamsPanel() {
         <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2">
           {teams.length ? (
             teams.map((t) => (
-              <TeamCard key={t.id} team={t} onDrive={driveLead} onWall={openOnWall} onTasks={openTasks} />
+              <TeamCard key={t.id} team={t} onOpen={openWall} onTasks={openTasks} onMailbox={openMailbox} />
             ))
           ) : (
             <p className="px-0.5 font-mono text-[11px] leading-relaxed text-zinc-600">
@@ -253,7 +250,7 @@ export default function TeamsPanel() {
         {/* footer */}
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
           {teams.length
-            ? "Drive lead pins the lead terminal · Open on wall opens the team wall."
+            ? "Click a card to fill the wall with its team · Tasks / Mailbox drill in."
             : "Teams spawn when a session orchestrates a multi-agent crew."}
         </footer>
       </Boundary>
@@ -263,84 +260,92 @@ export default function TeamsPanel() {
 
 function TeamCard({
   team,
-  onDrive,
-  onWall,
+  onOpen,
   onTasks,
+  onMailbox,
 }: {
   team: Team;
-  onDrive: (t: Team) => void;
-  onWall: (t: Team) => void;
+  onOpen: (t: Team) => void;
   onTasks: (t: Team) => void;
+  onMailbox: (t: Team) => void;
 }) {
   const members = team.members ?? [];
+  const label = `Team ${team.id.replace(/^session-/, "")}`;
   return (
-    <div className="rounded-md border border-zinc-800/70 bg-zinc-900/30 p-2.5">
-      {/* header — name · member count · relative createdAt */}
+    // The WHOLE card is the affordance — click it to fill the wall with this team.
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(team)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(team);
+        }
+      }}
+      title="Open this team on the wall"
+      className="cursor-pointer rounded-md border border-zinc-800/70 bg-zinc-900/30 p-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900/50"
+    >
+      {/* header — Team <id> · N agents · age */}
       <div className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-zinc-200">{team.name}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-zinc-200">{label}</span>
         <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-600">
           {members.length} {members.length === 1 ? "agent" : "agents"}
+          {team.createdAt ? ` · ${ago(team.createdAt)}` : ""}
         </span>
       </div>
-      {team.createdAt ? (
-        <div className="mt-0.5 font-mono text-[10px] text-zinc-600">{ago(team.createdAt)}</div>
-      ) : null}
 
-      {/* roster — one row per member */}
-      <div className="mt-3 flex flex-col gap-2">
-        {members.map((m) => (
-          <div key={m.agentId || m.name} className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className={`shrink-0 text-[10px] leading-none ${memberColor(m.color)}`} aria-hidden>●</span>
-              <span className="truncate font-mono text-[12px] text-zinc-200">{m.name}</span>
-              {m.agentType && (
-                <span className="shrink-0 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-zinc-400">
+      {/* roster — lead ★, teammates ●-colored; name primary, a terse task hint
+          secondary; agentType pill ONLY when it's non-default (not the noise). */}
+      <div className="mt-3 flex flex-col gap-1.5">
+        {members.map((m) => {
+          const custom = m.agentType && m.agentType !== "general-purpose" && m.agentType !== "team-lead";
+          return (
+            <div key={m.agentId || m.name} className="flex items-baseline gap-1.5">
+              {m.isLead ? (
+                <span className="shrink-0 text-[10px] leading-none text-amber-400" aria-hidden>★</span>
+              ) : (
+                <span className={`shrink-0 text-[10px] leading-none ${memberColor(m.color)}`} aria-hidden>●</span>
+              )}
+              <span className="shrink-0 font-mono text-[12px] text-zinc-200">{m.name}</span>
+              {custom && (
+                <span className="shrink-0 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-zinc-500">
                   {m.agentType}
                 </span>
               )}
-              {m.isLead && (
-                <span className="shrink-0 rounded bg-blue-500/15 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-blue-300">
-                  lead
+              {!m.isLead && m.prompt && (
+                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-600">
+                  {m.prompt.split("\n")[0]}
                 </span>
               )}
             </div>
-            {!m.isLead && m.prompt && (
-              <p className="truncate pl-3 font-mono text-[10px] text-zinc-600">{m.prompt}</p>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* actions */}
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      {/* drill-downs — stopPropagation so they don't also open the wall */}
+      <div className="mt-3 flex items-center gap-4 border-t border-dashed border-zinc-800 pt-2.5">
         <button
           type="button"
-          onClick={() => onDrive(team)}
-          title="Pin the lead session as the main terminal"
-          className="shrink-0 rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
-          Drive lead
-        </button>
-        <button
-          type="button"
-          onClick={() => onWall(team)}
-          title="Pin the lead and open the team wall"
-          className="shrink-0 rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
-          Open on wall
-        </button>
-        <button
-          type="button"
-          onClick={() => onTasks(team)}
-          title="Open this team's tasks"
-          className="ml-auto shrink-0 font-mono text-[10px] text-blue-400 transition-colors hover:text-blue-300"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTasks(team);
+          }}
+          className="font-mono text-[10px] text-blue-400 transition-colors hover:text-blue-300"
         >
           Tasks →
         </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMailbox(team);
+          }}
+          className="font-mono text-[10px] text-blue-400 transition-colors hover:text-blue-300"
+        >
+          Mailbox →
+        </button>
       </div>
-
-      {/* live inter-agent traffic + a composer to message a member directly */}
-      <MailboxFeed teamId={team.id} members={members.map((m) => m.name)} />
     </div>
   );
 }

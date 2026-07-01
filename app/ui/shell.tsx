@@ -46,6 +46,8 @@ import { TeamsProvider } from "@/app/ui/teams-state";
 import TeamsPanel from "@/app/ui/teams-panel";
 import { TasksProvider } from "@/app/ui/tasks-state";
 import TasksPanel from "@/app/ui/tasks-panel";
+import { MailboxProvider } from "@/app/ui/mailbox-state";
+import MailboxPanel from "@/app/ui/mailbox-panel";
 import { IssuesProvider } from "@/app/ui/issues-state";
 import IssuesPanel from "@/app/ui/issues-panel";
 import { TreeProvider } from "@/app/ui/tree-state";
@@ -126,6 +128,7 @@ export default async function Shell({
       <TodoPanelProvider>
       <TeamsProvider>
       <TasksProvider>
+      <MailboxProvider>
       <IssuesProvider>
       <TreeProvider>
       <RoutinesProvider>
@@ -233,6 +236,7 @@ export default async function Shell({
               + ~/.claude/tasks). */}
           <div id="teams-panel-root" className="flex h-full min-w-0" />
           <div id="tasks-panel-root" className="flex h-full min-w-0" />
+          <div id="mailbox-panel-root" className="flex h-full min-w-0" />
           {/* GitHub Issues — a Changelog sibling (gh-backed), read straight from
               the repo's issue tracker. */}
           <div id="issues-panel-root" className="flex h-full min-w-0" />
@@ -280,6 +284,7 @@ export default async function Shell({
       <TodoPanel />
       <TeamsPanel />
       <TasksPanel />
+      <MailboxPanel />
       <IssuesPanel />
       <TreePanel />
       <RoutinesPanel />
@@ -308,6 +313,7 @@ export default async function Shell({
       </RoutinesProvider>
       </TreeProvider>
       </IssuesProvider>
+      </MailboxProvider>
       </TasksProvider>
       </TeamsProvider>
       </TodoPanelProvider>
