@@ -22,7 +22,13 @@ type Task = {
   blocks?: string[];
   blockedBy?: string[];
 };
-type Team = { id: string; name: string; createdAt: number };
+type Team = {
+  id: string;
+  name: string;
+  createdAt: number;
+  leadSessionId?: string;
+  leadTranscriptId?: string;
+};
 
 // status → dot color; in_progress pulses.
 function statusDot(status?: string): string {
@@ -50,12 +56,23 @@ export default function TasksPanel() {
       } catch {
         /* no storage */
       }
-      // fallback: newest team from /api/teams
+      // fallback: the team on the OPEN wall (its lead is ?lead/?session), else the
+      // newest. Reads window.location once on open — no useSearchParams, no Suspense.
       if (!teamId) {
         const tr = await fetch("/api/teams", { cache: "no-store" }).then((r) => r.json());
         const arr: Team[] = tr?.teams ?? [];
+        let lead = "";
+        try {
+          const p = new URLSearchParams(window.location.search);
+          lead = p.get("lead") || p.get("session") || "";
+        } catch {
+          /* no window */
+        }
+        const onWall = lead
+          ? arr.find((t) => t.leadTranscriptId === lead || t.leadSessionId === lead || t.id === lead)
+          : undefined;
         const newest = [...arr].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
-        teamId = newest?.id ?? "";
+        teamId = (onWall ?? newest)?.id ?? "";
       }
       // The owning team, shown at the top so it's unmistakable whose tasks these
       // are: "Team c4921e42" from "session-c4921e42".
