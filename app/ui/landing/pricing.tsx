@@ -59,9 +59,9 @@ export default function Pricing() {
         </div>
 
         <div className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900/30 p-8">
-          <div className="font-mono text-xs uppercase tracking-wider text-zinc-500">Fleet</div>
+          <div className="font-mono text-xs uppercase tracking-wider text-zinc-500">Enterprise</div>
           <div className="mt-4 text-5xl font-semibold text-zinc-50">Custom</div>
-          <p className="mt-3 text-[15px] leading-relaxed text-zinc-400">Fleet governance, SSO, deployment support.</p>
+          <p className="mt-3 text-[15px] leading-relaxed text-zinc-400">Org-wide governance, SSO, deployment support.</p>
           <ul className="mt-6 flex flex-col gap-2.5 text-[15px] text-zinc-300">
             <Feat>SSO &amp; audit</Feat>
             <Feat>Org-wide policies</Feat>

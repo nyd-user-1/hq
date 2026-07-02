@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react";
 import type { MetricItem } from "@/lib/fleet";
-import FleetShotBoard from "./fleet-shot-board";
+import DashboardBoard from "./dashboard-board";
 
-// The hero's product shot — the REAL fleet board ("Analytics"), fetched from the
-// same /api/fleet/metrics the real FleetView polls, rendered by the real
-// KpiTile/ShapeCard components. Not a mockup: live numbers off disk, refreshed
-// on the view's own 8s cadence. (Client-fetched because the landing mounts
-// inside the client Terminal1Slot — lib/fleet's node:fs can't cross that
-// boundary.) The metric set mirrors the preferred board: six stat cards, the
-// three temporal areas, the two rankings.
+// The landing's analytics dashboard — the REAL Analytics board, fetched from the
+// same /api/fleet/metrics the live view polls, rendered by the real ShapeCard
+// components. Not a mockup: live numbers off disk, refreshed on the view's own 8s
+// cadence. (Client-fetched because the landing mounts inside the client
+// Terminal1Slot — the reader's node:fs can't cross that boundary.) The metric set
+// mirrors the preferred board: six stat cards + the three temporal areas.
 const IDS = [
   "f_sessions",
   "f_tokens",
@@ -23,7 +22,7 @@ const IDS = [
   "tokens_stacked_area",
 ].join(",");
 
-export default function FleetShot() {
+export default function DashboardShot() {
   const [items, setItems] = useState<MetricItem[] | null>(null);
 
   useEffect(() => {
@@ -44,5 +43,5 @@ export default function FleetShot() {
   }, []);
 
   if (!items) return <div aria-hidden className="h-full" />;
-  return <FleetShotBoard items={items} />;
+  return <DashboardBoard items={items} />;
 }

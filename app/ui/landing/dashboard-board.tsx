@@ -3,8 +3,15 @@
 import type { MetricItem } from "@/lib/fleet";
 import { ShapeCard } from "@/app/ui/fleet-view";
 
+// The fixed board layout for the landing's analytics dashboard section — the
+// preferred Analytics view, laid out like the real dashboard but without the
+// drag/resize/persist machinery (this is a product shot, not a workspace).
+// Cells are the REAL ShapeCard components, so tooltips, the range picker, and
+// the rAF path-morph all work. Heights are explicit because the cards fill their
+// parent.
+
 // Landing-only stat tile — value-only, larger, three-across (Brendan's live
-// devtools edit persisted). The real fleet view keeps the labeled KpiTile.
+// devtools edit persisted). The real analytics view keeps the labeled KpiTile.
 const TONE: Record<string, string> = {
   green: "text-green-400",
   blue: "text-blue-400",
@@ -24,12 +31,7 @@ function ShotStat({ value, tone }: { value: string; tone?: string }) {
   );
 }
 
-// The fixed board layout for the landing hero — the preferred Analytics view,
-// laid out like the real fleet board but without FleetGrid's drag/resize/persist
-// machinery (this is a product shot, not a workspace). Cells are the REAL
-// KpiTile/ShapeCard components, so tooltips, the range picker, and the rAF
-// path-morph all work. Heights are explicit because the cards fill their parent.
-export default function FleetShotBoard({ items }: { items: MetricItem[] }) {
+export default function DashboardBoard({ items }: { items: MetricItem[] }) {
   const by = new Map(items.map((it) => [it.id, it]));
   const stat = (id: string) => {
     const it = by.get(id);

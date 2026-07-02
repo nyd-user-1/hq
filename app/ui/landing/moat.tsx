@@ -4,19 +4,19 @@ import type { Spec } from "./spec-drawer";
 
 const SPECS: Spec[] = [
   {
-    n: "5.1",
+    n: "4.1",
     title: "Three dependencies",
     desc: <><span className="font-mono text-zinc-300">next · react · react-dom</span>. The whole stack — no ORM, no state library, no chart library, no auth provider.</>,
     file: "package.json",
   },
   {
-    n: "5.2",
+    n: "4.2",
     title: "The disk is the database",
     desc: <>Claude Code writes transcripts, tokens, and tool calls to <span className="font-mono text-zinc-300">~/.claude</span>; hq reads them back with <span className="font-mono text-zinc-300">node:fs</span>. Nothing to sync, migrate, or host.</>,
     file: "lib/transcript.ts",
   },
   {
-    n: "5.3",
+    n: "4.3",
     title: "Localhost-only",
     desc: <>No accounts, so no auth. No server, so no telemetry. Your history never leaves the machine that produced it.</>,
   },
@@ -35,7 +35,7 @@ export default function Moat() {
   return (
     <Section id="moat">
       <SectionHead
-        n="5.0"
+        n="4.0"
         name="Moat"
         title="The architecture is the moat."
         desc={
