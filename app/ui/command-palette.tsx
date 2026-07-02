@@ -536,7 +536,14 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    // Warm the two slow cold caches at app start (projects head-reads every
+    // transcript + git; commits git-logs every repo) so the user's FIRST ⌘K "all"
+    // search is warm, not a ~3s cold hit. Fire-and-forget; both cache for minutes.
+    fetch("/api/command-search?q=hq&scope=projects").catch(() => {});
+    fetch("/api/command-search?q=hq&scope=commits").catch(() => {});
+  }, []);
 
   // ⌘K is search-FIRST. The Menu scope only filters commands, so typing a query
   // there yields "no results" (the confusing state). The first keystroke jumps to
