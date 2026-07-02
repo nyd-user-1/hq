@@ -56,7 +56,7 @@ export default function HeroVideo() {
         ref={ref}
         onClick={togglePlay}
         className="h-full w-full cursor-pointer object-cover"
-        src="https://github.com/nyd-user-1/hq/releases/download/assets-v1/hq-short-video.mp4"
+        src="https://9lzokxs8sfpxikag.public.blob.vercel-storage.com/hq-short-video.mp4"
         autoPlay
         muted
         loop
