@@ -1,4 +1,3 @@
-import LandingNav from "@/app/ui/landing/nav";
 import Hero from "@/app/ui/landing/hero";
 import Manifesto from "@/app/ui/landing/manifesto";
 import Observe from "@/app/ui/landing/observe";
@@ -27,7 +26,8 @@ export default function RootLanding() {
       className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth"
       style={{ background: "#010102" }}
     >
-      <LandingNav />
+      {/* Navbar removed (Brendan, 7/2) — the landing opens straight on the hero;
+          landing/nav.tsx kept on disk in case it returns. */}
       <main>
         <Hero />
         <Manifesto />
