@@ -40,17 +40,10 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* The frame — Linear's hero app-shot chrome around the real fleet board. */}
+      {/* The frame — Linear's hero app-shot chrome around the real fleet board.
+          (Linear's lit gradient floor was tried and cut — the dashboard reads
+          better floating on the pure marketing black.) */}
       <div className="relative mx-auto mt-14 w-full max-w-[1320px] pb-14 sm:mt-16">
-        {/* the lit gradient floor behind/below the frame */}
-        <div
-          aria-hidden
-          className="absolute -inset-x-4 bottom-0 top-8 rounded-2xl"
-          style={{
-            background:
-              "radial-gradient(52.53% 57.5% at 50% 100%, rgba(8,9,10,0) 0%, rgba(8,9,10,0.5) 100%), linear-gradient(180deg, #08090a 10%, #d0d6e0 100%)",
-          }}
-        />
         <div
           className="relative rounded-xl p-2"
           style={{ background: "#090a0b", boxShadow: "0px 7px 32px #00000059" }}
