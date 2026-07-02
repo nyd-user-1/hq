@@ -451,7 +451,6 @@ const PAGE = 25; // how many search results to reveal per lazy-load step
 //           Files view; ⌘K stays a launcher).
 // the rest narrow to one corpus.
 const SCOPE_CHIPS: { scope: string; label: string }[] = [
-  { scope: "menu", label: "Menu" },
   { scope: "all", label: "All" },
   { scope: "files", label: "Files" },
   { scope: "favorites", label: "Favorites" },
@@ -466,7 +465,6 @@ const SCOPE_CHIPS: { scope: string; label: string }[] = [
 // Which view ⌘K opens to — Menu (launcher) by default, or All (search). Persisted
 // via the footer toggle so a user who lives in search can make it their landing.
 type DefaultScope = "menu" | "all";
-const DEFAULT_SCOPE_KEY = "hq-cmdk-default";
 
 // Wrap the query's terms in the result snippet so the matched keyword pops (the
 // FTS snippet already centers on the match; this just makes it visible).
@@ -487,12 +485,9 @@ function highlightSnippet(text: string, query: string): ReactNode {
       )
   );
 }
+// ⌘K is a SEARCH tool now (no Menu scope) — it always opens on All.
 function readDefaultScope(): DefaultScope {
-  try {
-    return localStorage.getItem(DEFAULT_SCOPE_KEY) === "all" ? "all" : "menu";
-  } catch {
-    return "menu";
-  }
+  return "all";
 }
 const SCOPE_ALIASES: Record<string, string> = {
   file: "files", files: "files",
@@ -519,8 +514,7 @@ export default function CommandPalette() {
 
   const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState("menu"); // ⌘K view: menu (commands) · all (search) · a corpus
-  const [defaultScope, setDefaultScopeState] = useState<DefaultScope>("menu"); // which view opens (persisted)
+  const [scope, setScope] = useState("all"); // ⌘K view: all (search) · a corpus filter
   const [sel, setSel] = useState(0);
   const [hits, setHits] = useState<Hit[]>([]);
   const [shown, setShown] = useState(PAGE); // lazy-load window over the Search results
@@ -558,17 +552,6 @@ export default function CommandPalette() {
       router.push(withPins(href, window.location.search), { scroll: false }),
     [router]
   );
-
-  // Set + persist which view ⌘K opens to next time (the footer toggle). Doesn't
-  // change the current view — chips do that; this only steers the landing.
-  const setDefaultScope = useCallback((d: DefaultScope) => {
-    setDefaultScopeState(d);
-    try {
-      localStorage.setItem(DEFAULT_SCOPE_KEY, d);
-    } catch {
-      /* private mode — default just won't persist */
-    }
-  }, []);
 
   // ←/→ step through the scope chips (Menu · All · Files · …) from the keyboard,
   // wrapping at the ends. Bound at the input's text edges so it never fights the
@@ -761,9 +744,7 @@ export default function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     setQ("");
-    const def = readDefaultScope();
-    setScope(def);
-    setDefaultScopeState(def);
+    setScope(readDefaultScope()); // always "all" — ⌘K is search-first
     setSel(0);
     setHits([]);
     setShown(PAGE);
@@ -1241,10 +1222,10 @@ export default function CommandPalette() {
                       cycleScope(-1);
                       return;
                     }
-                    // Backspace on an empty query clears an active scope chip.
-                    if (e.key === "Backspace" && !q && scope !== "menu") {
+                    // Backspace on an empty query clears an active scope filter → All.
+                    if (e.key === "Backspace" && !q && scope !== "all") {
                       e.preventDefault();
-                      setScope("menu");
+                      setScope("all");
                       return;
                     }
                     onKeyDown(e);
@@ -1413,24 +1394,6 @@ export default function CommandPalette() {
                     : `${flat.length} result${flat.length === 1 ? "" : "s"}`}
                 </span>
                 <div className="flex items-center gap-3">
-                  {/* Default-view toggle — which scope ⌘K opens to (persisted). */}
-                  <span className="flex items-center gap-1">
-                    <span className="text-zinc-700">default</span>
-                    {(["menu", "all"] as const).map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setDefaultScope(d)}
-                        title={`Open ⌘K to ${d === "menu" ? "the command launcher" : "All search"} by default`}
-                        className={`rounded px-1 transition-colors ${
-                          defaultScope === d
-                            ? "text-blue-300"
-                            : "text-zinc-600 hover:text-zinc-400"
-                        }`}
-                      >
-                        {d === "menu" ? "Menu" : "All"}
-                      </button>
-                    ))}
-                  </span>
                   <span className="hidden sm:inline">↑↓ navigate · ←→ scope · ↵ open · esc close</span>
                 </div>
               </div>

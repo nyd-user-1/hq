@@ -53,6 +53,24 @@ const ORDER: SearchScope[] = [
   "sdk",
 ];
 
+// Unscoped ⌘K "all" fans out ONLY the fast corpora so search is lightning-fast
+// even cold. Excluded here (reachable via their own scope chip): "projects"
+// (head-reads EVERY transcript + sync git per repo — ~2.4s cold), "docs" (5MB
+// normalize), "scripts"/"sdk" (niche, extra head-reads). This is a perf bound on
+// the default BROWSE, not a content filter — every corpus is still searchable by
+// selecting its chip (AGENTS.md search contract).
+const ALL_ORDER: SearchScope[] = [
+  "transcripts",
+  "files",
+  "sessions",
+  "commits",
+  "components",
+  "todos",
+  "memory",
+  "notes",
+  "skills",
+];
+
 const RRF_K = 60; // Reciprocal Rank Fusion constant (qmd uses k=60)
 const PER = 25; // hits pulled per corpus — deep enough to lazy-load through
 // Typo-recovery (bounded Levenshtein over ~1500 metadata items) is a FALLBACK for
@@ -91,7 +109,7 @@ export async function GET(req: Request) {
   // Scope filter (⌘K chip / "/file " prefix): restrict to one corpus, or "all".
   const reqScope = searchParams.get("scope") ?? "all";
   const scoped = reqScope !== "all" && ORDER.includes(reqScope as SearchScope);
-  const order = scoped ? [reqScope as SearchScope] : ORDER;
+  const order = scoped ? [reqScope as SearchScope] : ALL_ORDER;
   // Empty query: a browse, never blank. A scope chip browses that whole corpus
   // newest-first; unscoped "all" shows a CROSS-CORPUS recents feed (recent("all")
   // — transcripts/sessions/memory/notes/todos/commits by recency). The command
