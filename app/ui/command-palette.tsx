@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -466,6 +467,26 @@ const SCOPE_CHIPS: { scope: string; label: string }[] = [
 // via the footer toggle so a user who lives in search can make it their landing.
 type DefaultScope = "menu" | "all";
 const DEFAULT_SCOPE_KEY = "hq-cmdk-default";
+
+// Wrap the query's terms in the result snippet so the matched keyword pops (the
+// FTS snippet already centers on the match; this just makes it visible).
+function highlightSnippet(text: string, query: string): ReactNode {
+  const toks = query.trim().toLowerCase().split(/\s+/).filter((t) => t.length >= 2);
+  if (!toks.length) return text;
+  const esc = toks.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const parts = text.split(new RegExp(`(${esc.join("|")})`, "ig"));
+  return parts.map((p, i) =>
+    toks.includes(p.toLowerCase())
+      ? (
+        <mark key={i} className="rounded-sm bg-yellow-400/25 px-0.5 text-yellow-100">
+          {p}
+        </mark>
+      )
+      : (
+        <Fragment key={i}>{p}</Fragment>
+      )
+  );
+}
 function readDefaultScope(): DefaultScope {
   try {
     return localStorage.getItem(DEFAULT_SCOPE_KEY) === "all" ? "all" : "menu";
@@ -516,6 +537,14 @@ export default function CommandPalette() {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMounted(true), []);
+
+  // ⌘K is search-FIRST. The Menu scope only filters commands, so typing a query
+  // there yields "no results" (the confusing state). The first keystroke jumps to
+  // All so the query actually searches every corpus; Menu stays the empty-open
+  // launcher and the chips still switch manually.
+  useEffect(() => {
+    if (scope === "menu" && q.trim()) setScope("all");
+  }, [q, scope]);
 
   const go = useCallback(
     (href: string) =>
@@ -1328,8 +1357,8 @@ export default function CommandPalette() {
                                     {cmd.title}
                                   </span>
                                   {cmd.snippet && (
-                                    <span className="truncate font-mono text-[11px] text-zinc-500">
-                                      {cmd.snippet}
+                                    <span className="line-clamp-2 font-mono text-[11px] leading-relaxed text-zinc-400">
+                                      {highlightSnippet(cmd.snippet, q)}
                                     </span>
                                   )}
                                   <span className="truncate font-mono text-[10px] text-zinc-600">

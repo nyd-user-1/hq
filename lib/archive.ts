@@ -210,30 +210,6 @@ export type TranscriptHit = { id: string; score: number; phrase: boolean; snippe
 const liveCache = new Map<string, { mtime: number; text: string; norm: string }>();
 const LIVE_TAIL_BYTES = 4 * 1024 * 1024;
 
-// Normalizing a candidate's stored body is the dominant per-keystroke search cost
-// (a full-text regex pass; ~660ms over a large candidate set was measured). The
-// SAME candidates recur as a query grows ("th"→"the"→"ther"), so cache the
-// normalized form keyed by id+length — an append changes length, auto-invalidating.
-// Bounded LRU (delete+reinsert = move-to-newest) so a huge corpus can't grow it
-// without limit. This is what the old comment at text-search.ts:8 wrongly claimed
-// ("derived once per doc, never per-search") — now actually true for this path.
-const NORM_CACHE_MAX = 400;
-const normBodyCache = new Map<string, { len: number; norm: string }>();
-function cachedNormBody(id: string, body: string): string {
-  const hit = normBodyCache.get(id);
-  if (hit && hit.len === body.length) {
-    normBodyCache.delete(id);
-    normBodyCache.set(id, hit); // refresh recency
-    return hit.norm;
-  }
-  const norm = normalize(body);
-  normBodyCache.set(id, { len: body.length, norm });
-  if (normBodyCache.size > NORM_CACHE_MAX) {
-    const oldest = normBodyCache.keys().next().value;
-    if (oldest !== undefined) normBodyCache.delete(oldest);
-  }
-  return norm;
-}
 function liveEntry(file: string, mtime: number): { text: string; norm: string } {
   const c = liveCache.get(file);
   if (c && c.mtime === mtime) return c;
@@ -306,25 +282,26 @@ export function searchTranscriptIndex(tokens: string[]): {
     // FTS5 prefix-AND candidates, bm25-ordered (lower=better, negative). We cap
     // generously — final order is recency-then-score in the search layer; this
     // just bounds the per-query scoreNorm pass over candidate bodies.
+    // FTS5 does BOTH the ranking (bm25) AND the snippet (snippet() is native C —
+    // it returns the matched chunk with surrounding context). This replaces the
+    // old per-candidate path that loaded up to 500 full bodies and ran a JS regex
+    // normalize + snippet scan over each — THE multi-second cost. body is column 3
+    // in the fts5 schema (id, mtime, retained, body); 12 = context tokens. LIMIT 60
+    // because bm25 already surfaces the best matches first.
     const rows = db
       .prepare(
-        "SELECT id, body, bm25(transcripts) AS rank FROM transcripts " +
-          "WHERE transcripts MATCH ? ORDER BY rank LIMIT 500"
+        "SELECT id, bm25(transcripts) AS rank, " +
+          "snippet(transcripts, 3, '', '', '…', 12) AS snip " +
+          "FROM transcripts WHERE transcripts MATCH ? ORDER BY rank LIMIT 60"
       )
       .all(ftsMatch(tokens));
     for (const r of rows) {
       const id = String(r.id);
-      const body = typeof r.body === "string" ? r.body : "";
-      const m = scoreNorm(cachedNormBody(id, body), tokens, { prefix: true });
-      // score = the authoritative occurrence count; for a prefix-only hit (no
-      // verbatim token) that's still ≥1 via prefixHits. Fall back to -bm25 so a
-      // matched-but-uncounted row (defensive) still sorts sanely.
-      const score = m.score > 0 ? m.score : -Number(r.rank ?? 0);
       byId.set(id, {
         id,
-        score,
-        phrase: m.phrase,
-        snippet: snippetAround(body, tokens[0]),
+        score: -Number(r.rank ?? 0), // bm25: more-negative = better → negate so higher = better
+        phrase: true, // FTS matched the (prefix) tokens
+        snippet: typeof r.snip === "string" ? r.snip : "",
       });
     }
   } catch {
