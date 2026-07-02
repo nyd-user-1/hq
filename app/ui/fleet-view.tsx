@@ -636,7 +636,9 @@ function AnimatedLine({ shape, range }: { shape: Extract<Shape, { kind: "series"
   );
 }
 
-function ShapeCard({ shape }: { shape: Shape }) {
+// Exported for the landing page's fleet-shot (app/ui/landing/fleet-shot.tsx) —
+// the hero renders the REAL board components, not a mockup.
+export function ShapeCard({ shape }: { shape: Shape }) {
   const interactive = (shape.kind === "series" || shape.kind === "area") && !!shape.range;
   const [range, setRange] = useState<RangeKey>("all");
   return (
@@ -669,7 +671,7 @@ function ShapeCard({ shape }: { shape: Shape }) {
   );
 }
 
-function KpiTile({ k }: { k: Stat }) {
+export function KpiTile({ k }: { k: Stat }) {
   return (
     <div className="flex h-full flex-col justify-center overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 px-2.5 py-2">
       <div className="truncate text-[8px] uppercase tracking-widest text-zinc-600">{k.label}</div>
