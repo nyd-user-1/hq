@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { NAV_HEADERS, type NavLeaf, type ToggleKey } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
-import { usePlanner } from "@/app/ui/planner-state";
 import { useApi } from "@/app/ui/api-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 import { usePlugins } from "@/app/ui/plugins-state";
@@ -87,7 +86,6 @@ export default function TerminalNavMenu({
   sessionId?: string | null;
 }) {
   const toggles: Record<ToggleKey, Toggle> = {
-    planner: usePlanner(),
     api: useApi(),
     text: useTextEditor(),
     plugins: usePlugins(),

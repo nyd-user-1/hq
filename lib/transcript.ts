@@ -16,6 +16,44 @@ const PROJECTS_ROOT = path.join(claudeHome(), "projects");
 const SESSIONS_DIR = path.join(PROJECTS_ROOT, os.homedir().replace(/[/.]/g, "-"));
 const TAIL_BYTES = 8 * 1024 * 1024;
 
+// Shared, memoized tail READ. workingStatus / lastTurnInterrupted /
+// detectRivalBranch each read the last TAIL_BYTES of the SAME transcript on the
+// SAME 1s poll — historically four independent 8MB reads (+ a big string alloc)
+// per tick, per pane. Memoize the raw tail by (file, size, mtime): the first
+// caller in a request pays the read, the rest reuse it. A streaming file changes
+// between polls, so this is a within-request 4×→1× dedupe (the hot path), not a
+// cross-poll cache. Bounded to the handful of active panes.
+type TailRead = { text: string; mtime: number; size: number; partial: boolean };
+const tailReadCache = new Map<string, TailRead>();
+function tailText(file: string): TailRead | null {
+  let st: fs.Stats;
+  try {
+    st = fs.statSync(file);
+  } catch {
+    return null;
+  }
+  const hit = tailReadCache.get(file);
+  if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) return hit;
+  const startAt = Math.max(0, st.size - TAIL_BYTES);
+  let text: string;
+  try {
+    const fd = fs.openSync(file, "r");
+    const buf = Buffer.alloc(st.size - startAt);
+    fs.readSync(fd, buf, 0, buf.length, startAt);
+    fs.closeSync(fd);
+    text = buf.toString("utf8");
+  } catch {
+    return null;
+  }
+  const out: TailRead = { text, mtime: st.mtimeMs, size: st.size, partial: startAt > 0 };
+  tailReadCache.set(file, out);
+  if (tailReadCache.size > 12) {
+    const k = tailReadCache.keys().next().value;
+    if (k !== undefined) tailReadCache.delete(k);
+  }
+  return out;
+}
+
 export type Turn = { role: "user" | "assistant"; text: string; at: string };
 
 // Every Claude Code transcript on the machine (across ALL project dirs), newest
@@ -618,23 +656,9 @@ export function workingStatus(id: string | null): WorkingStatus | null {
   const live = liveSessionStatus(sid);
   const liveFresh = isLiveFresh(live, now);
   if (liveFresh && live!.status !== "busy") return null;
-  let text: string;
-  let partial = false;
-  let mtime = 0;
-  try {
-    const file = sessionFilePath(sid);
-    const st = fs.statSync(file);
-    mtime = st.mtimeMs;
-    const startAt = Math.max(0, st.size - TAIL_BYTES);
-    partial = startAt > 0;
-    const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(st.size - startAt);
-    fs.readSync(fd, buf, 0, buf.length, startAt);
-    fs.closeSync(fd);
-    text = buf.toString("utf8");
-  } catch {
-    return null;
-  }
+  const t = tailText(sessionFilePath(sid));
+  if (!t) return null;
+  const { text, mtime, partial } = t;
 
   const lines = text.split("\n");
   if (partial) lines.shift();
@@ -789,20 +813,9 @@ export function workingStatus(id: string | null): WorkingStatus | null {
 export function lastTurnInterrupted(id: string | null): boolean {
   const sid = id ?? latestSessionId();
   if (!sid) return false;
-  let text: string;
-  try {
-    const file = sessionFilePath(sid);
-    const st = fs.statSync(file);
-    const startAt = Math.max(0, st.size - TAIL_BYTES);
-    const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(st.size - startAt);
-    fs.readSync(fd, buf, 0, buf.length, startAt);
-    fs.closeSync(fd);
-    text = buf.toString("utf8");
-  } catch {
-    return false;
-  }
-  const lines = text.split("\n");
+  const t = tailText(sessionFilePath(sid));
+  if (!t) return false;
+  const lines = t.text.split("\n");
   // Walk back to the most recent MEANINGFUL turn boundary and ask: was it the
   // interrupt marker? Skip sidechains, local-command meta, and mid-turn tool
   // results (a trailing tool_result means a turn is still live → not interrupted).
@@ -879,19 +892,9 @@ export function detectRivalBranch(
 ): RivalBranch {
   const sid = id ?? latestSessionId();
   if (!sid) return { diverged: false };
-  let text: string;
-  try {
-    const file = sessionFilePath(sid);
-    const st = fs.statSync(file);
-    const startAt = Math.max(0, st.size - TAIL_BYTES);
-    const fd = fs.openSync(file, "r");
-    const buf = Buffer.alloc(st.size - startAt);
-    fs.readSync(fd, buf, 0, buf.length, startAt);
-    fs.closeSync(fd);
-    text = buf.toString("utf8");
-  } catch {
-    return { diverged: false };
-  }
+  const t = tailText(sessionFilePath(sid));
+  if (!t) return { diverged: false };
+  const text = t.text;
   // Spine parse: keep only records carrying BOTH uuid and parentUuid (the tree
   // backbone — user/assistant/attachment/system). Non-spine metadata records
   // (last-prompt, mode, ai-title, file-history-snapshot, the leading summary

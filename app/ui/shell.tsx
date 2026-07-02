@@ -7,8 +7,6 @@ import SidebarToggle from "@/app/ui/sidebar-toggle";
 import { SidebarProvider } from "@/app/ui/sidebar-state";
 import PanelWrapper from "@/app/ui/panel-wrapper";
 import TerminalRow from "@/app/ui/terminal-row";
-import { PlannerProvider } from "@/app/ui/planner-state";
-import PlannerPanel from "@/app/ui/planner-panel";
 import { ApiProvider } from "@/app/ui/api-state";
 import ApiPanel from "@/app/ui/api-panel";
 import { PluginsProvider } from "@/app/ui/plugins-state";
@@ -112,7 +110,6 @@ export default async function Shell({
           and the app panel brings its own ml-4, so closed = truly full width */}
       <CommandProvider>
       <FocusProvider>
-      <PlannerProvider>
       <ApiProvider>
       <PluginsProvider>
       <SkillsProvider>
@@ -197,14 +194,11 @@ export default async function Shell({
           {/* min-w-0 (not shrink-0) so the panel yields when the row is tight —
               the terminal's min-width holds, the panel shrinks. */}
           <div id="app-panel-root" className="flex h-full min-w-0" />
-          {/* The independent Batch Planner's own portal root — a second panel
-              that can be open AT THE SAME TIME as #app-panel-root. */}
-          <div id="planner-panel-root" className="flex h-full min-w-0" />
-          {/* The independent API (usage) panel's own portal root — another peer
-              that can sit open alongside the route panel and the planner. */}
+          {/* The independent API (usage) panel's own portal root — a peer that can
+              be open AT THE SAME TIME as #app-panel-root. */}
           <div id="api-panel-root" className="flex h-full min-w-0" />
           {/* The independent Plugins library panel's own portal root — a peer that
-              can sit open alongside the route panel, the planner, and the API. */}
+              can sit open alongside the route panel and the API. */}
           <div id="plugins-panel-root" className="flex h-full min-w-0" />
           {/* The independent Skills library panel's own portal root — first of
               the console panels to migrate out of @panel/(console). */}
@@ -275,7 +269,6 @@ export default async function Shell({
       </SidebarProvider>
 
       <PanelWrapper panel={panel} />
-      <PlannerPanel />
       <ApiPanel />
       <PluginsPanel />
       <SkillsPanel />
@@ -344,7 +337,6 @@ export default async function Shell({
       </SkillsProvider>
       </PluginsProvider>
       </ApiProvider>
-      </PlannerProvider>
       </FocusProvider>
       </CommandProvider>
     </div>

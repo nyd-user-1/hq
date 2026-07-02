@@ -141,9 +141,19 @@ export function retainedTranscriptText(id: string): string | null {
 
 // Spawn the out-of-process builder (deduped). Detached so the 2GB extract runs
 // off the server's event loop; it writes the index atomically and exits.
-function triggerBuild(): void {
+// THROTTLED: a live session bumps its transcript mtime on every write, so the
+// "index is stale" check below is CONTINUOUSLY true while you work — without a
+// floor, every search burst spawned a fresh full rebuild (a 35MB db rewrite) in
+// a tight loop. `force` bypasses the floor for the cases that truly need an index
+// NOW (first run / a db that vanished mid-query); a mere staleness refresh waits.
+let lastBuildAt = 0;
+const MIN_REFRESH_MS = 20_000;
+function triggerBuild(force = false): void {
   if (building) return;
+  const now = Date.now();
+  if (!force && now - lastBuildAt < MIN_REFRESH_MS) return;
   building = true;
+  lastBuildAt = now;
   try {
     const child = spawn(process.execPath, [BUILD_SCRIPT], {
       detached: true,
@@ -169,12 +179,23 @@ function newestSessionMtime(): number {
   return m;
 }
 
-// Called on browse: build if missing/stale, or refresh if a session is newer
-// than the index (so new/updated sessions become searchable). Deduped + cheap.
+// Memoized ~1s: a scope=all query calls warmIndex() once PER corpus (13×), and
+// each call used to re-run this full readdir+stat scan of every transcript. One
+// scan per request instead of thirteen.
+let mtimeMemo = { at: 0, val: 0 };
+function newestSessionMtimeCached(): number {
+  const now = Date.now();
+  if (now - mtimeMemo.at < 1000) return mtimeMemo.val;
+  mtimeMemo = { at: now, val: newestSessionMtime() };
+  return mtimeMemo.val;
+}
+
+// Called on browse: build if missing (immediately), or refresh (throttled) when a
+// session is newer than the index so new/updated sessions become searchable.
 export function warmIndex(): void {
   const meta = dbMeta();
-  if (!meta) triggerBuild();
-  else if (newestSessionMtime() > meta.builtMaxMtime + 1) triggerBuild();
+  if (!meta) return triggerBuild(true); // no usable index yet → build now
+  if (newestSessionMtimeCached() > meta.builtMaxMtime + 1) triggerBuild(false); // stale → throttled
 }
 
 export type TranscriptHit = { id: string; score: number; phrase: boolean; snippet: string };
@@ -185,6 +206,31 @@ export type TranscriptHit = { id: string; score: number; phrase: boolean; snippe
 // of an unchanged active session never re-read or re-normalize.
 const liveCache = new Map<string, { mtime: number; text: string; norm: string }>();
 const LIVE_TAIL_BYTES = 4 * 1024 * 1024;
+
+// Normalizing a candidate's stored body is the dominant per-keystroke search cost
+// (a full-text regex pass; ~660ms over a large candidate set was measured). The
+// SAME candidates recur as a query grows ("th"→"the"→"ther"), so cache the
+// normalized form keyed by id+length — an append changes length, auto-invalidating.
+// Bounded LRU (delete+reinsert = move-to-newest) so a huge corpus can't grow it
+// without limit. This is what the old comment at text-search.ts:8 wrongly claimed
+// ("derived once per doc, never per-search") — now actually true for this path.
+const NORM_CACHE_MAX = 400;
+const normBodyCache = new Map<string, { len: number; norm: string }>();
+function cachedNormBody(id: string, body: string): string {
+  const hit = normBodyCache.get(id);
+  if (hit && hit.len === body.length) {
+    normBodyCache.delete(id);
+    normBodyCache.set(id, hit); // refresh recency
+    return hit.norm;
+  }
+  const norm = normalize(body);
+  normBodyCache.set(id, { len: body.length, norm });
+  if (normBodyCache.size > NORM_CACHE_MAX) {
+    const oldest = normBodyCache.keys().next().value;
+    if (oldest !== undefined) normBodyCache.delete(oldest);
+  }
+  return norm;
+}
 function liveEntry(file: string, mtime: number): { text: string; norm: string } {
   const c = liveCache.get(file);
   if (c && c.mtime === mtime) return c;
@@ -248,7 +294,7 @@ export function searchTranscriptIndex(tokens: string[]): {
   const meta = dbMeta();
   const db = meta ? openSearchDb() : null;
   if (!meta || !db) {
-    triggerBuild();
+    triggerBuild(true); // no usable index → build now (bypass the refresh throttle)
     return { hits: [], building: true };
   }
   // Keyed by id so a live re-scan can override a stale index row.
@@ -266,7 +312,7 @@ export function searchTranscriptIndex(tokens: string[]): {
     for (const r of rows) {
       const id = String(r.id);
       const body = typeof r.body === "string" ? r.body : "";
-      const m = scoreNorm(normalize(body), tokens, { prefix: true });
+      const m = scoreNorm(cachedNormBody(id, body), tokens, { prefix: true });
       // score = the authoritative occurrence count; for a prefix-only hit (no
       // verbatim token) that's still ≥1 via prefixHits. Fall back to -bm25 so a
       // matched-but-uncounted row (defensive) still sorts sanely.
@@ -281,7 +327,7 @@ export function searchTranscriptIndex(tokens: string[]): {
   } catch {
     // db vanished/locked mid-query (a concurrent rebuild rename) — fall through
     // to the live-scan; warmIndex()/the next poll re-opens the fresh db.
-    triggerBuild();
+    triggerBuild(true); // usable index just disappeared → rebuild now
   }
   // Bridge the staleness window: any session modified since the index was built
   // (usually just the active one) is read fresh and merged. Only OVERRIDES on a

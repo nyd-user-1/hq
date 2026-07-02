@@ -56,7 +56,7 @@ export const NAV_TARGETS: NavTarget[] = [
 // The horizontal nav: THREE dropdown headers (Activity · Console · Metrics),
 // styled like the send-box model selector. Every destination is a leaf —
 // EITHER a route (href → a pin-carrying Link) OR a client-state toggle (one of
-// the independent panels: api/planner/text/plugins, which open alongside a route
+// the independent panels: api/text/plugins, which open alongside a route
 // panel). API + Plugins used to be standalone headers; they're folded in as
 // toggle leaves now (API under Metrics, Plugins under Console). `cols` lays a
 // crowded dropdown out in a grid (Console 2×3, Metrics 2×4). Source of truth for
@@ -64,7 +64,6 @@ export const NAV_TARGETS: NavTarget[] = [
 // client-state contexts.
 export type ToggleKey =
   | "api"
-  | "planner"
   | "text"
   | "plugins"
   | "preview"
@@ -155,7 +154,6 @@ export const NAV_HEADERS: NavHeader[] = [
       { title: "Savings", toggle: "savingsPanel" },
       { title: "Memory Audit", toggle: "auditPanel" },
       { title: "KPIs", toggle: "kpis" },
-      { title: "Planner", toggle: "planner" },
       { title: "API", toggle: "api" },
       { title: "Firehose", toggle: "firehosePanel" },
     ],

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { NAV_HEADERS, type NavHeader, type ToggleKey } from "@/app/ui/panel-nav";
 import { withPins } from "@/app/ui/keep-pins";
-import { usePlanner } from "@/app/ui/planner-state";
 import { useApi } from "@/app/ui/api-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 import { usePlugins } from "@/app/ui/plugins-state";
@@ -49,7 +48,6 @@ export default function PanelNav() {
   // All four toggle contexts, resolved once and addressed by key — leaves name a
   // ToggleKey rather than importing hooks themselves.
   const toggles: Record<ToggleKey, Toggle> = {
-    planner: usePlanner(),
     api: useApi(),
     text: useTextEditor(),
     plugins: usePlugins(),

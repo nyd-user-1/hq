@@ -16,7 +16,6 @@ import { ClaudeMark } from "@/app/ui/brand-marks";
 import { withPins } from "@/app/ui/keep-pins";
 import { NAV_TARGETS, type NavTarget } from "@/app/ui/panel-nav";
 import { useCommand } from "@/app/ui/command-state";
-import { usePlanner } from "@/app/ui/planner-state";
 import { useTextEditor } from "@/app/ui/text-editor-state";
 import { useSidebar } from "@/app/ui/sidebar-state";
 import { KIND_TAG } from "@/app/ui/search-tags";
@@ -106,14 +105,6 @@ const IconText = () => (
     <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
     <path d="M9 20h6" />
     <path d="M12 4v16" />
-  </svg>
-);
-const IconPlanner = () => (
-  <svg {...SVG}>
-    <rect x="3" y="3" width="7" height="7" rx="1" />
-    <rect x="14" y="3" width="7" height="7" rx="1" />
-    <rect x="3" y="14" width="7" height="7" rx="1" />
-    <rect x="14" y="14" width="7" height="7" rx="1" />
   </svg>
 );
 const IconSidebar = () => (
@@ -501,7 +492,6 @@ const SCOPE_ALIASES: Record<string, string> = {
 export default function CommandPalette() {
   const { open, setOpen } = useCommand();
   const router = useRouter();
-  const { toggle: togglePlanner } = usePlanner();
   const { toggle: toggleText } = useTextEditor();
   const [editNonce, setEditNonce] = useState(0); // bumped on hq:file-edited → re-fetch the open file
   const { toggle: toggleSidebar } = useSidebar();
@@ -660,7 +650,6 @@ export default function CommandPalette() {
   const commands: Command[] = useMemo(
     () => [
       { id: "text", section: "Actions", title: "New text note", keywords: "text editor capture paste write", icon: <IconText />, run: toggleText },
-      { id: "planner", section: "Actions", title: "Batch Planner", keywords: "planner batch burn cost sessions", icon: <IconPlanner />, run: togglePlanner },
       { id: "sidebar", section: "Actions", title: "Toggle sidebar", keywords: "sidebar recents hide show", icon: <IconSidebar />, run: toggleSidebar },
       { id: "home", section: "Actions", title: "Close panel", keywords: "close home terminal dismiss", icon: <IconClose />, run: () => go("/") },
       ...NAV_TARGETS.map((t) => ({
@@ -673,7 +662,7 @@ export default function CommandPalette() {
         run: () => go(t.href),
       })),
     ],
-    [go, togglePlanner, toggleText, toggleSidebar]
+    [go, toggleText, toggleSidebar]
   );
 
   // A search hit's command. Clicking/Enter DRILLS IN (toggles the inline viewer)
