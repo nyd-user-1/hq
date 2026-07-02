@@ -24,7 +24,7 @@ const SPECS: Spec[] = [
   {
     n: "1.4",
     title: "Costs nothing at rest",
-    desc: <>A 1s poll while a session is working; idle sessions are just files. There is no watcher fleet to babysit.</>,
+    desc: <>A 1s poll while a session is working; idle sessions are just files. There are no watchers to babysit.</>,
   },
 ];
 

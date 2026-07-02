@@ -1,15 +1,13 @@
-import FleetShot from "./fleet-shot";
+import HeroVideo from "./hero-video";
 
 // Section 1 — Linear's hero, faithfully: one giant headline, a description row
 // with the "New · …" feature link at its right, then the product IS the page —
-// the real app in Linear's frame chrome. Every chrome value here is lifted from
-// linear.app's shipped CSS (Hero.css/theme tokens), not re-derived: frame
-// #090a0b radius-12 p-8px over #101112 + 1px #ffffff14; view #121314 radius-7
-// ring 0 0 0 2px #0000001a; top-left glow radial #ffffff0a; the lit gradient
-// floor (180deg #08090a 10% → #d0d6e0) with its bottom radial damp; text
-// #f7f8f8/#8a8f98; Inter-style variable weights 510/590. The board inside is
-// the REAL fleet Analytics view (server-computed, live data, real components) —
-// it scrolls, deliberately.
+// hq in Linear's frame chrome. Every chrome value here is lifted from linear.app's
+// shipped CSS (Hero.css/theme tokens), not re-derived: frame #090a0b radius-12
+// p-8px over #101112 + 1px #ffffff14; view #121314 radius-7 ring 0 0 0 2px
+// #0000001a; text #f7f8f8/#8a8f98; Inter-style variable weights 510/590. The view
+// holds a silent looping screen-recording of hq (16:9, so the frame is aspect-video
+// and the clip fills it with no crop).
 export default function Hero() {
   return (
     <section id="top" className="overflow-hidden px-5 sm:px-8">
@@ -35,9 +33,9 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* The frame — Linear's hero app-shot chrome around the real fleet board.
-          (Linear's lit gradient floor was tried and cut — the dashboard reads
-          better floating on the pure marketing black.) */}
+      {/* The frame — Linear's hero app-shot chrome around the hq video.
+          (Linear's lit gradient floor was tried and cut — it reads better
+          floating on the pure marketing black.) */}
       <div className="relative mx-auto mt-[52px] w-full max-w-[1320px] pb-14">
         <div
           className="relative rounded-xl p-2"
@@ -48,37 +46,17 @@ export default function Hero() {
             className="absolute inset-0 rounded-xl"
             style={{ background: "#101112", border: "1px solid #ffffff14" }}
           />
-          {/* the view — the app surface itself */}
+          {/* the view — the app surface, holding the hq screen-recording. 16:9 so
+              the 1280×720 clip fills it with no crop. */}
           <div
-            className="relative overflow-hidden rounded-[7px]"
+            className="relative aspect-video overflow-hidden rounded-[7px]"
             style={{
               background: "#121314",
               border: "1px solid #ffffff14",
               boxShadow: "0 0 0 2px #0000001a",
-              height: 640,
             }}
           >
-            <div
-              aria-hidden
-              className="pointer-events-none absolute left-0 top-0 size-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full"
-              style={{ background: "radial-gradient(50% 50%, #ffffff0a 0%, transparent 90%)" }}
-            />
-            <div
-              className="relative flex items-center gap-2.5 border-b px-4 py-2.5 font-mono text-[11px]"
-              style={{ borderColor: "#ffffff0d" }}
-            >
-              <span className="size-2 rounded-full bg-green-500" />
-              <span style={{ color: "#d0d6e0" }}>hq</span>
-              <span style={{ color: "#62666d" }}>·</span>
-              <span style={{ color: "#8a8f98" }}>@fleet</span>
-              <span className="ml-auto" style={{ color: "#62666d" }}>
-                Analytics · live
-              </span>
-            </div>
-            {/* the real board — sized to fill the view exactly, no scroll */}
-            <div className="h-[calc(100%-37px)] overflow-hidden">
-              <FleetShot />
-            </div>
+            <HeroVideo />
           </div>
         </div>
       </div>

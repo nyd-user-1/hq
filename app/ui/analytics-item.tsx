@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useKpis, RECOMMENDED_VIEWS, type SavedView } from "@/app/ui/kpi-state";
 
-// Analytics nav item (formerly "Fleet") — the label opens the analytics dashboard
+// Analytics nav item — the label opens the analytics dashboard
 // in Terminal 1 (?session=@fleet); the chevron expands the board views (recommended
 // + saved, flat), each of which applies the view (kpi-state) and opens the dashboard.
 export default function AnalyticsItem() {
