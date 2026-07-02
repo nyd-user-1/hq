@@ -89,7 +89,7 @@ export default function SpecDrawer({
                 </svg>
               </button>
             </div>
-            <div className="relative min-h-0 flex-1 overflow-y-auto px-6 pb-10">
+            <div className="hq-scroll relative min-h-0 flex-1 overflow-y-auto px-6 pb-10">
               <div className="pt-4 font-mono text-[15px]" style={{ color: "#8a8f98" }}>
                 {n}
               </div>

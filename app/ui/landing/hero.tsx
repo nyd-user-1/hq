@@ -88,7 +88,7 @@ export default function Hero() {
               </span>
             </div>
             {/* the real board — scrolls (the one place a scrollbar is welcome) */}
-            <div className="h-[calc(100%-37px)] overflow-y-auto">
+            <div className="hq-scroll h-[calc(100%-37px)] overflow-y-auto">
               <FleetShot />
             </div>
           </div>
