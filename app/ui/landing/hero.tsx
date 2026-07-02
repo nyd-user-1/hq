@@ -15,17 +15,12 @@ export default function Hero() {
     <section id="top" className="overflow-hidden px-5 sm:px-8">
       <div className="mx-auto max-w-6xl pt-20 sm:pt-28">
         <h1
-          className="max-w-4xl text-5xl leading-[1.06] tracking-[-0.022em] sm:text-[68px]"
+          className="max-w-4xl text-4xl leading-[1.06] tracking-[-0.022em] sm:text-[48px]"
           style={{ fontWeight: 590, color: "#f7f8f8" }}
         >
-          Observability &amp; control for Claude&nbsp;Code
-          <span
-            aria-hidden
-            className="ml-3 inline-block h-[0.72em] w-[0.38em] translate-y-[0.04em] bg-green-500"
-            style={{ animation: "hq-cursor 1.1s steps(1) infinite" }}
-          />
+          Local Artificial Intelligence Management
         </h1>
-        <div className="mt-10 flex flex-col justify-between gap-5 sm:mt-14 sm:flex-row sm:items-baseline">
+        <div className="mt-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-baseline">
           <p className="max-w-xl text-[17px] leading-relaxed" style={{ color: "#8a8f98" }}>
             Every session writes to disk. hq reads it back live, prices every turn, and types
             straight into the running terminal.
@@ -40,17 +35,10 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* The frame — Linear's hero app-shot chrome around the real fleet board. */}
-      <div className="relative mx-auto mt-14 w-full max-w-[1320px] pb-14 sm:mt-16">
-        {/* the lit gradient floor behind/below the frame */}
-        <div
-          aria-hidden
-          className="absolute -inset-x-4 bottom-0 top-8 rounded-2xl"
-          style={{
-            background:
-              "radial-gradient(52.53% 57.5% at 50% 100%, rgba(8,9,10,0) 0%, rgba(8,9,10,0.5) 100%), linear-gradient(180deg, #08090a 10%, #d0d6e0 100%)",
-          }}
-        />
+      {/* The frame — Linear's hero app-shot chrome around the real fleet board.
+          (Linear's lit gradient floor was tried and cut — the dashboard reads
+          better floating on the pure marketing black.) */}
+      <div className="relative mx-auto mt-[52px] w-full max-w-[1320px] pb-14">
         <div
           className="relative rounded-xl p-2"
           style={{ background: "#090a0b", boxShadow: "0px 7px 32px #00000059" }}
@@ -87,8 +75,8 @@ export default function Hero() {
                 Analytics · live
               </span>
             </div>
-            {/* the real board — scrolls (the one place a scrollbar is welcome) */}
-            <div className="hq-scroll h-[calc(100%-37px)] overflow-y-auto">
+            {/* the real board — sized to fill the view exactly, no scroll */}
+            <div className="h-[calc(100%-37px)] overflow-hidden">
               <FleetShot />
             </div>
           </div>

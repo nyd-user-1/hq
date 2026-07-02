@@ -21,8 +21,6 @@ const IDS = [
   "tokens_by_session_area",
   "tokens_day_area",
   "tokens_stacked_area",
-  "tokens_by_project",
-  "tokens_per_session",
 ].join(",");
 
 export default function FleetShot() {
