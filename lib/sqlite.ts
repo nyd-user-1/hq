@@ -14,7 +14,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { claudeHome } from "./config";
-import { createRequire } from "node:module";
 
 export const SEARCH_DB = path.join(claudeHome(), "hq", "search.db");
 
@@ -54,9 +53,18 @@ function sqliteCtor(): DatabaseSyncCtor | null {
     return (orig as (...a: unknown[]) => void)(warning, ...rest);
   }) as typeof process.emitWarning;
   try {
-    const require = createRequire(import.meta.url);
-    const mod = require("node:sqlite") as { DatabaseSync?: DatabaseSyncCtor };
-    ctor = mod.DatabaseSync ?? null;
+    // Load the builtin via process.getBuiltinModule (Node 22.3+) — NOT require()/
+    // createRequire. Turbopack can't resolve `createRequire(import.meta.url)` for a
+    // node: external once this module is compiled to a CJS server chunk; it replaces
+    // the call with a THROWING stub ("Unsupported external type Url for commonjs
+    // reference"), so node:sqlite silently failed to load in BOTH `next dev` and the
+    // packaged server — and transcript search (the only sqlite consumer) got no
+    // index. getBuiltinModule is a plain process method the bundler leaves untouched.
+    const getBuiltin = (process as unknown as {
+      getBuiltinModule?: (id: string) => { DatabaseSync?: DatabaseSyncCtor } | undefined;
+    }).getBuiltinModule;
+    const mod = typeof getBuiltin === "function" ? getBuiltin.call(process, "node:sqlite") : undefined;
+    ctor = mod?.DatabaseSync ?? null;
   } catch {
     ctor = null; // node:sqlite unavailable on this runtime
   } finally {
