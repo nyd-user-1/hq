@@ -19,11 +19,6 @@ export default function Hero() {
           style={{ fontWeight: 590, color: "#f7f8f8" }}
         >
           Local Artificial Intelligence Management
-          <span
-            aria-hidden
-            className="ml-3 inline-block h-[0.72em] w-[0.38em] translate-y-[0.04em] bg-green-500"
-            style={{ animation: "hq-cursor 1.1s steps(1) infinite" }}
-          />
         </h1>
         <div className="mt-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-baseline">
           <p className="max-w-xl text-[17px] leading-relaxed" style={{ color: "#8a8f98" }}>
