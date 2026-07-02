@@ -72,7 +72,7 @@ export default function Manifesto() {
         ))}
       </div>
 
-      <h2 className="mt-16 max-w-4xl text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[56px]">
+      <h2 className="mt-16 max-w-4xl text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[48px]">
         The disk is the database.{" "}
         <span className="text-zinc-500">
           Purpose-built to read what Claude Code writes — no agent to instrument, no data to pipe. hq sets a new
