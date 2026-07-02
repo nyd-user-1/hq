@@ -141,17 +141,20 @@ export function retainedTranscriptText(id: string): string | null {
 
 // Spawn the out-of-process builder (deduped). Detached so the 2GB extract runs
 // off the server's event loop; it writes the index atomically and exits.
-// THROTTLED: a live session bumps its transcript mtime on every write, so the
-// "index is stale" check below is CONTINUOUSLY true while you work — without a
-// floor, every search burst spawned a fresh full rebuild (a 35MB db rewrite) in
-// a tight loop. `force` bypasses the floor for the cases that truly need an index
-// NOW (first run / a db that vanished mid-query); a mere staleness refresh waits.
+// THROTTLED (floor applies to EVERY build, no bypass). Two things made rebuilds
+// pathological: (1) a live session bumps its transcript mtime on every write, so
+// the staleness check is continuously true while you work; (2) if the db read
+// races a build's atomic rename, dbMeta() reads null, which used to force ANOTHER
+// build — a self-sustaining rebuild↔race loop (vicious with two servers sharing
+// the file). A hard floor breaks it: at most one build per window, so the db gets
+// a stable stretch to be read between builds. lastBuildAt=0 lets the first build
+// fire immediately (cold start), then it's bounded.
 let lastBuildAt = 0;
 const MIN_REFRESH_MS = 20_000;
-function triggerBuild(force = false): void {
+function triggerBuild(): void {
   if (building) return;
   const now = Date.now();
-  if (!force && now - lastBuildAt < MIN_REFRESH_MS) return;
+  if (now - lastBuildAt < MIN_REFRESH_MS) return;
   building = true;
   lastBuildAt = now;
   try {
@@ -194,8 +197,8 @@ function newestSessionMtimeCached(): number {
 // session is newer than the index so new/updated sessions become searchable.
 export function warmIndex(): void {
   const meta = dbMeta();
-  if (!meta) return triggerBuild(true); // no usable index yet → build now
-  if (newestSessionMtimeCached() > meta.builtMaxMtime + 1) triggerBuild(false); // stale → throttled
+  if (!meta) return triggerBuild(); // no usable index yet → build (throttled)
+  if (newestSessionMtimeCached() > meta.builtMaxMtime + 1) triggerBuild(); // stale → throttled
 }
 
 export type TranscriptHit = { id: string; score: number; phrase: boolean; snippet: string };
@@ -294,7 +297,7 @@ export function searchTranscriptIndex(tokens: string[]): {
   const meta = dbMeta();
   const db = meta ? openSearchDb() : null;
   if (!meta || !db) {
-    triggerBuild(true); // no usable index → build now (bypass the refresh throttle)
+    triggerBuild(); // no usable index → build (throttled)
     return { hits: [], building: true };
   }
   // Keyed by id so a live re-scan can override a stale index row.
@@ -327,7 +330,7 @@ export function searchTranscriptIndex(tokens: string[]): {
   } catch {
     // db vanished/locked mid-query (a concurrent rebuild rename) — fall through
     // to the live-scan; warmIndex()/the next poll re-opens the fresh db.
-    triggerBuild(true); // usable index just disappeared → rebuild now
+    triggerBuild(); // usable index just disappeared → rebuild (throttled)
   }
   // Bridge the staleness window: any session modified since the index was built
   // (usually just the active one) is read fresh and merged. Only OVERRIDES on a
