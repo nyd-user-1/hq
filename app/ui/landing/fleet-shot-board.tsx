@@ -18,9 +18,11 @@ export default function FleetShotBoard({ items }: { items: MetricItem[] }) {
     const it = by.get(id);
     return it?.shape ? <ShapeCard shape={it.shape} /> : null;
   };
+  // Fills the frame exactly — fixed stat row, the two chart rows flex to the
+  // remaining height, so the board never scrolls.
   return (
-    <div className="flex flex-col gap-3 p-3">
-      <div className="grid grid-cols-3 gap-3 lg:grid-cols-6" style={{ height: 76 }}>
+    <div className="flex h-full flex-col gap-3 p-3">
+      <div className="grid shrink-0 grid-cols-3 gap-3 lg:grid-cols-6" style={{ height: 72 }}>
         {stat("f_sessions")}
         {stat("f_tokens")}
         {stat("f_turns")}
@@ -28,14 +30,10 @@ export default function FleetShotBoard({ items }: { items: MetricItem[] }) {
         {stat("todos_pending")}
         {stat("f_cliff")}
       </div>
-      <div style={{ height: 300 }}>{shape("tokens_by_session_area")}</div>
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" style={{ height: 280 }}>
+      <div className="min-h-0 flex-[1.1]">{shape("tokens_by_session_area")}</div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2">
         {shape("tokens_day_area")}
         {shape("tokens_stacked_area")}
-      </div>
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" style={{ height: 224 }}>
-        {shape("tokens_by_project")}
-        {shape("tokens_per_session")}
       </div>
     </div>
   );

@@ -87,8 +87,8 @@ export default function Hero() {
                 Analytics · live
               </span>
             </div>
-            {/* the real board — scrolls (the one place a scrollbar is welcome) */}
-            <div className="hq-scroll h-[calc(100%-37px)] overflow-y-auto">
+            {/* the real board — sized to fill the view exactly, no scroll */}
+            <div className="h-[calc(100%-37px)] overflow-hidden">
               <FleetShot />
             </div>
           </div>
