@@ -21,7 +21,12 @@ import Footer from "@/app/ui/landing/footer";
 // nav sticks to the top of the page.
 export default function RootLanding() {
   return (
-    <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth bg-zinc-950">
+    // #010102 = Linear's --color-bg-marketing, lifted verbatim: the landing's
+    // "non-black black" that lets elevated panels (#0f1011+) read as lit.
+    <div
+      className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth"
+      style={{ background: "#010102" }}
+    >
       <LandingNav />
       <main>
         <Hero />

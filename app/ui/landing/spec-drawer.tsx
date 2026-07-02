@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 // TECH SPECS — Linear's signature drill-down, in hq's vocabulary. Each section's
-// "N.0 NAME →" index line doubles as the trigger; the drawer slides in from the
-// right and lists numbered N.1/N.2… sub-specs, each anchored to the real module it
-// describes. Enter-only animation (unmounts on close), Esc + backdrop dismiss.
+// "N.0 NAME →" index line doubles as the trigger; the panel flies over the page
+// from the right. Chrome values are lifted verbatim from linear.app's shipped
+// CSS: panel #0f1011 (--color-bg-panel) with an inset 1px #23252a ring
+// (--color-border-primary), --shadow-high 0 7px 32px #00000059, the top-left
+// radial glow, mono uppercase TECH SPECS label, #f7f8f8/#8a8f98/#62666d text.
+// Content scrolls (deliberately); Esc + backdrop dismiss; enter-only animation.
 
 export type Spec = { n: string; title: string; desc: ReactNode; file?: string };
 
@@ -35,58 +38,92 @@ export default function SpecDrawer({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group mt-6 inline-flex items-center gap-2.5 font-mono text-[13px] text-zinc-500"
+        className="group mt-6 inline-flex items-center gap-2.5 font-mono text-[13px]"
       >
-        <span className="text-zinc-600">{n}</span>
-        <span className="text-zinc-300">{name}</span>
+        <span style={{ color: "#62666d" }}>{n}</span>
+        <span style={{ color: "#d0d6e0" }}>{name}</span>
         <span className="text-blue-400 transition-transform group-hover:translate-x-0.5">→</span>
-        <span className="text-zinc-600 transition-colors group-hover:text-zinc-400">tech specs</span>
+        <span className="transition-colors group-hover:text-zinc-400" style={{ color: "#62666d" }}>
+          tech specs
+        </span>
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={`${name} tech specs`}>
           <div
             data-hq-drawer
-            className="absolute inset-0 bg-black/60"
-            style={{ animation: "hq-fade-in 0.2s ease-out" }}
+            className="absolute inset-0"
+            style={{ background: "rgba(1,1,2,0.7)", animation: "hq-fade-in 0.2s ease-out" }}
             onClick={() => setOpen(false)}
           />
           <aside
             data-hq-drawer
-            className="absolute right-0 top-0 flex h-full w-[min(460px,92vw)] flex-col border-l border-zinc-800 bg-zinc-950"
-            style={{ animation: "hq-drawer-in 0.25s ease-out" }}
+            className="absolute bottom-3 right-3 top-3 flex w-[min(560px,94vw)] flex-col overflow-hidden rounded-xl"
+            style={{
+              background: "#0f1011",
+              boxShadow: "inset 0 0 0 1px #23252a, 0px 7px 32px #00000059",
+              animation: "hq-drawer-in 0.25s ease-out",
+            }}
           >
-            <div className="flex items-center gap-3 border-b border-zinc-900 px-6 py-4">
-              <span className="font-mono text-[11px] tracking-[0.14em] text-zinc-600">TECH SPECS</span>
-              <span className="font-mono text-[13px]">
-                <span className="text-zinc-600">{n}</span> <span className="text-zinc-300">{name}</span>
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 size-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{ background: "radial-gradient(circle, #ffffff14 0%, transparent 50%)", mixBlendMode: "lighten" }}
+            />
+            <div className="relative flex items-center px-6 py-5">
+              <span
+                className="font-mono text-[12px] uppercase"
+                style={{ color: "#62666d", letterSpacing: "0.14em" }}
+              >
+                Tech specs
               </span>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close"
-                className="ml-auto rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                className="ml-auto rounded p-1 transition-colors hover:bg-white/[0.06]"
+                style={{ color: "#8a8f98" }}
               >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+                <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden>
                   <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
-            <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-6 pb-8">
-              {specs.map((s) => (
-                <div key={s.n} className="border-b border-zinc-900 py-5 last:border-b-0">
-                  <div className="flex items-baseline gap-3">
-                    <span className="font-mono text-[13px] text-blue-400">{s.n}</span>
-                    <h3 className="text-[15px] font-medium text-zinc-100">{s.title}</h3>
+            <div className="hq-scroll relative min-h-0 flex-1 overflow-y-auto px-6 pb-10">
+              <div className="pt-4 font-mono text-[15px]" style={{ color: "#8a8f98" }}>
+                {n}
+              </div>
+              <h2
+                className="mt-3 text-[40px] leading-[1.05] tracking-[-0.02em]"
+                style={{ color: "#f7f8f8", fontWeight: 590 }}
+              >
+                {name}
+              </h2>
+              <div className="mt-6">
+                {specs.map((s) => (
+                  <div key={s.n} className="border-t py-6 first:border-t-0" style={{ borderColor: "#23252a" }}>
+                    <div className="flex items-baseline gap-3">
+                      <span className="font-mono text-[13px]" style={{ color: "#8a8f98" }}>
+                        {s.n}
+                      </span>
+                      <h3 className="text-[17px]" style={{ color: "#f7f8f8", fontWeight: 510 }}>
+                        {s.title}
+                      </h3>
+                    </div>
+                    <p className="mt-2.5 text-[15px] leading-relaxed" style={{ color: "#8a8f98" }}>
+                      {s.desc}
+                    </p>
+                    {s.file && (
+                      <span
+                        className="mt-3.5 inline-flex items-center rounded px-2 py-1 font-mono text-[11px]"
+                        style={{ color: "#8a8f98", border: "1px solid #ffffff14", background: "#ffffff05" }}
+                      >
+                        {s.file}
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{s.desc}</p>
-                  {s.file && (
-                    <span className="mt-3 inline-flex items-center rounded-md bg-zinc-900 px-2 py-0.5 font-mono text-[11px] text-zinc-500 ring-1 ring-inset ring-zinc-800">
-                      {s.file}
-                    </span>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </aside>
         </div>

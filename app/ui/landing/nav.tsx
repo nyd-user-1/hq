@@ -12,7 +12,10 @@ const LINKS = [
 // to the top of the landing scroll container.
 export default function LandingNav() {
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-900/70 bg-zinc-950/70 backdrop-blur-md">
+    <header
+      className="sticky top-0 z-40 border-b backdrop-blur-md"
+      style={{ borderColor: "#ffffff0d", background: "rgba(1,1,2,0.72)" }}
+    >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
         <a href="#top" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-100">
           <Ping />
