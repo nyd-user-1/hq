@@ -18,7 +18,7 @@ export default function Hero() {
         >
           Local first AI Management for Humans
         </h1>
-        <div className="mt-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-baseline">
+        <div className="mt-3 flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
           <p className="max-w-xl text-[14px] leading-relaxed" style={{ color: "#8a8f98" }}>
             Purpose-built for CLI development in the AI era.
           </p>
