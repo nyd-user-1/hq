@@ -124,12 +124,27 @@
   to { opacity: 1; }
 }
 
+/* Landing $ cards (app/ui/landing/cost.tsx) — the ledger/savings/memory lists
+   auto-scroll: rows are rendered twice, so translating up by one full set (-50%)
+   loops seamlessly. Pauses on hover. */
+@keyframes hq-scroll-y {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+.hq-marquee {
+  animation: hq-scroll-y 30s linear infinite;
+}
+.hq-marquee:hover {
+  animation-play-state: paused;
+}
+
 /* Quality floor: freeze the traveling status rings when motion is unwelcome. The
    !important beats the inline `animation` the SpinRing sets (inline has no
    !important, so a stylesheet !important wins). */
 @media (prefers-reduced-motion: reduce) {
   [data-hq-spin] { animation: none !important; }
   [data-hq-drawer] { animation: none !important; }
+  .hq-marquee { animation: none !important; }
 }
 
 .boundary-flash-chip {

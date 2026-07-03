@@ -8,14 +8,14 @@ import DashboardShot from "./dashboard-shot";
 export default function DashboardSection() {
   return (
     <section id="dashboard" className="scroll-mt-24 px-5 sm:px-8">
-      <div className="mx-auto w-full max-w-[1320px] pb-20 pt-4">
+      <div className="mx-auto w-full max-w-6xl pb-20 pt-4">
         <h2
           className="max-w-2xl text-3xl leading-[1.08] tracking-[-0.02em] sm:text-[38px]"
           style={{ fontWeight: 590, color: "#f7f8f8" }}
         >
           Numbers for every session.
         </h2>
-        <p className="mt-3 max-w-xl text-[16px] leading-relaxed" style={{ color: "#8a8f98" }}>
+        <p className="mt-3 max-w-xl text-[14px] leading-relaxed" style={{ color: "#8a8f98" }}>
           Every metric computed from the transcripts on disk, at request time — no warehouse, no ETL.
         </p>
 

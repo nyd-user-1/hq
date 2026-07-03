@@ -16,18 +16,19 @@ export default function Hero() {
           className="max-w-4xl text-4xl leading-[1.06] tracking-[-0.022em] sm:text-[48px]"
           style={{ fontWeight: 590, color: "#f7f8f8" }}
         >
-          Local Artificial Intelligence Management
+          Local first AI Management for Humans
         </h1>
         <div className="mt-6 flex flex-col justify-between gap-5 sm:flex-row sm:items-baseline">
-          <p className="max-w-xl text-[17px] leading-relaxed" style={{ color: "#8a8f98" }}>
-            Every session writes to disk. hq reads it back live, prices every turn, and types
-            straight into the running terminal.
+          <p className="max-w-xl text-[14px] leading-relaxed" style={{ color: "#8a8f98" }}>
+            Purpose-built for CLI development in the AI era.
           </p>
-          <a href="#observe" className="group flex shrink-0 items-baseline gap-3 text-[15px]">
+          <a
+            href="#observe"
+            className="group flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[15px] transition-colors hover:bg-white/[0.08]"
+          >
             <span style={{ color: "#f7f8f8", fontWeight: 510 }}>New</span>
             <span className="transition-colors group-hover:text-zinc-300" style={{ color: "#8a8f98" }}>
-              Agent Teams{" "}
-              <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
+              Agent Teams
             </span>
           </a>
         </div>
@@ -36,7 +37,7 @@ export default function Hero() {
       {/* The frame — Linear's hero app-shot chrome around the hq video.
           (Linear's lit gradient floor was tried and cut — it reads better
           floating on the pure marketing black.) */}
-      <div className="relative mx-auto mt-[52px] w-full max-w-[1320px] pb-14">
+      <div className="relative mx-auto mt-[52px] w-full max-w-6xl pb-14">
         <div
           className="relative rounded-xl p-2"
           style={{ background: "#090a0b", boxShadow: "0px 7px 32px #00000059" }}

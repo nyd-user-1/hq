@@ -17,10 +17,14 @@ export default function SpecDrawer({
   n,
   name,
   specs,
+  children,
+  triggerClassName = "",
 }: {
   n: string;
   name: string;
   specs: Spec[];
+  children?: ReactNode; // when given, the children ARE the trigger (e.g. a product-shot card)
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -35,18 +39,25 @@ export default function SpecDrawer({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group mt-6 inline-flex items-center gap-2.5 font-mono text-[13px]"
-      >
-        <span style={{ color: "#62666d" }}>{n}</span>
-        <span style={{ color: "#d0d6e0" }}>{name}</span>
-        <span className="text-blue-400 transition-transform group-hover:translate-x-0.5">→</span>
-        <span className="transition-colors group-hover:text-zinc-400" style={{ color: "#62666d" }}>
-          tech specs
-        </span>
-      </button>
+      {children ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={`Open ${name} tech specs`}
+          className={triggerClassName}
+        >
+          {children}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="group inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-[13px] transition-colors hover:bg-white/[0.08]"
+        >
+          <span className="text-zinc-500">{n}</span>
+          <span className="text-zinc-200">{name}</span>
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={`${name} tech specs`}>

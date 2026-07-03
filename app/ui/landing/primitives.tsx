@@ -77,10 +77,9 @@ export function Ping({ color = "#34d399" }: { color?: string }) {
 }
 
 // The landing's structural spine, borrowed from Linear: a big two-tone headline on
-// the left, a short description + a numbered "N — NAME" index on the right. The index
-// is a real hq file path (the module the section is about), keeping it unmistakably
-// hq rather than a generic marketing counter. Pass `specs` and the index line becomes
-// the TECH SPECS drawer trigger (Linear's numbered sub-spec drill-down).
+// the left, a short description + a right-aligned "N.0 NAME" pill. The pill is the
+// TECH SPECS drawer trigger (styled to match the hero's "New Agent Teams" pill), so
+// each section drills into its own numbered sub-specs.
 export function SectionHead({
   n,
   name,
@@ -92,7 +91,7 @@ export function SectionHead({
   name: string;
   title: ReactNode;
   desc: ReactNode;
-  specs?: Spec[];
+  specs: Spec[];
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
@@ -100,17 +99,25 @@ export function SectionHead({
         {title}
       </h2>
       <div className="lg:pt-2">
-        <p className="max-w-md text-lg leading-relaxed text-zinc-400">{desc}</p>
-        {specs ? (
+        <p className="max-w-md text-[14px] leading-relaxed text-zinc-400">{desc}</p>
+        <div className="mt-6 flex justify-end">
           <SpecDrawer n={n} name={name} specs={specs} />
-        ) : (
-          <div className="mt-6 inline-flex items-center gap-2.5 font-mono text-[13px] text-zinc-500">
-            <span className="text-zinc-600">{n}</span>
-            <span className="text-zinc-300">{name}</span>
-            <span className="text-blue-400">→</span>
-          </div>
-        )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// A stacked section header (the dashboard/manifesto layout): a headline with its
+// description left-aligned directly underneath — no right-hand column, no pill. Used
+// by the sections that read as full-width feature statements.
+export function StackedHead({ title, desc }: { title: ReactNode; desc: ReactNode }) {
+  return (
+    <div className="max-w-3xl">
+      <h2 className="text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[48px]">
+        {title}
+      </h2>
+      <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-zinc-400">{desc}</p>
     </div>
   );
 }
@@ -124,17 +131,21 @@ export function Shot({
   chipBg = "#27272a",
   children,
   className = "",
+  activeHover = false,
 }: {
   chip?: string;
   tone?: string;
   chipBg?: string;
   children: ReactNode;
   className?: string;
+  activeHover?: boolean; // border → blue "active/focused" state on hover (for clickable shots)
 }) {
   return (
     <div
-      className={`relative rounded-xl border border-dashed p-3 pt-5 sm:p-4 sm:pt-5 ${className}`}
-      style={{ borderColor: tone, background: "#09090b" }}
+      className={`relative rounded-xl border border-dashed bg-[#09090b] p-3 pt-5 transition-colors sm:p-4 sm:pt-5 ${
+        activeHover ? "border-zinc-800 hover:border-blue-600" : "hover:bg-[#101014]"
+      } ${className}`}
+      style={activeHover ? undefined : { borderColor: tone }}
     >
       {chip && (
         <span

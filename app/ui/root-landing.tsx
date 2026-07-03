@@ -5,8 +5,6 @@ import Observe from "@/app/ui/landing/observe";
 import Cost from "@/app/ui/landing/cost";
 import Control from "@/app/ui/landing/control";
 import Moat from "@/app/ui/landing/moat";
-import Pricing from "@/app/ui/landing/pricing";
-import CTA from "@/app/ui/landing/cta";
 import Footer from "@/app/ui/landing/footer";
 
 // The "/" face — hq's front door, the hq version of Linear's landing: a clean top
@@ -20,11 +18,13 @@ import Footer from "@/app/ui/landing/footer";
 // nav sticks to the top of the page.
 export default function RootLanding() {
   return (
-    // #010102 = Linear's --color-bg-marketing, lifted verbatim: the landing's
-    // "non-black black" that lets elevated panels (#0f1011+) read as lit.
+    // #09090b = zinc-950, matched to the app shell (layout.tsx body) and the
+    // frame chrome (#090a0b) so the landing fill reads as ONE black with the rest
+    // of hq — not a darker "marketing black" inset (was #010102, too dark against
+    // the shell). Panels still read as lit via their inner #101112/#121314 layers.
     <div
       className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth"
-      style={{ background: "#010102" }}
+      style={{ background: "#09090b" }}
     >
       {/* Navbar removed (Brendan, 7/2) — the landing opens straight on the hero;
           landing/nav.tsx kept on disk in case it returns. */}
@@ -36,8 +36,6 @@ export default function RootLanding() {
         <Cost />
         <Control />
         <Moat />
-        <Pricing />
-        <CTA />
       </main>
       <Footer />
     </div>

@@ -6,14 +6,6 @@ import { Section } from "./primitives";
 // set of sources hq reads (honest, not a fabricated logo wall). The figures are
 // abstract isometric line-art, not imagery.
 
-const READS = [
-  "~/.claude/projects/**/*.jsonl",
-  "memory/*.md",
-  "~/.claude/hq/",
-  "git log ~/code/*",
-  "node:sqlite · FTS5",
-];
-
 const FIGS = [
   {
     v: 1 as const,
@@ -65,24 +57,14 @@ function FigMark({ v }: { v: 1 | 2 | 3 }) {
 export default function Manifesto() {
   return (
     <Section id="manifesto">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-y border-zinc-900 py-5 font-mono text-xs text-zinc-600">
-        <span className="text-zinc-500">reads</span>
-        {READS.map((r) => (
-          <span key={r}>{r}</span>
-        ))}
-      </div>
-
-      <h2 className="mt-16 max-w-4xl text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[48px]">
-        The disk is the database.{" "}
-        <span className="text-zinc-500">
-          Purpose-built to read what Claude Code writes — no agent to instrument, no data to pipe. hq sets a new
-          bar for watching, costing, and steering agentic sessions.
-        </span>
+      <h2 className="max-w-4xl text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[48px]">
+        hq{" "}
+        <span className="text-zinc-500">sets a new bar for CLI development.</span>
       </h2>
 
       <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-zinc-900 bg-zinc-900 sm:grid-cols-3">
         {FIGS.map((f) => (
-          <div key={f.n} className="flex flex-col bg-zinc-950 p-8">
+          <div key={f.n} className="group flex flex-col bg-zinc-950 p-8 transition-colors hover:bg-zinc-900">
             <FigMark v={f.v} />
             <div className="mt-7 font-mono text-xs tracking-wider text-zinc-600">{f.n}</div>
             <h3 className="mt-3 text-lg font-semibold text-zinc-100">{f.t}</h3>
