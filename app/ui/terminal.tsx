@@ -2058,21 +2058,42 @@ export default function Terminal({
   // first line, provenance = this session) and open the tab — DocsReveal
   // surfaces the @docs pane beside this terminal, so the block reads/edits
   // side-by-side with the live session.
-  async function openBlockInDoc(it: { text: string; role?: string }) {
+  //
+  // `code: true` (tool steps) fences the text in a code block: tool output is
+  // terminal text, not prose — parsed as markdown its single newlines soft-wrap
+  // into one run-on paragraph and "- " lines get eaten as lazy continuations.
+  // The fence keeps every line + monospace, matching what the terminal showed.
+  async function openBlockInDoc(it: {
+    text: string;
+    role?: string;
+    title?: string;
+    code?: boolean;
+  }) {
     if (!it.text?.trim()) return;
-    const title = (it.text.split("\n").find((l) => l.trim()) || "block")
+    const title = (
+      it.title ||
+      it.text.split("\n").find((l) => l.trim()) ||
+      "block"
+    )
       .replace(/^#+\s*/, "")
       .trim()
       .slice(0, 80);
+    // Fence longer than any backtick run inside, so the content can't close it.
+    const ticks = Math.max(
+      3,
+      ...(it.text.match(/`+/g) ?? []).map((s) => s.length + 1)
+    );
+    const fence = "`".repeat(ticks);
+    const body = it.code ? `${fence}\n${it.text.trimEnd()}\n${fence}` : it.text;
     try {
       const res = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          text: it.text,
+          text: body,
           sessionId: pinned ?? resolvedId,
-          source: it.role === "user" ? "user-block" : "block",
+          source: it.code ? "tool-step" : it.role === "user" ? "user-block" : "block",
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -2436,7 +2457,7 @@ export default function Terminal({
             }
             onSaveCode={() => saveCodeBlock({ text: it.detail, role: "assistant", at: it.at })}
             onOpenDoc={() =>
-              openBlockInDoc({ text: `${it.tool} · ${it.title}\n\n${it.detail}`, role: "assistant" })
+              openBlockInDoc({ title: `${it.tool} · ${it.title}`, text: it.detail, role: "assistant", code: true })
             }
             onReact={() => {}}
             onHide={() => toggleToolHidden(it)}
