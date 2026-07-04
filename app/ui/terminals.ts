@@ -14,6 +14,18 @@ export const MAX_TERMINALS = 4;
 export type WallView = "sessions" | "fleet" | "files" | "projects" | "docs";
 export const WALL_VIEWS: readonly WallView[] = ["sessions", "fleet", "files", "projects", "docs"];
 
+// The file each view renders — so a pane hosting a view wears THAT file as its
+// boundary chip (chip rule: display the file name, copy the path). A pane is
+// named by its occupant: Docs in a pane reads "docs", not "terminal-N · Docs".
+// "sessions" is absent (not embeddable yet) → callers fall back to the
+// terminal label.
+export const VIEW_FILES: Partial<Record<WallView, string>> = {
+  fleet: "app/ui/fleet-view.tsx",
+  files: "app/ui/files-view.tsx",
+  projects: "app/ui/project-view.tsx",
+  docs: "app/ui/docs.tsx",
+};
+
 export type PaneContent =
   | { kind: "session"; sessionId: string }
   | { kind: "view"; view: WallView }

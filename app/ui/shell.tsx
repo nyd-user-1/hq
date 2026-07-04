@@ -90,7 +90,8 @@ import CommandPalette from "@/app/ui/command-palette";
 import { FocusProvider } from "@/app/ui/focus-state";
 import Terminal1Slot from "@/app/ui/terminal1-slot";
 import Terminal1Star from "@/app/ui/terminal-1-star";
-import Terminal1ViewChip from "@/app/ui/terminal1-view-chip";
+import Terminal1Chip from "@/app/ui/terminal1-chip";
+import BoundaryChip from "@/app/ui/boundary-chip";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import ReorderListener from "@/app/ui/reorder-listener";
 
@@ -177,12 +178,25 @@ export default async function Shell({
             <TerminalRow initialFocus={focusDefault}>
               <Boundary
                 label="terminal-1"
-                copyText="app/ui/terminal.tsx"
-                reorderSlot={1}
                 lead={<SidebarToggle />}
+                // The label chip is dynamic (a client read of ?session): a view
+                // in T1 wears the view's file, a session keeps terminal-1. The
+                // static chip is the Suspense fallback so prerender still draws it.
+                chip={
+                  <Suspense
+                    fallback={
+                      <BoundaryChip
+                        label="terminal-1"
+                        copyText="app/ui/terminal.tsx"
+                        reorderSlot={1}
+                      />
+                    }
+                  >
+                    <Terminal1Chip />
+                  </Suspense>
+                }
                 trail={
                   <Suspense fallback={null}>
-                    <Terminal1ViewChip />
                     <TerminalChipMenu />
                   </Suspense>
                 }

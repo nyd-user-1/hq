@@ -9,7 +9,7 @@ import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import PaneView from "@/app/ui/pane-view";
 import PaneDropZone from "@/app/ui/pane-drop-zone";
-import { wallTokens, parseToken } from "@/app/ui/terminals";
+import { wallTokens, parseToken, VIEW_FILES } from "@/app/ui/terminals";
 
 // Terminal 1 + the WALL. Terminal 1 (children) is ALWAYS the first child → never
 // remounts. Up to THREE more panes come from ?wall — a comma-list of TYPED tokens,
@@ -70,10 +70,13 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
         const content = parseToken(tok);
         const slot = i + 2;
         const terminalKey = `t${slot}`;
-        // Every wall pane keeps the "terminal-N" slot chip. A teammate pane adds a
-        // SECOND chip naming the member (scout/probe) right after it, so you can tell
-        // which teammate the pane holds — "terminal-2 · scout".
-        const label = `terminal-${slot}`;
+        // A pane is named by its occupant: a view pane wears the view's file
+        // ("docs" copying app/ui/docs.tsx); a session pane keeps the
+        // "terminal-N" slot chip. A teammate pane adds a SECOND chip naming the
+        // member (scout/probe) right after it — "terminal-2 · scout".
+        const viewFile =
+          content?.kind === "view" ? VIEW_FILES[content.view] : undefined;
+        const label = viewFile ? viewFile.split("/").pop()! : `terminal-${slot}`;
         const teammateChip =
           content?.kind === "teammate" ? (
             <BoundaryChip label={content.member} copyText={content.member} />
@@ -84,7 +87,7 @@ function WallPanes({ initialFocus }: { initialFocus: boolean }) {
           <PaneDropZone key={tok} slot={slot} className="flex min-w-0 flex-1 flex-col">
             <Boundary
               label={label}
-              copyText="app/ui/terminal.tsx"
+              copyText={viewFile ?? "app/ui/terminal.tsx"}
               reorderSlot={slot}
               trail={content && content.kind !== "teammate" ? <TerminalChipMenu /> : teammateChip}
             >

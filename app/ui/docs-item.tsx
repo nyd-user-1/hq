@@ -1,29 +1,62 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useDocs } from "@/app/ui/docs-state";
 import { wallTokens } from "@/app/ui/terminals";
 
+// Opening Docs into T1 evicts whatever ?session held (a live session, "new",
+// another view). Remember that token so toggling Docs OFF restores your seat
+// instead of dumping you on the root landing. sessionStorage (not state) so the
+// restore survives a refresh, same as the docs tabs themselves.
+const DISPLACED_KEY = "hq-docs-displaced";
+const rememberDisplaced = (tok: string | null) => {
+  try {
+    if (tok) sessionStorage.setItem(DISPLACED_KEY, tok);
+    else sessionStorage.removeItem(DISPLACED_KEY);
+  } catch {
+    /* storage blocked — toggle-off just falls back to home */
+  }
+};
+
 // Docs nav item — the sidebar entry to the document editor, a Files sibling.
 // Shows Docs IN Terminal 1 (the tab model: ?session=@docs → Terminal1Slot →
 // PaneView), or lights up when @docs already sits on the wall. Clicking while
 // active closes the pane wherever it is (tabs persist in DocsProvider — the
-// pane is a viewport, closing it loses nothing).
+// pane is a viewport, closing it loses nothing) and restores the session Docs
+// displaced from T1.
 export default function DocsItem() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
   const { docsOpen } = useDocs();
   const toks = wallTokens(params);
-  const inT1 = params.get("session") === "@docs";
+  const ses = params.get("session");
+  const inT1 = ses === "@docs";
   const onWall = toks.includes("@docs");
   const active = inT1 || onWall;
+
+  // The displaced token, read after hydration (state, not a render-time storage
+  // read, so server and client first paints match).
+  const [restore, setRestore] = useState<string | null>(null);
+  useEffect(() => {
+    if (!inT1) return;
+    try {
+      setRestore(sessionStorage.getItem(DISPLACED_KEY));
+    } catch {
+      setRestore(null);
+    }
+  }, [inT1]);
 
   const sp = new URLSearchParams(params.toString());
   sp.delete("center"); // legacy overlay param — retired
   if (active) {
-    // toggle off — drop @docs from whichever pane holds it
-    if (inT1) sp.delete("session");
+    // toggle off — drop @docs from whichever pane holds it; T1 gets back the
+    // token Docs displaced (falls back to home when there wasn't one).
+    if (inT1) {
+      if (restore) sp.set("session", restore);
+      else sp.delete("session");
+    }
     const rest = toks.filter((t) => t !== "@docs");
     if (rest.length) sp.set("wall", rest.join(","));
     else sp.delete("wall");
@@ -33,9 +66,16 @@ export default function DocsItem() {
   }
   const href = `${pathname}${sp.toString() ? `?${sp}` : ""}`;
 
+  const onClick = () => {
+    // record the eviction on open; consume the memo on close
+    if (!active) rememberDisplaced(ses && ses !== "@docs" ? ses : null);
+    else if (inT1) rememberDisplaced(null);
+  };
+
   return (
     <Link
       href={href}
+      onClick={onClick}
       scroll={false}
       className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
         active
