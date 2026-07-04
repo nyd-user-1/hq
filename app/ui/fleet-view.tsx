@@ -638,8 +638,25 @@ function AnimatedLine({ shape, range }: { shape: Extract<Shape, { kind: "series"
 
 // Exported for the landing page's fleet-shot (app/ui/landing/fleet-shot.tsx) —
 // the hero renders the REAL board components, not a mockup.
+// Slice a stacked-area shape to the last N days for the range picker (day-windowed,
+// not resampled — the stacked body redraws over the narrower span).
+function windowStacked(shape: Extract<Shape, { kind: "stackedArea" }>, range: RangeKey) {
+  if (range === "all") return shape;
+  const n = Math.min(shape.dayLabels.length, Number(range));
+  if (n >= shape.dayLabels.length) return shape;
+  const dayLabels = shape.dayLabels.slice(-n);
+  return {
+    ...shape,
+    dayLabels,
+    capL: dayLabels[0] ?? shape.capL,
+    series: shape.series.map((s) => ({ ...s, points: s.points.slice(-n) })),
+  };
+}
+
 export function ShapeCard({ shape }: { shape: Shape }) {
-  const interactive = (shape.kind === "series" || shape.kind === "area") && !!shape.range;
+  const interactive =
+    ((shape.kind === "series" || shape.kind === "area") && !!shape.range) ||
+    (shape.kind === "stackedArea" && !!shape.range);
   const [range, setRange] = useState<RangeKey>("all");
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 p-3">
@@ -659,7 +676,7 @@ export function ShapeCard({ shape }: { shape: Shape }) {
         {shape.kind === "scatter" && <ScatterBody shape={shape} />}
         {shape.kind === "heatmap" && <HeatBody shape={shape} />}
         {shape.kind === "stacked" && <StackedBody shape={shape} />}
-        {shape.kind === "stackedArea" && <StackedAreaBody shape={shape} />}
+        {shape.kind === "stackedArea" && <StackedAreaBody shape={interactive ? windowStacked(shape, range) : shape} />}
         {shape.kind === "sparkline" && <SparkBody shape={shape} />}
         {shape.kind === "table" && <TableBody shape={shape} />}
         {shape.kind === "calendar" && <CalendarBody shape={shape} />}

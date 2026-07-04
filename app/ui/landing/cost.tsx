@@ -1,4 +1,5 @@
-import { Section, SectionHead, Shot } from "./primitives";
+import { Section, StackedHead, Shot } from "./primitives";
+import { MeterBar } from "./meter-bar";
 import SpecDrawer, { type Spec } from "./spec-drawer";
 
 const SPECS: Spec[] = [
@@ -55,9 +56,7 @@ function Meter({
           </span>
         )}
       </div>
-      <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-zinc-800">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-      </div>
+      <MeterBar pct={pct} color={color} className="mt-2.5" />
       <div className="mt-2.5 font-mono text-[13px] leading-relaxed text-zinc-500">
         <span style={{ color }}>{pct}%</span> {stats}
       </div>
@@ -131,9 +130,7 @@ const NOTES = [
 export default function Cost() {
   return (
     <Section id="cost">
-      <SectionHead
-        n="2.0"
-        name="Cost"
+      <StackedHead
         title="Per turn token counts."
         desc={
           <>
@@ -141,7 +138,6 @@ export default function Cost() {
             and does the math on your machine.
           </>
         }
-        specs={SPECS}
       />
       {/* Horizontal scroll of the $ surfaces — equal height, a couple peeking off the
           right edge so the row invites a scroll to the rest. */}

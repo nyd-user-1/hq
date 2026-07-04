@@ -1,4 +1,4 @@
-import { Section } from "./primitives";
+import { Section, StackedHead } from "./primitives";
 
 // The "new species of product tool" beat, Linear-style: a two-tone statement (white
 // claim → grey elaboration) over a strip and three FIG figures. Linear runs a
@@ -57,10 +57,10 @@ function FigMark({ v }: { v: 1 | 2 | 3 }) {
 export default function Manifesto() {
   return (
     <Section id="manifesto">
-      <h2 className="max-w-4xl text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[48px]">
-        hq{" "}
-        <span className="text-zinc-500">sets a new bar for CLI development.</span>
-      </h2>
+      <StackedHead
+        title="A better UI/UX for CLI."
+        desc="One UI for terminals with drag and drop components, keyword search, and state based awareness."
+      />
 
       <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-zinc-900 bg-zinc-900 sm:grid-cols-3">
         {FIGS.map((f) => (

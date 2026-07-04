@@ -6,6 +6,7 @@ import Cost from "@/app/ui/landing/cost";
 import Control from "@/app/ui/landing/control";
 import Moat from "@/app/ui/landing/moat";
 import Footer from "@/app/ui/landing/footer";
+import { Reveal } from "@/app/ui/landing/reveal";
 
 // The "/" face — hq's front door, the hq version of Linear's landing: a clean top
 // nav, a hero with a live product shot, a two-tone manifesto over a real "reads"
@@ -30,12 +31,12 @@ export default function RootLanding() {
           landing/nav.tsx kept on disk in case it returns. */}
       <main>
         <Hero />
-        <DashboardSection />
-        <Manifesto />
-        <Observe />
-        <Cost />
-        <Control />
-        <Moat />
+        <Reveal><DashboardSection /></Reveal>
+        <Reveal><Manifesto /></Reveal>
+        <Reveal><Observe /></Reveal>
+        <Reveal><Cost /></Reveal>
+        <Reveal><Control /></Reveal>
+        <Reveal><Moat /></Reveal>
       </main>
       <Footer />
     </div>

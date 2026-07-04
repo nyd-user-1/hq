@@ -23,20 +23,32 @@ export default function Observe() {
         }
       />
       <div className="mt-14 grid grid-cols-2 gap-6 lg:grid-cols-4">
-        {STATES.map((s) => (
+        {STATES.map((s, i) => (
           <div
             key={s.label}
-            className="relative flex flex-col rounded-lg border border-dashed p-4 pt-6 font-mono"
-            style={{ borderColor: s.border, background: "#09090b", minHeight: 340 }}
+            className="group relative flex flex-col rounded-lg border border-dashed p-4 pt-6 font-mono"
+            style={{ borderColor: s.border, background: "#09090b", minHeight: 500 }}
           >
             <span
               className="absolute -top-2.5 left-4 z-20 inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] text-white"
               style={{ background: s.chip }}
             >
               <span className="size-1.5 rounded-full bg-white/90" />
-              terminal-1
+              terminal-{i + 1}
             </span>
-            {s.ring && <SpinRing from={s.ring[0]} to={s.ring[1]} dur="2.2s" radius="9px" />}
+            {/* The Working pane always travels its ring; the others light up their own
+                state-color ring on hover so every pane animates under the cursor. */}
+            {s.ring ? (
+              <SpinRing from={s.ring[0]} to={s.ring[1]} dur="2.2s" radius="9px" />
+            ) : (
+              <SpinRing
+                from={s.border}
+                to={s.border}
+                dur="2.2s"
+                radius="9px"
+                className="opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              />
+            )}
             <span className="text-[11px] uppercase tracking-widest" style={{ color: s.border }}>
               {s.label}
             </span>

@@ -7,7 +7,7 @@ import DashboardShot from "./dashboard-shot";
 // the hero's headline.
 export default function DashboardSection() {
   return (
-    <section id="dashboard" className="scroll-mt-24 px-5 sm:px-8">
+    <section id="dashboard" className="flex min-h-screen scroll-mt-24 items-center px-5 sm:px-8">
       <div className="mx-auto w-full max-w-6xl pb-20 pt-4">
         <h2
           className="max-w-2xl text-3xl leading-[1.08] tracking-[-0.02em] sm:text-[38px]"
@@ -16,7 +16,9 @@ export default function DashboardSection() {
           Runtime usage data.
         </h2>
         <p className="mt-3 max-w-xl text-[14px] leading-relaxed" style={{ color: "#8a8f98" }}>
-          Live and accurate token data available per session, turn, tool, and user. No warehouse or ETL required.
+          Reading live token data per session, tool, turn, and user.
+          <br />
+          No warehouse. No ETL.
         </p>
 
         {/* the frame — the same Linear app-shot chrome as the hero */}

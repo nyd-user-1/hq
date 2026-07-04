@@ -14,11 +14,13 @@ export function SpinRing({
   to,
   dur,
   radius = "14px",
+  className,
 }: {
   from: string;
   to: string;
   dur: string;
   radius?: string;
+  className?: string; // e.g. gate on hover: "opacity-0 transition-opacity group-hover:opacity-100"
 }) {
   const style: CSSProperties = {
     position: "absolute",
@@ -32,7 +34,7 @@ export function SpinRing({
     animation: `hq-border-spin ${dur} linear infinite`,
     pointerEvents: "none",
   };
-  return <div data-hq-spin aria-hidden style={style} />;
+  return <div data-hq-spin aria-hidden style={style} className={className} />;
 }
 
 // The section eyebrow — a soft file-path chip. Each section names the real hq module
@@ -57,8 +59,8 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section id={id} className={`scroll-mt-24 px-5 sm:px-8 ${className}`}>
-      <div className="mx-auto max-w-6xl py-16 sm:py-24">{children}</div>
+    <section id={id} className={`flex min-h-screen scroll-mt-24 items-center px-5 sm:px-8 ${className}`}>
+      <div className="mx-auto w-full max-w-6xl py-16 sm:py-24">{children}</div>
     </section>
   );
 }
@@ -114,10 +116,10 @@ export function SectionHead({
 export function StackedHead({ title, desc }: { title: ReactNode; desc: ReactNode }) {
   return (
     <div className="max-w-3xl">
-      <h2 className="text-4xl font-semibold leading-[1.06] tracking-[-0.02em] text-zinc-50 sm:text-[48px]">
+      <h2 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] text-zinc-50 sm:text-[38px]">
         {title}
       </h2>
-      <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-zinc-400">{desc}</p>
+      <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-zinc-400">{desc}</p>
     </div>
   );
 }
@@ -142,15 +144,17 @@ export function Shot({
 }) {
   return (
     <div
-      className={`relative rounded-xl border border-dashed bg-[#09090b] p-3 pt-5 transition-colors sm:p-4 sm:pt-5 ${
+      className={`group relative rounded-xl border border-dashed bg-[#09090b] p-3 pt-5 transition-colors sm:p-4 sm:pt-5 ${
         activeHover ? "border-zinc-800 hover:border-blue-600" : "hover:bg-[#101014]"
       } ${className}`}
       style={activeHover ? undefined : { borderColor: tone }}
     >
       {chip && (
         <span
-          className="absolute -top-2.5 left-5 z-10 inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[11px] text-white"
-          style={{ background: chipBg }}
+          className={`absolute -top-2.5 left-5 z-10 inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[11px] text-white ${
+            activeHover ? "bg-zinc-800 transition-colors group-hover:bg-blue-600" : ""
+          }`}
+          style={activeHover ? undefined : { background: chipBg }}
         >
           <span className="size-1.5 rounded-full bg-white/90" />
           {chip}

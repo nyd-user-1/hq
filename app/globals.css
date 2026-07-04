@@ -124,6 +124,14 @@
   to { opacity: 1; }
 }
 
+/* Hero "New · Agent Teams" pill (app/ui/landing/hero.tsx) — a diagonal light sweep
+   across the button on hover. The overlay sits off-screen left at rest and travels
+   across once per hover-enter. */
+@keyframes hq-shimmer {
+  from { transform: translateX(-160%) skewX(-16deg); }
+  to { transform: translateX(160%) skewX(-16deg); }
+}
+
 /* Landing $ cards (app/ui/landing/cost.tsx) — the ledger/savings/memory lists
    auto-scroll: rows are rendered twice, so translating up by one full set (-50%)
    loops seamlessly. Pauses on hover. */
