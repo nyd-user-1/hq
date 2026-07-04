@@ -3461,7 +3461,7 @@ export default function Terminal({
               title="open the session that continues this one"
             >
               → continued by {lineage.successor.project} ·{" "}
-              {lineage.successor.id.slice(0, 8)} ·{" "}
+              {lineage.successor.title || lineage.successor.id.slice(0, 8)} ·{" "}
               {new Date(lineage.successor.bornAt).toLocaleTimeString([], {
                 hour: "numeric",
                 minute: "2-digit",
@@ -3482,7 +3482,7 @@ export default function Terminal({
                   title="open the cleared session read-only"
                 >
                   {lineage.predecessor.project} ·{" "}
-                  {lineage.predecessor.id.slice(0, 8)}
+                  {lineage.predecessor.title || lineage.predecessor.id.slice(0, 8)}
                 </Link>{" "}
                 was cleared — its work continues here
                 {predecessorCtx > 0 && (

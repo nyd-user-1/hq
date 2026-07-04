@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { claudeHome } from "./config";
 import { cleanText } from "@/lib/sessions";
+import { getSessionsMeta } from "@/lib/sessions-meta";
 
 // Session lineage: which sessions continue which. A /clear ends one session
 // file and births a new one whose first real record IS the /clear command —
@@ -38,7 +39,7 @@ function isStubMeta(m: { cwd: string | null; entrypoint: string | null }): boole
 export type LineageNode = {
   id: string;
   project: string;
-  title: string; // first real prompt — what the row is named by (falls back to the id)
+  title: string; // HQ rename if set, else the first real prompt (consumer falls back to the id)
   bornAt: number; // first timestamped entry (for a clear-born session: the /clear moment)
   lastActive: number; // file mtime
 };
@@ -47,6 +48,8 @@ type Meta = LineageNode & {
   cwd: string | null;
   clearBorn: boolean;
   entrypoint: string | null;
+  headLeaf: string | null; // this session's head `last-prompt` pointer = the LAST record of the session it continues
+  lastUuid: string | null; // this session's own last-record uuid — the thing a successor's headLeaf points back to
 };
 
 type Head = {
@@ -55,6 +58,7 @@ type Head = {
   clearBorn: boolean;
   title: string;
   entrypoint: string | null;
+  headLeaf: string | null;
 };
 
 // A transcript's head never changes once written — cache per path for the
@@ -75,7 +79,7 @@ function readHead(file: string): Head {
     fs.closeSync(fd);
     text = buf.toString("utf8", 0, n);
   } catch {
-    return { cwd: null, firstTs: 0, clearBorn: false, title: "", entrypoint: null };
+    return { cwd: null, firstTs: 0, clearBorn: false, title: "", entrypoint: null, headLeaf: null };
   }
   let cwd: string | null = null;
   let firstTs = 0;
@@ -83,6 +87,7 @@ function readHead(file: string): Head {
   let clearBorn = false;
   let title = "";
   let entrypoint: string | null = null;
+  let headLeaf: string | null = null;
   for (const line of text.split("\n")) {
     if (!line) continue;
     let e;
@@ -93,6 +98,10 @@ function readHead(file: string): Head {
     }
     if (!cwd && typeof e.cwd === "string") cwd = e.cwd;
     if (!entrypoint && typeof e.entrypoint === "string") entrypoint = e.entrypoint;
+    // A continued session's first record is a `last-prompt` whose leafUuid is the
+    // last record of the session it forked from — the ground-truth lineage edge.
+    if (!headLeaf && e.type === "last-prompt" && typeof e.leafUuid === "string")
+      headLeaf = e.leafUuid;
     if (!firstTs && typeof e.timestamp === "string") {
       const t = Date.parse(e.timestamp);
       if (!Number.isNaN(t)) firstTs = t;
@@ -130,9 +139,44 @@ function readHead(file: string): Head {
     }
     if (cwd && firstTs && decided && title) break;
   }
-  const head = { cwd, firstTs, clearBorn, title, entrypoint };
+  const head = { cwd, firstTs, clearBorn, title, entrypoint, headLeaf };
   if (decided) headCache.set(file, head); // a brand-new file may still be mid-write
   return head;
+}
+
+// The uuid of a transcript's LAST record — what a successor's headLeaf points
+// back to. Cached by (path,mtime) so a settled file is read once; a live file
+// re-reads only when it grows. A small tail read (32 KB) regardless of file size.
+const tailCache = new Map<string, string | null>();
+function lastRecordUuid(file: string, mtime: number): string | null {
+  const key = `${file}:${mtime}`;
+  const hit = tailCache.get(key);
+  if (hit !== undefined) return hit;
+  let uuid: string | null = null;
+  try {
+    const fd = fs.openSync(file, "r");
+    const size = fs.fstatSync(fd).size;
+    const span = Math.min(size, 32 * 1024);
+    const buf = Buffer.alloc(span);
+    fs.readSync(fd, buf, 0, span, size - span);
+    fs.closeSync(fd);
+    const lines = buf.toString("utf8").split("\n").filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const e = JSON.parse(lines[i]);
+        if (typeof e.uuid === "string") {
+          uuid = e.uuid;
+          break;
+        }
+      } catch {
+        /* a truncated first line from the tail window — skip */
+      }
+    }
+  } catch {
+    /* unreadable — no leaf */
+  }
+  tailCache.set(key, uuid);
+  return uuid;
 }
 
 function scan(): Meta[] {
@@ -163,7 +207,7 @@ function scan(): Meta[] {
         continue;
       }
       if (now - mtime > WEEK_MS) continue;
-      const { cwd, firstTs, clearBorn, title, entrypoint } = readHead(full);
+      const { cwd, firstTs, clearBorn, title, entrypoint, headLeaf } = readHead(full);
       out.push({
         id: f.slice(0, -6),
         project:
@@ -174,6 +218,8 @@ function scan(): Meta[] {
         cwd,
         clearBorn,
         entrypoint,
+        headLeaf,
+        lastUuid: lastRecordUuid(full, mtime),
       });
     }
   }
@@ -193,27 +239,50 @@ export type Lineage = {
   successor: LineageNode | null; // the session that continues this one
 };
 
+// Resolve a session's predecessor. GROUND TRUTH first: a continued session's
+// headLeaf is the last-record uuid of the session it forked from, so map every
+// session's own last-record uuid → its id and resolve the parent exactly — right
+// even when several same-cwd agents overlap in time (the heuristic's blind spot,
+// e.g. two agents in one working tree). FALLBACK (no explicit pointer on disk):
+// the original same-cwd + /clear-adjacency heuristic. Memoized per call.
+function buildParentOf(all: Meta[]): (m: Meta) => Meta | null {
+  const byId = new Map(all.map((m) => [m.id, m]));
+  const leafOwner = new Map<string, string>();
+  for (const m of all) if (m.lastUuid) leafOwner.set(m.lastUuid, m.id);
+  const memo = new Map<string, Meta | null>();
+  return function parentOf(m: Meta): Meta | null {
+    const cached = memo.get(m.id);
+    if (cached !== undefined) return cached;
+    let parent: Meta | null = null;
+    // 1) explicit last-prompt edge — authoritative
+    if (m.headLeaf) {
+      const pid = leafOwner.get(m.headLeaf);
+      if (pid && pid !== m.id) parent = byId.get(pid) ?? null;
+    }
+    // 2) heuristic fallback: same-cwd session born earlier, still being written
+    //    near the /clear moment; latest-born such session wins. Skip stubs
+    //    (sdk-cli probes, bare-home /clears) — those are collisions, not lineage.
+    if (!parent && m.clearBorn && m.cwd && m.bornAt && !isStubMeta(m)) {
+      let best: Meta | null = null;
+      for (const c of all) {
+        if (c.id === m.id || c.cwd !== m.cwd) continue;
+        if (!c.bornAt || c.bornAt >= m.bornAt) continue;
+        if (c.lastActive < m.bornAt - ADJACENCY_MS) continue;
+        if (!best || c.bornAt > best.bornAt) best = c;
+      }
+      parent = best;
+    }
+    memo.set(m.id, parent);
+    return parent;
+  };
+}
+
 export function lineageFor(id: string): Lineage {
   const all = scan();
   const me = all.find((m) => m.id === id);
   if (!me) return { chain: null, predecessor: null, successor: null };
 
-  // Parent of a clear-born session: the same-cwd session born earlier that was
-  // still being written near the /clear moment; latest-born such session wins.
-  const parentOf = (m: Meta): Meta | null => {
-    if (!m.clearBorn || !m.cwd || !m.bornAt) return null;
-    // A /clear in the bare home dir or an HQ sdk-cli probe has no real
-    // predecessor — only same-cwd collisions. Don't invent a lineage for it.
-    if (isStubMeta(m)) return null;
-    let best: Meta | null = null;
-    for (const c of all) {
-      if (c.id === m.id || c.cwd !== m.cwd) continue;
-      if (!c.bornAt || c.bornAt >= m.bornAt) continue;
-      if (c.lastActive < m.bornAt - ADJACENCY_MS) continue;
-      if (!best || c.bornAt > best.bornAt) best = c;
-    }
-    return best;
-  };
+  const parentOf = buildParentOf(all);
   // Child: the session whose parent is m; if several (re-cleared), follow the
   // most recently active one — that's the line the user actually continued.
   const childOf = (m: Meta): Meta | null => {
@@ -225,10 +294,14 @@ export function lineageFor(id: string): Lineage {
     return best;
   };
 
+  // Prefer the HQ custom rename (sessions-meta sidecar) over the first-prompt
+  // title, so every lineage surface — the session-tree menu, the continued-by /
+  // continues-here footers — reflects what the user actually named the session.
+  const meta = getSessionsMeta();
   const strip = ({ id, project, title, bornAt, lastActive }: Meta): LineageNode => ({
     id,
     project,
-    title,
+    title: meta[id]?.title || title,
     bornAt,
     lastActive,
   });
@@ -259,17 +332,7 @@ export function lineageFor(id: string): Lineage {
 // /clear continuations under one header. O(N²) over a week's sessions (small N).
 export function chainRootMap(): Map<string, string> {
   const all = scan();
-  const parentOf = (m: Meta): Meta | null => {
-    if (!m.clearBorn || !m.cwd || !m.bornAt || isStubMeta(m)) return null;
-    let best: Meta | null = null;
-    for (const c of all) {
-      if (c.id === m.id || c.cwd !== m.cwd) continue;
-      if (!c.bornAt || c.bornAt >= m.bornAt) continue;
-      if (c.lastActive < m.bornAt - ADJACENCY_MS) continue;
-      if (!best || c.bornAt > best.bornAt) best = c;
-    }
-    return best;
-  };
+  const parentOf = buildParentOf(all);
   const roots = new Map<string, string>();
   for (const m of all) {
     const seen = new Set<string>([m.id]);
