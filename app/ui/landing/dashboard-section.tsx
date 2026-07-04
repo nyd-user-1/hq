@@ -46,21 +46,7 @@ export default function DashboardSection() {
                 className="pointer-events-none absolute left-0 top-0 size-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full"
                 style={{ background: "radial-gradient(50% 50%, #ffffff0a 0%, transparent 90%)" }}
               />
-              <div
-                className="relative flex items-center gap-2.5 border-b px-4 py-2.5 font-mono text-[11px]"
-                style={{ borderColor: "#ffffff0d" }}
-              >
-                <span className="size-2 rounded-full bg-green-500" />
-                <span style={{ color: "#d0d6e0" }}>hq</span>
-                <span style={{ color: "#62666d" }}>·</span>
-                <span style={{ color: "#8a8f98" }}>analytics</span>
-                <span className="ml-auto" style={{ color: "#62666d" }}>
-                  live
-                </span>
-              </div>
-              <div className="h-[calc(100%-37px)] overflow-hidden">
-                <DashboardShot />
-              </div>
+              <DashboardShot />
             </div>
           </div>
         </div>

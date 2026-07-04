@@ -603,6 +603,10 @@ function AnimatedLine({ shape, range }: { shape: Extract<Shape, { kind: "series"
   const xy = disp.map((v, i) => [(i / (SAMPLES - 1)) * W, H - (v / max) * (H - 6) - 3] as [number, number]);
   const line = smoothPath(xy);
   const gid = `anim-${tone}`;
+  // dashed mean reference line + label
+  const mean = disp.reduce((a, b) => a + b, 0) / (disp.length || 1);
+  const meanY = H - (mean / max) * (H - 6) - 3;
+  const meanPct = (meanY / H) * 100;
   const capR = range === "all" ? "today" : range === "90" ? "3 mo" : `${range} d`;
   const hx = hover != null && wn > 1 ? (hover / (wn - 1)) * 100 : 0;
   const hSample = hover != null ? Math.round((hover / Math.max(1, wn - 1)) * (SAMPLES - 1)) : 0;
@@ -618,8 +622,15 @@ function AnimatedLine({ shape, range }: { shape: Extract<Shape, { kind: "series"
             </linearGradient>
           </defs>
           <path d={line ? `${line} L${W},${H} L0,${H} Z` : ""} fill={`url(#${gid})`} />
+          <line x1="0" y1={meanY} x2={W} y2={meanY} stroke="#52525b" strokeWidth="1" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
           <path d={line} fill="none" stroke={ink} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         </svg>
+        <div
+          className="pointer-events-none absolute right-1 z-[1] -translate-y-1/2 rounded bg-zinc-950/70 px-1 text-[8px] text-zinc-500"
+          style={{ top: `${meanPct}%` }}
+        >
+          avg {fmtNum(mean)}
+        </div>
         {hover != null && (
           <>
             <div className="pointer-events-none absolute inset-y-0 w-px bg-zinc-700/60" style={{ left: `${hx}%` }} />
