@@ -29,7 +29,7 @@ import { getProjectSessions } from "@/lib/projects";
 import { getTodos } from "@/lib/todo";
 import { COMPONENTS, readComponentSource } from "@/lib/components";
 import { CORPORA, type Corpus } from "@/app/ui/search-corpus";
-import SearchResultGroup from "@/app/ui/search-result-group";
+import SearchResultCard from "@/app/ui/search-result-card";
 import SearchScopeFilter from "@/app/ui/search-scope-filter";
 
 // Shared chrome for the in-panel readers (file/component/commit/todo/project/
@@ -558,6 +558,13 @@ export default async function Search({
       ? `${groups.length} ${groups.length === 1 ? "corpus" : "corpora"}`
       : "";
 
+  // One merged stream — no per-category sections. Sorted by recency ACROSS every
+  // corpus (old → oldest first; otherwise newest first). Each card carries its
+  // corpus in the corner (search-result-card), so the grouping isn't lost.
+  const flat = groups
+    .flatMap((g) => g.hits.map((h) => ({ hit: h, corpus: g.corpus })))
+    .sort((a, b) => (sortDir === "old" ? a.hit.at - b.hit.at : b.hit.at - a.hit.at));
+
   return (
     <Boundary label="@panel/search/page.tsx">
       <div className="flex flex-col gap-2">
@@ -590,19 +597,18 @@ export default async function Search({
         </div>
       </div>
 
-      <div className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto">
-        {groups.map((g) => (
-          <SearchResultGroup
-            key={g.corpus.scope}
-            corpus={g.corpus}
-            hits={g.hits}
+      <div className="scrollbar-none flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+        {flat.map(({ hit, corpus }) => (
+          <SearchResultCard
+            key={`${hit.kind}:${hit.ref}`}
+            hit={hit}
             q={q}
             back={back}
-            count={g.count}
-            drillHref={g.drill}
+            categoryLabel={corpus.label}
+            categoryClass={corpus.chip}
           />
         ))}
-        {groups.length === 0 && (
+        {flat.length === 0 && (
           <p className="text-xs text-zinc-600">
             {building
               ? "building the search index (first time, ~10s)…"

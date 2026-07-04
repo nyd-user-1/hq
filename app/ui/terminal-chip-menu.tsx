@@ -86,7 +86,7 @@ export default function TerminalChipMenu() {
         className={`boundary-flash-chip flex cursor-pointer items-center bg-zinc-800 px-1.5 font-mono text-[10px] text-zinc-400 transition-colors hover:text-zinc-200 ${open ? "text-zinc-100" : ""}`}
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="m6 9 6 6 6-6" />
+          <path d="M12 5v14M5 12h14" />
         </svg>
       </button>
       {open && (

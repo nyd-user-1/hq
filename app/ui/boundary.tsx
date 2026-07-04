@@ -8,6 +8,7 @@ import BoundaryChip from "@/app/ui/boundary-chip";
 export default function Boundary({
   label,
   copyText,
+  chip,
   lead,
   trail,
   topOnly = false,
@@ -20,6 +21,11 @@ export default function Boundary({
   // What the chip COPIES when it must differ from the display (e.g. four wall
   // panes labelled terminal-1..4 that all copy app/ui/terminal.tsx).
   copyText?: string;
+  // Replace the default file-path BoundaryChip with a custom node — used by the
+  // Activity container, whose chip is a click-to-copy chip that ALSO reveals the
+  // panel-switch dropdown on hover (activity-switch-chip.tsx). When set, `label`
+  // is still used for the flash/anatomy but the caller owns what renders.
+  chip?: React.ReactNode;
   lead?: React.ReactNode;
   trail?: React.ReactNode;
   // Terminal panes pass their slot (1-4) so the label chip becomes a drag handle /
@@ -53,7 +59,7 @@ export default function Boundary({
     >
       <span className="absolute -top-2.5 left-4 z-20 flex max-w-[calc(100%-2rem)] items-center gap-2">
         {lead}
-        <BoundaryChip label={label} copyText={copyText} reorderSlot={reorderSlot} />
+        {chip ?? <BoundaryChip label={label} copyText={copyText} reorderSlot={reorderSlot} />}
         {trail}
       </span>
       {children}

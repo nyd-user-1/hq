@@ -1,48 +1,33 @@
 "use client";
 
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes } from "react";
 
-// The general-purpose button hq was missing — 131 inline <button>s across 18
-// files reinvented this. The chip buttons (ButtonChipIcon / ButtonChipAction)
-// stay for the boundary + send-box affordances; this is everything else. Spreads
-// native button props so it drops in for a raw <button>. Styling rides the
-// semantic tokens (globals.css @theme): bg-surface-2/3, bg-accent, bg-danger.
-
-type Variant = "primary" | "secondary" | "ghost" | "danger";
-type Size = "sm" | "md";
+// hq's standard action button. Two looks, one component:
+//   • "plain"   — borderless text; the card action (Install / card Run).
+//   • "outline" — bordered; the detail-header action (Run / Apply).
+// The label swaps on state at the call site; this owns the look. Spreads native
+// button props so it drops in for a raw <button>. Don't hand-roll another.
+type Variant = "plain" | "outline";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-accent text-white hover:opacity-90",
-  secondary: "bg-surface-2 text-zinc-100 hover:bg-surface-3",
-  ghost: "bg-transparent text-zinc-400 hover:bg-surface-2 hover:text-zinc-100",
-  danger: "bg-danger text-white hover:opacity-90",
-};
-
-const SIZES: Record<Size, string> = {
-  sm: "px-2 py-1 text-xs",
-  md: "px-3 py-1.5 text-sm",
+  plain: "px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+  outline:
+    "border border-zinc-700 px-2.5 py-1 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100",
 };
 
 export default function Button({
-  variant = "secondary",
-  size = "md",
-  leftIcon,
+  variant = "plain",
   className = "",
   type = "button",
   children,
   ...rest
-}: {
-  variant?: Variant;
-  size?: Size;
-  leftIcon?: ReactNode;
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
+}: { variant?: Variant } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type={type}
-      className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={`shrink-0 rounded-md font-mono text-[11px] transition-colors disabled:opacity-60 ${VARIANTS[variant]} ${className}`}
       {...rest}
     >
-      {leftIcon}
       {children}
     </button>
   );

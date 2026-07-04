@@ -25,7 +25,6 @@ export default function SearchResultGroup({
   return (
     <section className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${corpus.dot}`} aria-hidden />
         <h2 className={`font-mono text-[11px] uppercase tracking-wider ${corpus.text}`}>
           {corpus.label}
         </h2>
@@ -40,9 +39,16 @@ export default function SearchResultGroup({
           </Link>
         )}
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-l border-zinc-800/60 pl-2.5">
+      <div className="flex min-w-0 flex-col gap-1.5">
         {hits.map((h) => (
-          <SearchResultCard key={`${h.kind}:${h.ref}`} hit={h} q={q} back={back} />
+          <SearchResultCard
+            key={`${h.kind}:${h.ref}`}
+            hit={h}
+            q={q}
+            back={back}
+            categoryLabel={corpus.label}
+            categoryClass={corpus.text}
+          />
         ))}
       </div>
     </section>

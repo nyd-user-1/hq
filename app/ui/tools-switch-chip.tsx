@@ -2,19 +2,15 @@
 
 import { useRef, useState } from "react";
 import BoundaryChip from "@/app/ui/boundary-chip";
-import { CONSOLE_PANELS, type ConsoleKey } from "@/app/ui/console-state";
-import { useAgents } from "@/app/ui/agents-state";
-import { useCommands } from "@/app/ui/commands-state";
-import { useHooks } from "@/app/ui/hooks-state";
-import { useMcp } from "@/app/ui/mcp-state";
-import { useOutputStyles } from "@/app/ui/output-styles-state";
-import { usePlugins } from "@/app/ui/plugins-state";
-import { useRoutines } from "@/app/ui/routines-state";
-import { useSkills } from "@/app/ui/skills-state";
+import { TOOLS_PANELS, type ToolsKey } from "@/app/ui/tools-state";
+import { useCompose } from "@/app/ui/compose-state";
+import { usePreview } from "@/app/ui/preview-state";
+import { useTextEditor } from "@/app/ui/text-editor-state";
+import { useTree } from "@/app/ui/tree-state";
 
 // lucide "arrow-up-right" — the "pop out" glyph on each menu row. Clicking it opens
 // that panel as its OWN standalone push-in (independent of the container), so two
-// console panels can sit side by side.
+// tools panels can sit side by side.
 function ArrowUpRight() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -24,20 +20,20 @@ function ArrowUpRight() {
   );
 }
 
-// The Console boundary's file-path chip — but wired to reveal the panel switcher.
+// The Tools boundary's file-path chip — but wired to reveal the panel switcher.
 // It IS the click-to-copy BoundaryChip (label = the active panel's file); HOVER over
-// it drops the list of the eight console panels. A row's TEXT swaps the container in
-// place (console-panel re-keys its Boundary, so the blue flash replays + the chip
-// label changes); the trailing "↗" instead pops that panel out as its own standalone
-// panel. Mirrors activity-switch-chip.tsx.
-export default function ConsoleSwitchChip({
+// it drops the list of the four tools panels. A row's TEXT swaps the container in
+// place (tools-panel re-keys its Boundary, so the flash replays + the chip label
+// changes); the trailing "↗" instead pops that panel out as its own standalone
+// panel. Mirrors console-switch-chip.tsx.
+export default function ToolsSwitchChip({
   file,
   active,
   onSelect,
 }: {
   file: string;
-  active: ConsoleKey;
-  onSelect: (k: ConsoleKey) => void;
+  active: ToolsKey;
+  onSelect: (k: ToolsKey) => void;
 }) {
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -50,19 +46,15 @@ export default function ConsoleSwitchChip({
     closeTimer.current = setTimeout(() => setOpen(false), 160);
   };
 
-  // Each console panel's standalone push-in state — the "↗" opens one independent of
-  // the container (keyed by ConsoleKey).
-  const standalone: Record<ConsoleKey, (v: boolean) => void> = {
-    agents: useAgents().setOpen,
-    commands: useCommands().setOpen,
-    hooks: useHooks().setOpen,
-    mcp: useMcp().setOpen,
-    outputStyles: useOutputStyles().setOpen,
-    plugins: usePlugins().setOpen,
-    routines: useRoutines().setOpen,
-    skills: useSkills().setOpen,
+  // Each tools panel's standalone push-in state — the "↗" opens one independent of
+  // the container (keyed by ToolsKey).
+  const standalone: Record<ToolsKey, (v: boolean) => void> = {
+    compose: useCompose().setOpen,
+    preview: usePreview().setOpen,
+    text: useTextEditor().setOpen,
+    tree: useTree().setOpen,
   };
-  const popOut = (k: ConsoleKey) => {
+  const popOut = (k: ToolsKey) => {
     standalone[k](true);
     setOpen(false);
   };
@@ -77,7 +69,7 @@ export default function ConsoleSwitchChip({
       <BoundaryChip label={file} />
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 flex w-52 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
-          {CONSOLE_PANELS.map((p) => (
+          {TOOLS_PANELS.map((p) => (
             <div
               key={p.key}
               className="flex items-center rounded transition-colors hover:bg-zinc-900"

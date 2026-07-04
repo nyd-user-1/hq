@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
+import FilterChip from "@/app/ui/filter-chip";
+import Button from "@/app/ui/button";
 import Markdown from "@/app/ui/md";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
 import type { LibraryStyle } from "@/lib/output-styles";
@@ -61,8 +63,7 @@ export default function OutputStylesPanel({ embedded = false }: { embedded?: boo
     [query],
   );
 
-  const yours = styles.filter((s) => s.source === "user" && matchesQuery(s));
-  const pool = styles.filter((s) => s.source !== "user");
+  const pool = styles;
 
   const sources = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -123,24 +124,12 @@ export default function OutputStylesPanel({ embedded = false }: { embedded?: boo
           <StyleDetailView style={selected} />
         ) : (
           <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col overflow-y-auto pr-2">
-            {/* YOURS */}
-            <SectionLabel label="Yours" count={styles.filter((s) => s.source === "user").length} />
-            <div className="mt-2 flex flex-col gap-4">
-              {yours.length ? (
-                yours.map((s) => <StyleCard key={s.id} s={s} onOpen={setSelected} />)
-              ) : (
-                <p className="px-0.5 font-mono text-[11px] text-zinc-600">
-                  {query ? "no styles of yours match." : "No styles under ~/.claude/output-styles yet."}
-                </p>
-              )}
-            </div>
-
-            <div className="sticky top-0 z-10 mt-6 bg-[#09090b] pb-4 pt-1">
+            <div className="sticky top-0 z-10 mt-1 bg-[#09090b] pb-4 pt-1">
               <SectionLabel label="Library" count={pool.length} />
               <div className="scrollbar-none mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain">
-                <SrcChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
+                <FilterChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
                 {sources.map(([s, n]) => (
-                  <SrcChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
+                  <FilterChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
                 ))}
               </div>
             </div>
@@ -186,25 +175,8 @@ function SectionLabel({ label, count }: { label: string; count: number }) {
   );
 }
 
-function SrcChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
-        active
-          ? "border-zinc-200 bg-zinc-200 text-zinc-900"
-          : "border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
-      }`}
-    >
-      <span>{label}</span>
-      <span className={`tabular-nums ${active ? "text-zinc-500" : "text-zinc-600"}`}>{count}</span>
-    </button>
-  );
-}
 
 function StyleCard({ s, onOpen }: { s: LibraryStyle; onOpen: (s: LibraryStyle) => void }) {
-  const dot = s.source === "user" ? "text-blue-500" : s.source === "builtin" ? "text-orange-500" : "text-emerald-500";
   return (
     <div
       role="button"
@@ -220,15 +192,13 @@ function StyleCard({ s, onOpen }: { s: LibraryStyle; onOpen: (s: LibraryStyle) =
     >
       <div className="flex items-center gap-2">
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className={`shrink-0 text-[10px] leading-none ${dot}`} aria-hidden>●</span>
           <span className="truncate font-mono text-[13px] text-zinc-200">{s.name}</span>
         </span>
-        {s.source === "builtin" && (
-          <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-zinc-600">built-in</span>
-        )}
       </div>
 
-      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{s.sourceLabel}</div>
+      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">
+        {s.source === "builtin" ? <span className="text-orange-300/70">Anthropic</span> : s.sourceLabel}
+      </div>
 
       {s.description && (
         <p className="mt-3 line-clamp-2 text-[11px] leading-snug text-zinc-500">{s.description}</p>
@@ -269,14 +239,9 @@ function StyleDetailView({ style: s }: { style: LibraryStyle }) {
     <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 font-mono text-[11px] text-zinc-400">{s.sourceLabel}</div>
-        <button
-          type="button"
-          onClick={() => prefill(`/output-style ${s.name} `)}
-          title={`Switch to ${s.name}`}
-          className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
+        <Button variant="outline" onClick={() => prefill(`/output-style ${s.name} `)} title={`Switch to ${s.name}`}>
           Apply
-        </button>
+        </Button>
       </div>
 
       {s.description && <p className="text-[12px] leading-relaxed text-zinc-300">{s.description}</p>}

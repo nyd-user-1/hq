@@ -96,10 +96,16 @@ export default function SearchResultCard({
   hit,
   q,
   back,
+  categoryLabel,
+  categoryClass,
 }: {
   hit: SearchHit;
   q: string;
   back: string;
+  // The corpus this result belongs to — shown in the card's top-right corner
+  // (colored per corpus) now that the group's dot/label/rail are gone.
+  categoryLabel: string;
+  categoryClass: string;
 }) {
   const href = `${back}&${openParam(hit)}`;
   const drag =
@@ -112,9 +118,14 @@ export default function SearchResultCard({
     "block rounded-md border border-zinc-800/80 px-3 py-2 transition-colors hover:border-zinc-600 hover:bg-zinc-900/50 focus-visible:border-zinc-500 focus-visible:bg-zinc-900/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-600";
   const inner = (
     <>
-      <div className="truncate text-sm font-medium text-zinc-200">{hit.title}</div>
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">{hit.title}</div>
+        <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${categoryClass}`}>
+          {categoryLabel}
+        </span>
+      </div>
       {hit.snippet && (
-        <p className="mt-0.5 line-clamp-2 break-words text-xs text-zinc-400">
+        <p className="mt-3 line-clamp-2 break-words text-xs text-zinc-400">
           {highlight(hit.snippet, q)}
         </p>
       )}

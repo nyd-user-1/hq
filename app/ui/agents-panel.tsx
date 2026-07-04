@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
+import FilterChip from "@/app/ui/filter-chip";
+import Button from "@/app/ui/button";
 import Markdown from "@/app/ui/md";
 import { useAgents } from "@/app/ui/agents-state";
 import type { LibraryAgent } from "@/lib/agents";
@@ -53,8 +55,7 @@ export default function AgentsPanel({ embedded = false }: { embedded?: boolean }
     [query],
   );
 
-  const yours = agents.filter((a) => a.source === "user" && matchesQuery(a));
-  const pool = agents.filter((a) => a.source !== "user");
+  const pool = agents;
 
   const sources = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -115,24 +116,12 @@ export default function AgentsPanel({ embedded = false }: { embedded?: boolean }
           <AgentDetailView agent={selected} />
         ) : (
           <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col overflow-y-auto pr-2">
-            {/* YOURS */}
-            <SectionLabel label="Yours" count={agents.filter((a) => a.source === "user").length} />
-            <div className="mt-2 flex flex-col gap-4">
-              {yours.length ? (
-                yours.map((a) => <AgentCard key={a.id} a={a} onOpen={setSelected} />)
-              ) : (
-                <p className="px-0.5 font-mono text-[11px] text-zinc-600">
-                  {query ? "no agents of yours match." : "No agents under ~/.claude/agents yet."}
-                </p>
-              )}
-            </div>
-
-            <div className="sticky top-0 z-10 mt-6 bg-[#09090b] pb-4 pt-1">
+            <div className="sticky top-0 z-10 mt-1 bg-[#09090b] pb-4 pt-1">
               <SectionLabel label="Library" count={pool.length} />
               <div className="scrollbar-none mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain">
-                <SrcChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
+                <FilterChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
                 {sources.map(([s, n]) => (
-                  <SrcChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
+                  <FilterChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
                 ))}
               </div>
             </div>
@@ -178,32 +167,14 @@ function SectionLabel({ label, count }: { label: string; count: number }) {
   );
 }
 
-function SrcChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
-        active
-          ? "border-zinc-200 bg-zinc-200 text-zinc-900"
-          : "border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
-      }`}
-    >
-      <span>{label}</span>
-      <span className={`tabular-nums ${active ? "text-zinc-500" : "text-zinc-600"}`}>{count}</span>
-    </button>
-  );
-}
 
-// model is the right-edge meta when set; otherwise the source's pill.
+// model is the right-edge meta when set; otherwise nothing.
 function AgentMeta({ a }: { a: LibraryAgent }) {
   if (a.model) return <span className="font-mono text-[10px] lowercase text-zinc-500">{a.model}</span>;
-  if (a.source === "builtin") return <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">built-in</span>;
   return null;
 }
 
 function AgentCard({ a, onOpen }: { a: LibraryAgent; onOpen: (a: LibraryAgent) => void }) {
-  const dot = a.source === "user" ? "text-blue-500" : a.source === "builtin" ? "text-orange-500" : "text-emerald-500";
   return (
     <div
       role="button"
@@ -219,7 +190,6 @@ function AgentCard({ a, onOpen }: { a: LibraryAgent; onOpen: (a: LibraryAgent) =
     >
       <div className="flex items-center gap-2">
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className={`shrink-0 text-[10px] leading-none ${dot}`} aria-hidden>●</span>
           <span className="truncate font-mono text-[13px] text-zinc-200">{a.name}</span>
         </span>
         <span className="shrink-0">
@@ -227,7 +197,9 @@ function AgentCard({ a, onOpen }: { a: LibraryAgent; onOpen: (a: LibraryAgent) =
         </span>
       </div>
 
-      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{a.sourceLabel}</div>
+      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">
+        {a.source === "builtin" ? <span className="text-orange-300/70">Anthropic</span> : a.sourceLabel}
+      </div>
 
       {a.description && (
         <p className="mt-3 line-clamp-2 text-[11px] leading-snug text-zinc-500">{a.description}</p>
@@ -287,14 +259,9 @@ function AgentDetailView({ agent: a }: { agent: LibraryAgent }) {
             </>
           )}
         </div>
-        <button
-          type="button"
-          onClick={copy}
-          title={`Copy ${a.name}`}
-          className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
+        <Button variant="outline" onClick={copy} title={`Copy ${a.name}`}>
           {copied ? "Copied" : "Copy"}
-        </button>
+        </Button>
       </div>
 
       {a.tools && (

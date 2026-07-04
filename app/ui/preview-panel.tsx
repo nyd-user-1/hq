@@ -12,8 +12,9 @@ import type { PreviewProject } from "@/lib/preview-projects";
 // in-app blip, not Safari's dead page). The project list is UNIVERSAL — every
 // project hq knows (session cwds ∪ projectsRoot), each with a dev URL inferred
 // from its package.json (overridable + persisted) and a live dot.
-export default function PreviewPanel() {
+export default function PreviewPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = usePreview();
+  const active = embedded || open;
   const [projects, setProjects] = useState<PreviewProject[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [url, setUrl] = useState("");
@@ -32,7 +33,7 @@ export default function PreviewPanel() {
   // localhost TCP checks) so the live dots stay current. Auto-select the first
   // LIVE project (else the first with a URL) so the panel shows something useful.
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
@@ -67,12 +68,12 @@ export default function PreviewPanel() {
       alive = false;
       if (timer) clearTimeout(timer);
     };
-  }, [open]);
+  }, [active]);
 
   // Probe the SELECTED url for the reconnect overlay (down→up reloads the frame).
   // iframe onerror is unreliable cross-origin, so drive up/down from this probe.
   useEffect(() => {
-    if (!open || !url) return;
+    if (!active || !url) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ping = async () => {
@@ -94,7 +95,7 @@ export default function PreviewPanel() {
       alive = false;
       if (timer) clearTimeout(timer);
     };
-  }, [open, url]);
+  }, [active, url]);
 
   const applyUrl = (u: string, persistForPath?: string | null) => {
     const next = u.trim();
@@ -170,9 +171,7 @@ export default function PreviewPanel() {
   const sorted = [...projects].sort((a, b) => Number(b.live) - Number(a.live));
   const startingName = projects.find((p) => p.path === starting)?.name ?? "the project";
 
-  return (
-    <AppPanel open={open} onClose={closePanel} rootId="preview-panel-root">
-      <Boundary label="preview-panel.tsx">
+  const content = (
         <div className="flex min-h-0 flex-1 flex-col gap-2 font-mono">
           {/* header: status dot · "preview" · live count */}
           <div className="flex items-center gap-2 border-b border-zinc-800/60 pb-2 text-[11px]">
@@ -302,7 +301,11 @@ export default function PreviewPanel() {
             )}
           </div>
         </div>
-      </Boundary>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel open={open} onClose={closePanel} rootId="preview-panel-root">
+      <Boundary label="preview-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

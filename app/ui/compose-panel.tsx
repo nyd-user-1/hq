@@ -10,8 +10,10 @@ import { useCompose } from "@/app/ui/compose-state";
 // wrapping the existing ComposeTray verbatim. The tray is fully self-contained —
 // it gathers dropped artifacts and dispatches the hq:compose window event the
 // terminal listens for — so the panel is pure chrome around it.
-export default function ComposePanel() {
+export default function ComposePanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useCompose();
+  const content = <ComposeTray />;
+  if (embedded) return content;
   return (
     <AppPanel
       rootId="compose-panel-root"
@@ -19,9 +21,7 @@ export default function ComposePanel() {
       onClose={() => setOpen(false)}
       widthClass="sm:w-[min(420px,40vw)]"
     >
-      <Boundary label="compose-panel.tsx">
-        <ComposeTray />
-      </Boundary>
+      <Boundary label="compose-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

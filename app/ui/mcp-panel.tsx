@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
+import FilterChip from "@/app/ui/filter-chip";
 import { useMcp } from "@/app/ui/mcp-state";
 import type { McpServer } from "@/lib/mcp";
 
@@ -12,11 +13,6 @@ import type { McpServer } from "@/lib/mcp";
 // .mcp.json. Filter by scope; click a server to copy its launch command/URL.
 // (Remote claude.ai connectors are managed server-side and aren't on disk.)
 
-const TRANSPORT_TINT: Record<string, string> = {
-  stdio: "border-sky-500/40 text-sky-300",
-  http: "border-emerald-500/40 text-emerald-300",
-  sse: "border-violet-500/40 text-violet-300",
-};
 
 export default function McpPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useMcp();
@@ -100,11 +96,17 @@ export default function McpPanel({ embedded = false }: { embedded?: boolean } = 
         )}
 
         {servers.length > 0 && (
-          <div className="scrollbar-none mt-1 flex shrink-0 gap-1.5 overflow-x-auto overscroll-x-contain">
-            <ScopeChip label="all" count={servers.length} active={scope === "all"} onClick={() => setScope("all")} />
-            {scopes.map(([key, { label, n }]) => (
-              <ScopeChip key={key} label={label} count={n} active={scope === key} onClick={() => setScope(key)} />
-            ))}
+          <div className="mt-1 shrink-0">
+            <div className="flex items-baseline gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">Library</span>
+              <span className="font-mono text-[10px] tabular-nums text-zinc-600">{servers.length}</span>
+            </div>
+            <div className="scrollbar-none mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain">
+              <FilterChip truncate label="all" count={servers.length} active={scope === "all"} onClick={() => setScope("all")} />
+              {scopes.map(([key, { label, n }]) => (
+                <FilterChip truncate key={key} label={label} count={n} active={scope === key} onClick={() => setScope(key)} />
+              ))}
+            </div>
           </div>
         )}
 
@@ -136,22 +138,6 @@ export default function McpPanel({ embedded = false }: { embedded?: boolean } = 
   );
 }
 
-function ScopeChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
-        active
-          ? "border-zinc-200 bg-zinc-200 text-zinc-900"
-          : "border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
-      }`}
-    >
-      <span className="max-w-[120px] truncate">{label}</span>
-      <span className={`tabular-nums ${active ? "text-zinc-500" : "text-zinc-600"}`}>{count}</span>
-    </button>
-  );
-}
 
 function ServerCard({ s }: { s: McpServer }) {
   const [copied, setCopied] = useState(false);
@@ -164,7 +150,6 @@ function ServerCard({ s }: { s: McpServer }) {
       /* clipboard blocked */
     }
   };
-  const tint = TRANSPORT_TINT[s.transport] ?? "border-zinc-700 text-zinc-400";
   return (
     <div
       role="button"
@@ -182,9 +167,6 @@ function ServerCard({ s }: { s: McpServer }) {
       <div className="flex items-center gap-2">
         <span className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="truncate font-mono text-[13px] text-zinc-200">{s.name}</span>
-        </span>
-        <span className={`shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wide ${tint}`}>
-          {s.transport}
         </span>
       </div>
 

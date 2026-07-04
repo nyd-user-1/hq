@@ -16,8 +16,9 @@ import { useTextEditor } from "@/app/ui/text-editor-state";
 // Keys, Claude-chat style: ↵ saves · ⇧↵ newline · esc closes. AppPanel now owns
 // the slide-in frame + the close/expand controls, so the modal backdrop, body
 // scroll-lock, and the close-X chip are gone — the editor guts are unchanged.
-export default function TextEditorPanel() {
+export default function TextEditorPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen, text, setText, clear, editTarget, closeEdit } = useTextEditor();
+  const active = embedded || open;
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,13 +26,13 @@ export default function TextEditorPanel() {
 
   // Focus the textarea + reset transient status whenever the panel opens.
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     setError(null);
     setSavedName(null);
     setSaving(false);
     const id = requestAnimationFrame(() => taRef.current?.focus());
     return () => cancelAnimationFrame(id);
-  }, [open]);
+  }, [active]);
 
   const stats = useMemo(() => {
     const trimmed = text.trim();
@@ -126,14 +127,8 @@ export default function TextEditorPanel() {
     }
   }
 
-  return (
-    <AppPanel
-      rootId="text-editor-panel-root"
-      open={open}
-      onClose={dismiss}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="text-editor-panel.tsx">
+  const content = (
+    <>
         <p className="-mt-1 font-mono text-[11px] text-zinc-500">
           {editTarget ? (
             <>
@@ -194,7 +189,17 @@ export default function TextEditorPanel() {
             </button>
           </div>
         </div>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="text-editor-panel-root"
+      open={open}
+      onClose={dismiss}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="text-editor-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

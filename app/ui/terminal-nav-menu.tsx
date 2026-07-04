@@ -17,6 +17,7 @@ import { useAgents } from "@/app/ui/agents-state";
 import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { useConsole } from "@/app/ui/console-state";
 import { useActivity } from "@/app/ui/activity-state";
+import { useTools } from "@/app/ui/tools-state";
 import { usePermissions } from "@/app/ui/permissions-state";
 import { useKpis } from "@/app/ui/kpi-state";
 import { useChangelog } from "@/app/ui/changelog-state";
@@ -53,23 +54,14 @@ const ConsoleIcon = () => (<svg {...IP}><polyline points="4 17 10 11 4 5" /><lin
 const MetricsIcon = () => (<svg {...IP}><line x1="18" x2="18" y1="20" y2="10" /><line x1="12" x2="12" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="14" /></svg>);
 const Chevron = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600"><path d="m9 18 6-6-6-6" /></svg>);
 const Branch = () => (<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></svg>);
-// Standalone one-off toggles at the foot of the menu — moved out of the Activity
-// flyout now that Activity is a drill-down container.
-const ComposeIcon = () => (<svg {...IP}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>);
-const TextIcon = () => (<svg {...IP}><path d="M17 6.1H3" /><path d="M21 12.1H3" /><path d="M15.1 18H3" /></svg>);
-const TreeIcon = () => (<svg {...IP}><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="M7 11h4" /><path d="M7 7h6" /><path d="M7 15h8" /></svg>);
-const PreviewIcon = () => (<svg {...IP}><rect width="18" height="14" x="3" y="5" rx="2" /><path d="m10 9 3 2-3 2z" /></svg>);
-const STANDALONE = [
-  { title: "Compose", toggle: "composePanel", Icon: ComposeIcon },
-  { title: "Text", toggle: "text", Icon: TextIcon },
-  { title: "Tree", toggle: "treePanel", Icon: TreeIcon },
-  { title: "Preview", toggle: "preview", Icon: PreviewIcon },
-] as const;
+// lucide "wrench" — the Tools group glyph (Compose · Preview · Text · Tree).
+const ToolsIcon = () => (<svg {...IP}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z" /></svg>);
 
 const ITEMS = [
   { key: "Activity", Icon: ActivityIcon },
   { key: "Console", Icon: ConsoleIcon },
   { key: "Metrics", Icon: MetricsIcon },
+  { key: "Tools", Icon: ToolsIcon },
 ];
 
 export default function TerminalNavMenu({
@@ -120,6 +112,7 @@ export default function TerminalNavMenu({
   };
   const consoleCtx = useConsole();
   const activityCtx = useActivity();
+  const toolsCtx = useTools();
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
@@ -185,7 +178,7 @@ export default function TerminalNavMenu({
           {ITEMS.map(({ key, Icon }) => {
             // Activity + Console open their drill-down container DIRECTLY (no flyout);
             // the container's own "⌄" switches panels. Metrics stays a flyout.
-            const container = key === "Console" ? consoleCtx : key === "Activity" ? activityCtx : null;
+            const container = key === "Console" ? consoleCtx : key === "Activity" ? activityCtx : key === "Tools" ? toolsCtx : null;
             return container ? (
               <button
                 key={key}
@@ -221,24 +214,6 @@ export default function TerminalNavMenu({
               </div>
             );
           })}
-          {/* Standalone one-offs — Compose · Text · Tree · Preview (moved out of the
-              Activity flyout, which is a container now). */}
-          <div className="my-1 h-px bg-zinc-800" />
-          {STANDALONE.map(({ title, toggle, Icon }) => (
-            <button
-              key={title}
-              type="button"
-              onMouseEnter={() => setFlyout(null)}
-              onClick={() => {
-                toggles[toggle].toggle();
-                close();
-              }}
-              className={`${ROW} w-full ${toggles[toggle].open ? "bg-zinc-900 text-zinc-100" : ""}`}
-            >
-              <Icon />
-              {title}
-            </button>
-          ))}
           {sessionId && (
             <>
               <div className="my-1 h-px bg-zinc-800" />

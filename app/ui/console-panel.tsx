@@ -4,6 +4,7 @@ import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
 import { useConsole, CONSOLE_PANELS } from "@/app/ui/console-state";
 import ConsoleSwitchChip from "@/app/ui/console-switch-chip";
+import ConsoleNavChips from "@/app/ui/console-nav-chips";
 import CommandsPanel from "@/app/ui/commands-panel";
 import SkillsPanel from "@/app/ui/skills-panel";
 import PluginsPanel from "@/app/ui/plugins-panel";
@@ -28,7 +29,8 @@ export default function ConsolePanel() {
       <Boundary
         key={active}
         label={meta.file}
-        trail={<ConsoleSwitchChip active={active} onSelect={setActive} />}
+        chip={<ConsoleSwitchChip file={meta.file} active={active} onSelect={setActive} />}
+        trail={<ConsoleNavChips active={active} onSelect={setActive} />}
       >
         {active === "commands" && <CommandsPanel embedded />}
         {active === "skills" && <SkillsPanel embedded />}

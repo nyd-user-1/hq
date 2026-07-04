@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
+import FilterChip from "@/app/ui/filter-chip";
+import Button from "@/app/ui/button";
 import Markdown from "@/app/ui/md";
 import { useCommands } from "@/app/ui/commands-state";
 import type { LibraryCommand } from "@/lib/commands-library";
@@ -56,8 +58,7 @@ export default function CommandsPanel({ embedded = false }: { embedded?: boolean
     [query],
   );
 
-  const yours = commands.filter((c) => c.source === "user" && matchesQuery(c));
-  const pool = commands.filter((c) => c.source !== "user");
+  const pool = commands;
 
   const sources = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -118,24 +119,12 @@ export default function CommandsPanel({ embedded = false }: { embedded?: boolean
           <CommandDetailView cmd={selected} />
         ) : (
           <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col overflow-y-auto pr-2">
-            {/* YOURS */}
-            <SectionLabel label="Yours" count={commands.filter((c) => c.source === "user").length} />
-            <div className="mt-2 flex flex-col gap-4">
-              {yours.length ? (
-                yours.map((c) => <CommandCard key={c.id} c={c} onOpen={setSelected} />)
-              ) : (
-                <p className="px-0.5 font-mono text-[11px] text-zinc-600">
-                  {query ? "no commands of yours match." : "No commands under ~/.claude/commands yet."}
-                </p>
-              )}
-            </div>
-
-            <div className="sticky top-0 z-10 mt-6 bg-[#09090b] pb-4 pt-1">
+            <div className="sticky top-0 z-10 mt-1 bg-[#09090b] pb-4 pt-1">
               <SectionLabel label="Library" count={pool.length} />
               <div className="scrollbar-none mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain">
-                <SrcChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
+                <FilterChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
                 {sources.map(([s, n]) => (
-                  <SrcChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
+                  <FilterChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
                 ))}
               </div>
             </div>
@@ -181,22 +170,6 @@ function SectionLabel({ label, count }: { label: string; count: number }) {
   );
 }
 
-function SrcChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
-        active
-          ? "border-zinc-200 bg-zinc-200 text-zinc-900"
-          : "border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
-      }`}
-    >
-      <span>{label}</span>
-      <span className={`tabular-nums ${active ? "text-zinc-500" : "text-zinc-600"}`}>{count}</span>
-    </button>
-  );
-}
 
 function CommandMeta({ c }: { c: LibraryCommand }) {
   if (c.source === "builtin") {
@@ -207,14 +180,6 @@ function CommandMeta({ c }: { c: LibraryCommand }) {
 
 function CommandCard({ c, onOpen }: { c: LibraryCommand; onOpen: (c: LibraryCommand) => void }) {
   const [staged, setStaged] = useState(false);
-  const dot =
-    c.source === "user"
-      ? "text-blue-500"
-      : c.source === "builtin"
-        ? "text-zinc-500"
-        : c.source === "mcp"
-          ? "text-purple-400"
-          : "text-emerald-500";
   // Stage into the send box (not copy, not auto-run); stop the click from also
   // opening the card's detail view.
   const run = (e: React.MouseEvent) => {
@@ -243,21 +208,19 @@ function CommandCard({ c, onOpen }: { c: LibraryCommand; onOpen: (c: LibraryComm
     >
       <div className="flex items-center gap-2">
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className={`shrink-0 text-[10px] leading-none ${dot}`} aria-hidden>●</span>
           <span className="truncate font-mono text-[13px] text-zinc-200">/{c.name}</span>
         </span>
-        <button
-          type="button"
-          onClick={run}
-          title={`Stage /${c.name} in the send box`}
-          className="shrink-0 rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
+        <Button onClick={run} title={`Stage /${c.name} in the send box`}>
           {staged ? "Staged ↵" : "Run"}
-        </button>
+        </Button>
       </div>
 
       <div className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[10px] text-zinc-500">
-        <span className="truncate">{subLabel}</span>
+        {c.source === "builtin" ? (
+          <span className="truncate text-orange-300/70">Anthropic</span>
+        ) : (
+          <span className="truncate">{subLabel}</span>
+        )}
         {c.aliases?.length ? (
           <span className="shrink-0 text-zinc-600">/{c.aliases.join(" /")}</span>
         ) : null}
@@ -318,14 +281,9 @@ function CommandDetailView({ cmd: c }: { cmd: LibraryCommand }) {
           <span className="text-zinc-700"> · </span>
           <CommandMeta c={c} />
         </div>
-        <button
-          type="button"
-          onClick={run}
-          title={`Stage /${c.name} in the send box`}
-          className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
+        <Button variant="outline" onClick={run} title={`Stage /${c.name} in the send box`}>
           {copied ? "Staged ↵" : "Run"}
-        </button>
+        </Button>
       </div>
 
       {c.argHint && (

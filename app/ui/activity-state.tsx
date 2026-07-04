@@ -15,15 +15,15 @@ export type ActivityKey =
   | "issues"
   | "tasks";
 
-// Order here IS the dropdown order (the requested ordering, not A–Z). find-by-key
-// everywhere else, so this stays display-only.
+// Order here IS the dropdown + chevron order (A–Z by title). find-by-key everywhere
+// else, so this stays display-only.
 export const ACTIVITY_PANELS: { key: ActivityKey; title: string; file: string }[] = [
-  { key: "projects", title: "Projects", file: "projects-panel.tsx" },
-  { key: "todos", title: "To Do", file: "todo-panel.tsx" },
-  { key: "components", title: "Components", file: "components-panel.tsx" },
   { key: "changelog", title: "Changelog", file: "changelog-panel.tsx" },
+  { key: "components", title: "Components", file: "components-panel.tsx" },
   { key: "issues", title: "Issues", file: "issues-panel.tsx" },
+  { key: "projects", title: "Projects", file: "projects-panel.tsx" },
   { key: "tasks", title: "Tasks", file: "tasks-panel.tsx" },
+  { key: "todos", title: "To Do", file: "todo-panel.tsx" },
 ];
 
 const KEYS = ACTIVITY_PANELS.map((p) => p.key) as string[];

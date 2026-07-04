@@ -23,8 +23,9 @@ type TreeData = {
   teams: Team[];
 };
 
-export default function TreePanel() {
+export default function TreePanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useTree();
+  const active = embedded || open;
   const [data, setData] = useState<TreeData>({ sessions: [], jobs: [], teams: [] });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -45,19 +46,13 @@ export default function TreePanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const totalSub = data.sessions.reduce((n, s) => n + s.subagents.length, 0);
 
-  return (
-    <AppPanel
-      rootId="tree-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="tree-panel.tsx">
+  const content = (
+    <>
         {/* header — summary count + refresh (shrink-0, stays put above the tree) */}
         <div className="flex shrink-0 items-baseline gap-2">
           <span className="font-mono text-xs text-zinc-300">tree</span>
@@ -107,7 +102,17 @@ export default function TreePanel() {
         <p className="shrink-0 text-xs text-zinc-600">
           nested subagents + background/dispatched agents Claude Code wrote to disk · click a row to pin its parent session · subagents aren&apos;t separately resumable
         </p>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="tree-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="tree-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

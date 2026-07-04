@@ -168,12 +168,11 @@ function HookCard({ h }: { h: HookEntry }) {
       className="cursor-pointer rounded-md border border-zinc-800/70 bg-zinc-900/30 p-2.5 text-left transition-colors hover:border-zinc-600"
     >
       <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-500">
-          {h.matcher ? <span className="text-zinc-300">{h.matcher}</span> : "all events"}
-        </span>
-        <span className="shrink-0 font-mono text-[10px] text-zinc-600">{copied ? "copied" : h.sourceLabel}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-zinc-200">{h.matcher || "all events"}</span>
+        {copied && <span className="shrink-0 font-mono text-[10px] text-emerald-400">copied</span>}
       </div>
-      <p className="mt-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-snug text-zinc-300">
+      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{h.sourceLabel}</div>
+      <p className="mt-3 whitespace-pre-wrap break-words font-mono text-[11px] leading-snug text-zinc-500">
         {h.command}
       </p>
     </div>

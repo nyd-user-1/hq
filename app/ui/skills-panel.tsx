@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
+import FilterChip from "@/app/ui/filter-chip";
+import Button from "@/app/ui/button";
 import Markdown from "@/app/ui/md";
 import { useSkills } from "@/app/ui/skills-state";
 import type { LibrarySkill } from "@/lib/skills-library";
@@ -64,8 +66,7 @@ export default function SkillsPanel({ embedded = false }: { embedded?: boolean }
   );
 
   // Yours = your own skills. Library = everything from plugins + built-ins.
-  const yours = skills.filter((s) => s.source === "user" && matchesQuery(s));
-  const pool = skills.filter((s) => s.source !== "user");
+  const pool = skills;
 
   // source chips for the library, most-populous first.
   const sources = useMemo(() => {
@@ -128,26 +129,14 @@ export default function SkillsPanel({ embedded = false }: { embedded?: boolean }
           <SkillDetailView skill={selected} />
         ) : (
           <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col overflow-y-auto pr-2">
-            {/* YOURS */}
-            <SectionLabel label="Yours" count={skills.filter((s) => s.source === "user").length} />
-            <div className="mt-2 flex flex-col gap-4">
-              {yours.length ? (
-                yours.map((s) => <SkillCard key={s.id} s={s} onOpen={setSelected} />)
-              ) : (
-                <p className="px-0.5 font-mono text-[11px] text-zinc-600">
-                  {query ? "no skills of yours match." : "No skills under ~/.claude/skills yet."}
-                </p>
-              )}
-            </div>
-
             {/* LIBRARY — source bar sticks while you scroll (overflow-y-only parent
                 so Safari's position:sticky keeps painting; see plugins-panel). */}
-            <div className="sticky top-0 z-10 mt-6 bg-[#09090b] pb-4 pt-1">
+            <div className="sticky top-0 z-10 mt-1 bg-[#09090b] pb-4 pt-1">
               <SectionLabel label="Library" count={pool.length} />
               <div className="scrollbar-none mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain">
-                <SrcChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
+                <FilterChip label="all" count={pool.length} active={src === "all"} onClick={() => setSrc("all")} />
                 {sources.map(([s, n]) => (
-                  <SrcChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
+                  <FilterChip key={s} label={s} count={n} active={src === s} onClick={() => setSrc(s)} />
                 ))}
               </div>
             </div>
@@ -194,22 +183,6 @@ function SectionLabel({ label, count }: { label: string; count: number }) {
   );
 }
 
-function SrcChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
-        active
-          ? "border-zinc-200 bg-zinc-200 text-zinc-900"
-          : "border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
-      }`}
-    >
-      <span>{label}</span>
-      <span className={`tabular-nums ${active ? "text-zinc-500" : "text-zinc-600"}`}>{count}</span>
-    </button>
-  );
-}
 
 // The right-edge meta: token estimate for real files; "Built-in" carries no file.
 function SkillMeta({ s }: { s: LibrarySkill }) {
@@ -223,7 +196,6 @@ function SkillMeta({ s }: { s: LibrarySkill }) {
 // into the detail; the Run button stages "/name " into the send box.
 function SkillCard({ s, onOpen }: { s: LibrarySkill; onOpen: (s: LibrarySkill) => void }) {
   const [staged, setStaged] = useState(false);
-  const dot = s.source === "user" ? "text-blue-500" : s.source === "builtin" ? "text-orange-500" : "text-emerald-500";
   const run = (e: React.MouseEvent) => {
     e.stopPropagation();
     prefill(`/${s.name} `);
@@ -248,7 +220,6 @@ function SkillCard({ s, onOpen }: { s: LibrarySkill; onOpen: (s: LibrarySkill) =
     >
       <div className="flex items-center gap-2">
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className={`shrink-0 text-[10px] leading-none ${dot}`} aria-hidden>●</span>
           <span className="truncate font-mono text-[13px] text-zinc-200">/{s.name}</span>
           {s.workflow && (
             <span className="shrink-0 rounded bg-fuchsia-500/15 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-fuchsia-300">
@@ -256,17 +227,14 @@ function SkillCard({ s, onOpen }: { s: LibrarySkill; onOpen: (s: LibrarySkill) =
             </span>
           )}
         </span>
-        <button
-          type="button"
-          onClick={run}
-          title={`Stage /${s.name} in the send box`}
-          className="shrink-0 rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
+        <Button onClick={run} title={`Stage /${s.name} in the send box`}>
           {staged ? "Staged ↵" : "Run"}
-        </button>
+        </Button>
       </div>
 
-      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">{subLabel}</div>
+      <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">
+        {s.source === "builtin" ? <span className="text-orange-300/70">Anthropic</span> : subLabel}
+      </div>
 
       {s.description && (
         <p className="mt-3 line-clamp-2 text-[11px] leading-snug text-zinc-500">{s.description}</p>
@@ -314,14 +282,9 @@ function SkillDetailView({ skill: s }: { skill: LibrarySkill }) {
           <span className="text-zinc-700"> · </span>
           <SkillMeta s={s} />
         </div>
-        <button
-          type="button"
-          onClick={() => prefill(`/${s.name} `)}
-          title={`Load /${s.name} into the terminal`}
-          className="shrink-0 rounded-md border border-zinc-700 px-2.5 py-1 font-mono text-[11px] text-zinc-300 transition-colors hover:border-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-        >
+        <Button variant="outline" onClick={() => prefill(`/${s.name} `)} title={`Load /${s.name} into the terminal`}>
           Run
-        </button>
+        </Button>
       </div>
 
       {s.argHint && (

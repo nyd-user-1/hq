@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
+import FilterChip from "@/app/ui/filter-chip";
+import Switch from "@/app/ui/switch";
+import Button from "@/app/ui/button";
 import { GitHubMark } from "@/app/ui/brand-marks";
 import { usePlugins } from "@/app/ui/plugins-state";
 import type { CatalogPlugin } from "@/lib/plugin-catalog";
@@ -94,11 +97,9 @@ export default function PluginsPanel({ embedded = false }: { embedded?: boolean 
     [query],
   );
 
-  // Yours = enabled (filtered by the search box). Pool = everything installable.
-  const yours = catalog.filter((p) => p.enabled && matchesQuery(p));
-  const pool = catalog.filter((p) => !p.enabled);
+  const pool = catalog;
 
-  // category chips, built from the installable pool, most-populous first.
+  // category chips, built from the pool, most-populous first.
   const cats = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const p of pool) if (p.category) counts[p.category] = (counts[p.category] ?? 0) + 1;
@@ -109,7 +110,9 @@ export default function PluginsPanel({ embedded = false }: { embedded?: boolean 
     .filter((p) => (cat === "all" || p.category === cat) && matchesQuery(p))
     .sort(
       (a, b) =>
-        Number(FEATURED.has(b.ref)) - Number(FEATURED.has(a.ref)) || a.name.localeCompare(b.name),
+        Number(b.enabled) - Number(a.enabled) ||
+        Number(FEATURED.has(b.ref)) - Number(FEATURED.has(a.ref)) ||
+        a.name.localeCompare(b.name),
     );
 
   const detailChanged = useCallback(() => {
@@ -167,28 +170,16 @@ export default function PluginsPanel({ embedded = false }: { embedded?: boolean 
           <PluginDetailView base={selected} detail={detail} loading={detailLoading} onChanged={detailChanged} />
         ) : (
           <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col overflow-y-auto pr-2">
-            {/* YOURS */}
-            <SectionLabel label="Yours" count={catalog.filter((p) => p.enabled).length} />
-            <div className="mt-2 flex flex-col gap-4">
-              {yours.length ? (
-                yours.map((p) => <PluginCard key={p.ref} p={p} onOpen={setSelected} onChanged={load} />)
-              ) : (
-                <p className="px-0.5 font-mono text-[11px] text-zinc-600">
-                  {query ? "no enabled plugins match." : "Nothing enabled yet — install one below."}
-                </p>
-              )}
-            </div>
-
-            {/* CATALOG — the category bar sticks while you scroll the list. NOTE:
-                the scroll PARENT must stay overflow-y-only — adding overflow-x here
-                breaks position:sticky rendering in Safari (cards bleed through the
-                bar). overscroll-x-contain keeps a chip swipe from nudging the list. */}
-            <div className="sticky top-0 z-10 mt-6 bg-[#09090b] pb-4 pt-1">
-              <SectionLabel label="Catalog" count={pool.length} />
+            {/* The category bar sticks while you scroll the list. NOTE: the scroll
+                PARENT must stay overflow-y-only — adding overflow-x here breaks
+                position:sticky rendering in Safari (cards bleed through the bar).
+                overscroll-x-contain keeps a chip swipe from nudging the list. */}
+            <div className="sticky top-0 z-10 mt-1 bg-[#09090b] pb-4 pt-1">
+              <SectionLabel label="Library" count={pool.length} />
               <div className="scrollbar-none mt-2 flex gap-1.5 overflow-x-auto overscroll-x-contain">
-                <CatChip label="all" count={pool.length} active={cat === "all"} onClick={() => setCat("all")} />
+                <FilterChip label="all" count={pool.length} active={cat === "all"} onClick={() => setCat("all")} />
                 {cats.map(([c, n]) => (
-                  <CatChip key={c} label={c} count={n} active={cat === c} onClick={() => setCat(c)} />
+                  <FilterChip key={c} label={c} count={n} active={cat === c} onClick={() => setCat(c)} />
                 ))}
               </div>
             </div>
@@ -235,22 +226,6 @@ function SectionLabel({ label, count }: { label: string; count: number }) {
   );
 }
 
-function CatChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
-        active
-          ? "border-zinc-200 bg-zinc-200 text-zinc-900"
-          : "border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
-      }`}
-    >
-      <span>{label}</span>
-      <span className={`tabular-nums ${active ? "text-zinc-500" : "text-zinc-600"}`}>{count}</span>
-    </button>
-  );
-}
 
 // The list card: vendor-led identity + one control. The whole card drills into
 // the detail view; the control stops propagation so toggling never opens it.
@@ -284,13 +259,12 @@ function PluginCard({
         </div>
       </div>
 
-      {(p.author || p.category) && (
-        <div className="mt-0.5 truncate font-mono text-[10px]">
+      {(p.author || p.enabled) && (
+        <div className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[10px]">
           {p.author && (
             <span className={firstParty ? "text-orange-300/70" : "text-zinc-500"}>{p.author}</span>
           )}
-          {p.author && p.category && <span className="text-zinc-700"> · </span>}
-          {p.category && <span className="text-zinc-600">{titleCase(p.category)}</span>}
+          {p.enabled && <span className="text-emerald-400">enabled</span>}
         </div>
       )}
 
@@ -463,32 +437,10 @@ function EnableControl({ refId, enabled, onChanged }: { refId: string; enabled: 
   return on ? (
     <Switch on disabled={busy} onClick={() => toggle(false)} title="disable" />
   ) : (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => toggle(true)}
-      className="rounded-md px-2 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-60"
-    >
+    <Button disabled={busy} onClick={() => toggle(true)}>
       {busy ? "installing…" : "Install"}
-    </button>
+    </Button>
   );
 }
 
 // A macOS-style switch (green ring when on).
-function Switch({ on, onClick, disabled, title }: { on: boolean; onClick: () => void; disabled?: boolean; title?: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={onClick}
-      title={title}
-      className={`relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full ring-1 transition-colors disabled:opacity-50 ${
-        on ? "bg-emerald-500 ring-emerald-400" : "bg-zinc-600 ring-zinc-500"
-      }`}
-    >
-      <span className={`inline-block size-3.5 rounded-full bg-white shadow-sm transition-transform ${on ? "translate-x-[15px]" : "translate-x-0.5"}`} />
-    </button>
-  );
-}

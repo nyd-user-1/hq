@@ -4,6 +4,7 @@ import AppPanel from "@/app/ui/app-panel";
 import Boundary from "@/app/ui/boundary";
 import { useActivity, ACTIVITY_PANELS } from "@/app/ui/activity-state";
 import ActivitySwitchChip from "@/app/ui/activity-switch-chip";
+import ActivityNavChips from "@/app/ui/activity-nav-chips";
 import ProjectsPanel from "@/app/ui/projects-panel";
 import TodoPanel from "@/app/ui/todo-panel";
 import ComponentsPanel from "@/app/ui/components-panel";
@@ -26,7 +27,8 @@ export default function ActivityPanel() {
       <Boundary
         key={active}
         label={meta.file}
-        trail={<ActivitySwitchChip active={active} onSelect={setActive} />}
+        chip={<ActivitySwitchChip file={meta.file} active={active} onSelect={setActive} />}
+        trail={<ActivityNavChips active={active} onSelect={setActive} />}
       >
         {active === "projects" && <ProjectsPanel embedded />}
         {active === "todos" && <TodoPanel embedded />}

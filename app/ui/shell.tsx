@@ -17,6 +17,8 @@ import { ConsoleProvider } from "@/app/ui/console-state";
 import ConsolePanel from "@/app/ui/console-panel";
 import { ActivityProvider } from "@/app/ui/activity-state";
 import ActivityPanel from "@/app/ui/activity-panel";
+import { ToolsProvider } from "@/app/ui/tools-state";
+import ToolsPanel from "@/app/ui/tools-panel";
 import { KpiProvider } from "@/app/ui/kpi-state";
 import KpiPanel from "@/app/ui/kpi-panel";
 import { CommandsProvider } from "@/app/ui/commands-state";
@@ -117,6 +119,7 @@ export default async function Shell({
       <CommandsProvider>
       <ConsoleProvider>
       <ActivityProvider>
+      <ToolsProvider>
       <HooksProvider>
       <McpProvider>
       <AgentsProvider>
@@ -213,6 +216,10 @@ export default async function Shell({
               activity panel is active (Projects · To Do · Components · Changelog ·
               Issues · Tasks) and swaps between them in place. */}
           <div id="activity-panel-root" className="flex h-full min-w-0" />
+          {/* The Tools container's own portal root — one panel that hosts whichever
+              tools panel is active (Compose · Preview · Text · Tree) and swaps
+              between them in place. */}
+          <div id="tools-panel-root" className="flex h-full min-w-0" />
           {/* The Console capability panels — Hooks · MCP · Agents · Output Styles,
               each its own client-state portal, siblings of Skills/Commands. */}
           <div id="hooks-panel-root" className="flex h-full min-w-0" />
@@ -276,6 +283,7 @@ export default async function Shell({
       <CommandsPanel />
       <ConsolePanel />
       <ActivityPanel />
+      <ToolsPanel />
       <HooksPanel />
       <McpPanel />
       <AgentsPanel />
@@ -330,6 +338,7 @@ export default async function Shell({
       </AgentsProvider>
       </McpProvider>
       </HooksProvider>
+      </ToolsProvider>
       </ActivityProvider>
       </ConsoleProvider>
       </CommandsProvider>
