@@ -124,7 +124,8 @@
   to { opacity: 1; }
 }
 
-/* Hero "New · Agent Teams" pill (app/ui/landing/hero.tsx) — a diagonal light sweep
+/* Hover shimmer, shared by the hero "New · Agent Teams" button (app/ui/landing/hero.tsx)
+   and the section spec buttons (app/ui/landing/spec-drawer.tsx) — a diagonal light sweep
    across the button on hover. The overlay sits off-screen left at rest and travels
    across once per hover-enter. */
 @keyframes hq-shimmer {

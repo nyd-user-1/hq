@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MetricItem, Shape, Tone } from "@/lib/fleet";
-import { ShapeCard, smoothPath } from "@/app/ui/fleet-view";
+import { ShapeCard } from "@/app/ui/fleet-view";
 import { useInView } from "./use-in-view";
 
 // Parse a formatted stat ("55.3M", "$7.5k", "4,418", "26%", "48") into its animatable
@@ -69,7 +69,6 @@ function CountUp({ value, className }: { value: string; className?: string }) {
 // per-session token history is often sparse, so the two stacked charts get
 // hand-shaped fake series (real dates + structure kept; only the values swapped).
 // This lives here, NOT in lib/fleet.ts, so the real Fleet dashboard stays honest.
-const INK: Record<string, string> = { green: "#4ade80", blue: "#60a5fa", orange: "#fb923c", amber: "#fbbf24", red: "#f87171", zinc: "#a1a1aa" };
 
 // a smooth gaussian bump: center/width as fractions of the span so it adapts to n
 function hump(n: number, cFrac: number, wFrac: number, h: number): number[] {
@@ -164,6 +163,10 @@ function prepare(items: MetricItem[], range: GlobalRange): MetricItem[] {
 }
 
 // ── stat tiles ────────────────────────────────────────────────────────────────
+// Landing-shot label overrides — shorter labels that fit the 8-up row. The real
+// Fleet labels stay untouched in lib/fleet.ts (this is the demo shot only).
+const LABELS: Record<string, string> = { f_cliff: "ctx", todos_done: "done" };
+
 const TONE: Record<string, string> = {
   green: "text-green-400",
   blue: "text-blue-400",
@@ -173,15 +176,7 @@ const TONE: Record<string, string> = {
   zinc: "text-zinc-50",
 };
 
-// fake trend sparklines + deltas per tile (a demo shot — pure decoration)
-const SPARKS = [
-  [4, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16],
-  [12, 11, 13, 10, 12, 14, 13, 16, 15, 18, 17, 20],
-  [6, 8, 7, 9, 11, 10, 13, 12, 15, 14, 17, 18],
-  [5, 5, 6, 7, 6, 8, 9, 8, 10, 11, 10, 12],
-  [9, 8, 10, 7, 9, 6, 8, 5, 7, 6, 4, 5],
-  [7, 9, 8, 11, 10, 12, 11, 13, 12, 14, 13, 15],
-];
+// fake per-tile deltas (a demo shot — pure decoration)
 const DELTAS: { v: string; up: boolean }[] = [
   { v: "12%", up: true },
   { v: "8%", up: true },
@@ -189,46 +184,22 @@ const DELTAS: { v: string; up: boolean }[] = [
   { v: "3%", up: true },
   { v: "5%", up: false },
   { v: "2%", up: true },
+  { v: "9%", up: true },
+  { v: "4%", up: false },
 ];
 
-function Sparkline({ points, color, className }: { points: number[]; color: string; className?: string }) {
-  const W = 100;
-  const H = 24;
-  const max = Math.max(...points);
-  const min = Math.min(...points);
-  const rng = max - min || 1;
-  const xy = points.map((p, i) => [(i / (points.length - 1)) * W, H - ((p - min) / rng) * (H - 4) - 2] as [number, number]);
-  const d = smoothPath(xy);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={className} aria-hidden>
-      <path d={`${d} L${W},${H} L0,${H} Z`} fill={color} fillOpacity="0.14" />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
-// A KPI tile: label above the number, delta chip right beside it, and a full-width
-// trend sparkline across the bottom (brightens on hover).
+// A KPI tile: label above the number, delta chip right beside it.
 function ShotStat({ value, label, tone, idx }: { value: string; label?: string; tone?: string; idx: number }) {
-  const spark = SPARKS[idx % SPARKS.length];
   const delta = DELTAS[idx % DELTAS.length];
-  const ink = INK[tone ?? "zinc"] ?? INK.zinc;
   return (
-    <div className="group relative flex h-[72px] flex-col justify-start overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 px-4 pt-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900/60">
-      <div className="relative z-[1]">
-        {label && <div className="text-[10px] uppercase tracking-widest text-zinc-500">{label}</div>}
-        <div className="mt-1 flex items-baseline gap-2">
-          <CountUp value={value} className={`text-[24px] leading-none tracking-tight ${TONE[tone ?? "zinc"] ?? TONE.zinc}`} />
-          <span className={`font-mono text-[11px] ${delta.up ? "text-emerald-400" : "text-red-400"}`}>
-            {delta.up ? "▲" : "▼"} {delta.v}
-          </span>
-        </div>
+    <div className="flex h-[72px] flex-col justify-center overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 px-3 transition-colors hover:border-zinc-700 hover:bg-zinc-900/60">
+      {label && <div className="truncate text-[10px] uppercase tracking-wider text-zinc-500 max-[1080px]:hidden">{label}</div>}
+      <div className="mt-1 flex items-baseline gap-1.5 whitespace-nowrap">
+        <CountUp value={value} className={`text-[20px] leading-none tracking-tight ${TONE[tone ?? "zinc"] ?? TONE.zinc}`} />
+        <span className={`font-mono text-[10px] max-[1200px]:hidden ${delta.up ? "text-emerald-400" : "text-red-400"}`}>
+          {delta.up ? "▲" : "▼"} {delta.v}
+        </span>
       </div>
-      <Sparkline
-        points={spark}
-        color={ink}
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-8 w-full opacity-45 transition-opacity duration-300 group-hover:opacity-80"
-      />
     </div>
   );
 }
@@ -243,7 +214,7 @@ export default function DashboardBoard({ items, range = "live" }: { items: Metri
   const by = useMemo(() => new Map(prepared.map((it) => [it.id, it])), [prepared]);
   const stat = (id: string, idx: number) => {
     const it = by.get(id);
-    return it?.stat ? <ShotStat value={it.stat.value} label={it.stat.label} tone={it.stat.tone} idx={idx} /> : null;
+    return it?.stat ? <ShotStat value={it.stat.value} label={LABELS[id] ?? it.stat.label} tone={it.stat.tone} idx={idx} /> : null;
   };
   const shape = (id: string) => {
     const it = by.get(id);
@@ -251,13 +222,15 @@ export default function DashboardBoard({ items, range = "live" }: { items: Metri
   };
   return (
     <div className="flex h-full flex-col gap-3 p-3">
-      <div className="grid shrink-0 grid-cols-3 gap-3">
+      <div className="grid shrink-0 grid-cols-8 gap-2">
         {stat("f_sessions", 0)}
         {stat("f_tokens", 1)}
         {stat("f_turns", 2)}
         {stat("f_projects", 3)}
-        {stat("todos_pending", 4)}
-        {stat("f_cliff", 5)}
+        {stat("f_spend", 4)}
+        {stat("todos_pending", 5)}
+        {stat("todos_done", 6)}
+        {stat("f_cliff", 7)}
       </div>
       <div className="min-h-0 flex-[1.1]">{shape("tokens_by_session_area")}</div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2">

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Section, StackedHead, SpinRing } from "./primitives";
 import type { Spec } from "./spec-drawer";
 
@@ -57,8 +58,8 @@ export default function Observe() {
         {STATES.map((s, i) => (
           <div
             key={s.label}
-            className="group relative flex flex-col rounded-lg border border-dashed p-4 pt-6 font-mono"
-            style={{ borderColor: s.border, background: s.bg, minHeight: 500 }}
+            className="group relative flex flex-col rounded-lg border border-dashed p-4 pt-6 font-mono transition-colors duration-300 hover:bg-[var(--pane-bg)]"
+            style={{ borderColor: s.border, ["--pane-bg"]: s.bg, minHeight: 500 } as CSSProperties}
           >
             <span
               className="absolute -top-2.5 left-4 z-20 inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] text-white"

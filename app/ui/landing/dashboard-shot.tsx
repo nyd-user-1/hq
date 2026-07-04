@@ -15,7 +15,9 @@ const IDS = [
   "f_tokens",
   "f_turns",
   "f_projects",
+  "f_spend",
   "todos_pending",
+  "todos_done",
   "f_cliff",
   "tokens_by_session_area",
   "tokens_day_area",
@@ -101,14 +103,8 @@ export default function DashboardShot() {
 
   return (
     <div className="relative flex h-full flex-col">
-      <div className="flex items-center gap-2.5 border-b px-4 py-2.5 font-mono text-[11px]" style={{ borderColor: "#ffffff0d" }}>
-        <LiveDot />
-        <span style={{ color: "#d0d6e0" }}>hq</span>
-        <span style={{ color: "#62666d" }}>·</span>
-        <span style={{ color: "#8a8f98" }}>analytics</span>
-        <span className="ml-auto">
-          <LiveMenu value={range} onChange={setRange} />
-        </span>
+      <div className="flex items-center border-b px-4 py-2.5 font-mono text-[11px]" style={{ borderColor: "#ffffff0d" }}>
+        <LiveMenu value={range} onChange={setRange} />
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {items ? <DashboardBoard items={items} range={range} /> : <div aria-hidden className="h-full" />}

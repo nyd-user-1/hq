@@ -52,10 +52,14 @@ export default function SpecDrawer({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="group inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-[13px] transition-colors hover:bg-white/[0.08]"
+          className="group relative inline-flex items-center gap-2 overflow-hidden rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-[13px] transition-colors hover:bg-white/[0.08]"
         >
-          <span className="text-zinc-500">{n}</span>
-          <span className="text-zinc-200">{name}</span>
+          <span className="relative z-[1] text-zinc-500">{n}</span>
+          <span className="relative z-[1] text-zinc-200">{name}</span>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -translate-x-[160%] bg-gradient-to-r from-transparent via-white/30 to-transparent motion-safe:group-hover:animate-[hq-shimmer_1.2s_ease-out_infinite]"
+          />
         </button>
       )}
 
