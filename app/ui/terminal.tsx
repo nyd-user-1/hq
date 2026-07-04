@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import Markdown from "@/app/ui/md";
 import BlockMenu from "@/app/ui/block-menu";
+import { useDocs } from "@/app/ui/docs-state";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import SearchField from "@/app/ui/search-field";
 import ComposeMenu from "@/app/ui/compose-menu";
@@ -1032,6 +1033,7 @@ export default function Terminal({
   const taRef = useRef<HTMLTextAreaElement>(null); // send box — for auto-grow
   const cmdOverlayRef = useRef<HTMLDivElement>(null); // command-color overlay (scroll-synced to the textarea)
   const [savedNotes, setSavedNotes] = useState<Set<string>>(new Set()); // blocks saved as notes (keyed by text)
+  const { openDoc } = useDocs(); // block ⋮ → Open in Doc (the Docs editor)
   // Per-block view state (favorite / hidden / 👍👎), keyed by the block's stable
   // id (jsonl uuid, falling back to its timestamp). Hydrated from the block-meta
   // sidecar whenever the shown session changes.
@@ -2052,6 +2054,39 @@ export default function Terminal({
     }
   }
 
+  // Send a block into the Docs editor: create a document from it (title = its
+  // first line, provenance = this session) and open the tab — DocsReveal
+  // surfaces the @docs pane beside this terminal, so the block reads/edits
+  // side-by-side with the live session.
+  async function openBlockInDoc(it: { text: string; role?: string }) {
+    if (!it.text?.trim()) return;
+    const title = (it.text.split("\n").find((l) => l.trim()) || "block")
+      .replace(/^#+\s*/, "")
+      .trim()
+      .slice(0, 80);
+    try {
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          text: it.text,
+          sessionId: pinned ?? resolvedId,
+          source: it.role === "user" ? "user-block" : "block",
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { name } = await res.json();
+      const g = await fetch(
+        `/api/file-edit?kind=document&ref=${encodeURIComponent(name)}`
+      );
+      const content = g.ok ? ((await g.json())?.content ?? "") : undefined;
+      openDoc({ kind: "document", ref: name, title, content });
+    } catch {
+      setError("couldn't open block in Doc");
+    }
+  }
+
   // ── Per-block actions (favorite / hide / 👍👎 / save-as-code) ──────────────
   type TurnItem = Extract<TimelineItem, { kind: "turn" }>;
   // The block id used to key block-meta: the source jsonl uuid, falling back to
@@ -2261,6 +2296,7 @@ export default function Terminal({
               onFavorite={() => toggleBlockFavorite(it)}
               onSaveNote={() => saveNoteBlock(it)}
               onSaveCode={() => saveCodeBlock(it)}
+              onOpenDoc={() => openBlockInDoc(it)}
               onReact={(r) => reactToBlock(it, r)}
               onHide={() => toggleBlockHidden(it)}
             />
@@ -2399,6 +2435,9 @@ export default function Terminal({
               saveNoteBlock({ text: `${it.tool} · ${it.title}\n\n${it.detail}`, role: "assistant", at: it.at })
             }
             onSaveCode={() => saveCodeBlock({ text: it.detail, role: "assistant", at: it.at })}
+            onOpenDoc={() =>
+              openBlockInDoc({ text: `${it.tool} · ${it.title}\n\n${it.detail}`, role: "assistant" })
+            }
             onReact={() => {}}
             onHide={() => toggleToolHidden(it)}
           />

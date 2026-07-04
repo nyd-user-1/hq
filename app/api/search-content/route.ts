@@ -3,6 +3,7 @@ import { turnsFor, timelineFor } from "@/lib/transcript";
 import { retainedTranscriptText } from "@/lib/archive";
 import { getMemoryFile, getScriptFile } from "@/lib/search";
 import { getNoteFile } from "@/lib/notes";
+import { getDocumentFile } from "@/lib/documents";
 import { readDoc } from "@/lib/docs";
 import { getRepoFile } from "@/lib/files";
 import { getCommit } from "@/lib/shipped";
@@ -63,6 +64,13 @@ function build(kind: string, ref: string): Body {
       return {
         format: "markdown",
         content: c ? c.replace(/^---[\s\S]*?---\n/, "") : "_note not found_",
+      };
+    }
+    case "document": {
+      const c = getDocumentFile(ref);
+      return {
+        format: "markdown",
+        content: c ? c.replace(/^---[\s\S]*?---\n/, "") : "_document not found_",
       };
     }
     case "script":

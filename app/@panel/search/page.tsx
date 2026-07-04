@@ -21,6 +21,7 @@ import {
   type SearchHit,
 } from "@/lib/search";
 import { getNoteFile } from "@/lib/notes";
+import { getDocumentFile, documentTitle } from "@/lib/documents";
 import { readDoc, warmDocs } from "@/lib/docs";
 import { getRepoFile } from "@/lib/files";
 import { getCommit } from "@/lib/shipped";
@@ -137,6 +138,7 @@ export default async function Search({
     open?: string;
     openSession?: string;
     openNote?: string;
+    openDocument?: string;
     openScript?: string;
     openFile?: string;
     openComponent?: string;
@@ -156,6 +158,7 @@ export default async function Search({
     open,
     openSession,
     openNote,
+    openDocument,
     openScript,
     openFile,
     openComponent,
@@ -319,6 +322,43 @@ export default async function Search({
               <Markdown text={body} />
             ) : (
               <p className="text-xs text-zinc-600">note not found</p>
+            )}
+          </div>
+        </div>
+      </Boundary>
+    );
+  }
+
+  // ── opened document (a Docs-editor page) ─────────────────────────────────
+  if (openDocument) {
+    const content = getDocumentFile(openDocument);
+    const body = content ? content.replace(/^---[\s\S]*?---\n/, "") : "";
+    return (
+      <Boundary label="@panel/search/page.tsx">
+        <div className="flex items-baseline gap-3">
+          <Link
+            href={back}
+            scroll={false}
+            className="shrink-0 font-mono text-xs text-blue-400 hover:text-blue-300"
+          >
+            ← results
+          </Link>
+          <span className="min-w-0 truncate font-mono text-xs text-zinc-500">
+            document
+          </span>
+        </div>
+        <div className="relative min-h-0 flex-1">
+          <ReaderActions
+            kind="document"
+            refId={openDocument}
+            title={content ? documentTitle(content) : openDocument}
+            text={body}
+          />
+          <div className="scrollbar-none h-full overflow-y-auto text-sm">
+            {content ? (
+              <Markdown text={body} />
+            ) : (
+              <p className="text-xs text-zinc-600">document not found</p>
             )}
           </div>
         </div>

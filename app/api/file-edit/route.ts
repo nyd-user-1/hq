@@ -2,27 +2,31 @@ import { NextResponse } from "next/server";
 import { getMemoryFile, writeMemoryFile } from "@/lib/search";
 import { getNoteFile, writeNoteFile } from "@/lib/notes";
 import { getRepoFile, writeRepoFile } from "@/lib/files";
+import { getDocumentFile, writeDocumentFile } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
 
 // Read/write the RAW content of an editable file behind the ⌘K reader's Edit
-// pencil. Editable kinds only: memory notes, HQ notes, and repo .md files. GET
-// returns the raw file (frontmatter included — the editor edits it verbatim); POST
-// writes it back atomically. Same-origin middleware guards this like every route.
+// pencil + the Docs editor. Editable kinds only: memory notes, HQ notes, repo
+// .md files, and HQ documents. GET returns the raw file (frontmatter included —
+// the editor edits it verbatim); POST writes it back atomically. Same-origin
+// middleware guards this like every route.
 
-type Kind = "memory" | "note" | "file";
+type Kind = "memory" | "note" | "file" | "document";
 const READERS: Record<Kind, (ref: string) => string | null> = {
   memory: getMemoryFile,
   note: getNoteFile,
   file: getRepoFile,
+  document: getDocumentFile,
 };
 const WRITERS: Record<Kind, (ref: string, content: string) => boolean> = {
   memory: writeMemoryFile,
   note: writeNoteFile,
   file: writeRepoFile,
+  document: writeDocumentFile,
 };
 const isKind = (k: string): k is Kind =>
-  k === "memory" || k === "note" || k === "file";
+  k === "memory" || k === "note" || k === "file" || k === "document";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

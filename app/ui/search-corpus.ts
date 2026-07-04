@@ -20,7 +20,8 @@ export type Corpus = {
 // transcripts intentionally share emerald (a session IS its transcript); the
 // label disambiguates them on the rail.
 export const CORPORA: Corpus[] = [
-  { scope: "docs", kind: "doc", label: "Docs", dot: "bg-indigo-400", text: "text-indigo-300", chip: "bg-indigo-500/15 text-indigo-300" },
+  { scope: "docs", kind: "doc", label: "CC Docs", dot: "bg-indigo-400", text: "text-indigo-300", chip: "bg-indigo-500/15 text-indigo-300" },
+  { scope: "documents", kind: "document", label: "Documents", dot: "bg-lime-400", text: "text-lime-300", chip: "bg-lime-500/15 text-lime-300" },
   { scope: "sessions", kind: "session", label: "Sessions", dot: "bg-emerald-400", text: "text-emerald-300", chip: "bg-emerald-500/15 text-emerald-300" },
   { scope: "transcripts", kind: "transcript", label: "Transcripts", dot: "bg-emerald-400", text: "text-emerald-300", chip: "bg-emerald-500/15 text-emerald-300" },
   { scope: "files", kind: "file", label: "Files", dot: "bg-sky-400", text: "text-sky-300", chip: "bg-sky-500/15 text-sky-300" },
@@ -43,6 +44,6 @@ export const CORPUS_BY_KIND = Object.fromEntries(
 // corpora a search spans. Used as the hairline under the input. Hex (not Tailwind)
 // so the full 13-stop gradient survives JIT purging.
 export const SPECTRUM_STOPS = [
-  "#818cf8", "#34d399", "#34d399", "#38bdf8", "#fb923c", "#22d3ee", "#facc15",
-  "#a78bfa", "#60a5fa", "#e879f9", "#fbbf24", "#fb7185", "#2dd4bf",
+  "#818cf8", "#a3e635", "#34d399", "#34d399", "#38bdf8", "#fb923c", "#22d3ee",
+  "#facc15", "#a78bfa", "#60a5fa", "#e879f9", "#fbbf24", "#fb7185", "#2dd4bf",
 ];

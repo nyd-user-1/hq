@@ -83,6 +83,8 @@ import { TrustedFoldersProvider } from "@/app/ui/trusted-folders-state";
 import TrustedFoldersPanel from "@/app/ui/trusted-folders-panel";
 import { TextEditorProvider } from "@/app/ui/text-editor-state";
 import TextEditorPanel from "@/app/ui/text-editor-panel";
+import { DocsProvider } from "@/app/ui/docs-state";
+import DocsReveal from "@/app/ui/docs-reveal";
 import { CommandProvider } from "@/app/ui/command-state";
 import CommandPalette from "@/app/ui/command-palette";
 import { FocusProvider } from "@/app/ui/focus-state";
@@ -156,6 +158,7 @@ export default async function Shell({
       <EnvironmentProvider>
       <TrustedFoldersProvider>
       <TextEditorProvider>
+      <DocsProvider>
       <SidebarProvider initialOpen={sidebarOpen}>
         <div className="flex min-h-0 flex-1">
           <SidebarColumn>
@@ -288,6 +291,11 @@ export default async function Shell({
         <Suspense fallback={null}>
           <ReorderListener />
         </Suspense>
+        {/* Surfaces the @docs pane when a doc tab opens from outside Docs
+            (block ⋮ → Open in Doc, a reader's pencil). */}
+        <Suspense fallback={null}>
+          <DocsReveal />
+        </Suspense>
       </SidebarProvider>
 
       <PanelWrapper panel={panel} />
@@ -329,6 +337,7 @@ export default async function Shell({
       <EnvironmentPanel />
       <TrustedFoldersPanel />
       <TextEditorPanel />
+      </DocsProvider>
       </TextEditorProvider>
       </TrustedFoldersProvider>
       </EnvironmentProvider>

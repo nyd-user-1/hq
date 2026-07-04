@@ -9,9 +9,10 @@
 export const MAX_TERMINALS = 4;
 
 // The views a terminal can host besides a session. "sessions" = the home index
-// (projects + recent-sessions picker); the rest mirror the center overlays.
-export type WallView = "sessions" | "fleet" | "files" | "projects";
-export const WALL_VIEWS: readonly WallView[] = ["sessions", "fleet", "files", "projects"];
+// (projects + recent-sessions picker); "docs" = the document editor (docs.tsx,
+// co-equal with the terminal); the rest mirror the center overlays.
+export type WallView = "sessions" | "fleet" | "files" | "projects" | "docs";
+export const WALL_VIEWS: readonly WallView[] = ["sessions", "fleet", "files", "projects", "docs"];
 
 export type PaneContent =
   | { kind: "session"; sessionId: string }

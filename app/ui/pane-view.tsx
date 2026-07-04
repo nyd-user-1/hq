@@ -7,14 +7,18 @@ import type { WallView } from "@/app/ui/terminals";
 import FleetView from "@/app/ui/fleet-view";
 import FilesView from "@/app/ui/files-view";
 import ProjectView from "@/app/ui/project-view";
+import DocsView from "@/app/ui/docs";
 
 // A dashboard view rendered as a terminal's content. Fleet is a clean drop-in (no
 // props, no searchParams, h-full self-scroll); Files/Projects render fine but still
-// carry their ?center-overlay router wiring (minor quirks in a pane).
+// carry their ?center-overlay router wiring (minor quirks in a pane). Docs is the
+// document editor — its tab state lives in DocsProvider (shell level), so it
+// survives moving between T1 and the wall.
 function ViewFor({ view }: { view: WallView }) {
   if (view === "fleet") return <FleetView />;
   if (view === "files") return <FilesView />;
   if (view === "projects") return <ProjectView />;
+  if (view === "docs") return <DocsView />;
   return null; // "sessions" home isn't embeddable in a pane yet
 }
 

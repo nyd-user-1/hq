@@ -68,6 +68,7 @@ const ALL_ORDER: SearchScope[] = [
   "todos",
   "memory",
   "notes",
+  "documents",
   "skills",
 ];
 

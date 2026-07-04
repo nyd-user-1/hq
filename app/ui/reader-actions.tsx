@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTextEditor } from "@/app/ui/text-editor-state";
+import { useDocs, type DocTabKind } from "@/app/ui/docs-state";
 
 // Editable kinds — mirrors the ⌘K reader's canEdit (memory notes, HQ notes,
-// repo .md). Keep in sync with /api/file-edit's accepted kinds.
+// repo .md, HQ documents). Keep in sync with /api/file-edit's accepted kinds.
 function editable(kind: string, refId: string) {
   return (
     kind === "memory" ||
     kind === "note" ||
+    kind === "document" ||
     (kind === "file" && refId.endsWith(".md"))
   );
 }
@@ -34,7 +35,7 @@ export default function ReaderActions({
   title: string;
   text: string;
 }) {
-  const { openEdit } = useTextEditor();
+  const { openDoc } = useDocs();
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const canEdit = editable(kind, refId);
@@ -45,8 +46,10 @@ export default function ReaderActions({
     return () => window.removeEventListener("hq:file-edited", onEdited);
   }, [router]);
 
-  // Pencil → fetch the RAW file (frontmatter and all) and open it in the shared
-  // Text editor in edit mode, exactly like the ⌘K reader's pencil.
+  // Pencil → fetch the RAW file (frontmatter and all) and open it as a tab in
+  // the Docs editor (DocsReveal surfaces the @docs pane). Editing moved there
+  // from the slide-in Text panel — full ProseMirror, side-by-side with the
+  // terminal; the Text panel stays for the scratch-note flow.
   const onEdit = useCallback(async () => {
     try {
       const res = await fetch(
@@ -54,8 +57,8 @@ export default function ReaderActions({
       );
       if (!res.ok) return;
       const d = await res.json();
-      openEdit({
-        kind,
+      openDoc({
+        kind: kind as DocTabKind,
         ref: refId,
         title,
         content: typeof d?.content === "string" ? d.content : "",
@@ -63,7 +66,7 @@ export default function ReaderActions({
     } catch {
       /* leave the reader as-is on a fetch error */
     }
-  }, [kind, refId, title, openEdit]);
+  }, [kind, refId, title, openDoc]);
 
   if (!canEdit && !text) return null;
 

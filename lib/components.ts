@@ -68,7 +68,11 @@ export const COMPONENTS: ComponentEntry[] = [
   { name: "NoteBody", file: "app/ui/note-body.tsx", kind: "presentational", status: "review", desc: "Saved note-block body." },
   { name: "SidebarToggle", file: "app/ui/sidebar-toggle.tsx", kind: "presentational", status: "review", desc: "Variant of ButtonChipIcon — the boundary sidebar toggle." },
   { name: "TextEditor", file: "app/ui/text-editor.tsx", kind: "container", status: "review", desc: "Full-screen capture modal (opened from the panel-menu “Text” item) — paste text, ↵ saves it as a searchable HQ note (POST /api/notes)." },
-  { name: "CommandPalette", file: "app/ui/command-palette.tsx", kind: "container", status: "review", desc: "⌘K launcher — ranked + grouped Actions/Navigate commands; keyboard-driven; nav carries the terminal pins (withPins)." },];
+  { name: "CommandPalette", file: "app/ui/command-palette.tsx", kind: "container", status: "review", desc: "⌘K launcher — ranked + grouped Actions/Navigate commands; keyboard-driven; nav carries the terminal pins (withPins)." },
+  { name: "DocsView", file: "app/ui/docs.tsx", kind: "container", status: "review", desc: "The Docs editor — a pane view (@docs) co-equal with the terminal: tab strip, title-over-body page, footer with counts + save; library index when no tab is open." },
+  { name: "ProseMirrorEditor", file: "app/ui/prosemirror-editor.tsx", kind: "presentational", status: "review", desc: "WYSIWYG markdown editor (ProseMirror — Linear's engine): input rules, / slash menu, ⌘S; markdown in/out so files stay plain .md." },
+  { name: "DocsItem", file: "app/ui/docs-item.tsx", kind: "presentational", status: "review", desc: "Sidebar Write → Docs item; toggles ?session=@docs, lights when @docs is in any pane." },
+  { name: "DocsReveal", file: "app/ui/docs-reveal.tsx", kind: "container", status: "review", desc: "Invisible listener that surfaces the @docs pane when a doc tab opens from outside (block ⋮ → Open in Doc, a reader's pencil) — wall slot beside a live session, else T1." },];
 
 // Registry provenance — like a to-do, each entry records the session that added
 // it and when. This whole registry was authored in one session, so they share

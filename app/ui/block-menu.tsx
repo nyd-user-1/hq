@@ -73,6 +73,7 @@ export default function BlockMenu({
   onFavorite,
   onSaveNote,
   onSaveCode,
+  onOpenDoc,
   onReact,
   onHide,
 }: {
@@ -87,6 +88,8 @@ export default function BlockMenu({
   onFavorite: () => void;
   onSaveNote: () => void;
   onSaveCode: () => void;
+  /** send this block into the Docs editor as a new document (optional) */
+  onOpenDoc?: () => void;
   onReact: (r: Reaction) => void;
   onHide: () => void;
 }) {
@@ -197,6 +200,19 @@ export default function BlockMenu({
               label="Save as code"
               onClick={choose(onSaveCode)}
             />
+            {onOpenDoc && (
+              <MenuItem
+                icon={
+                  <svg {...SVG}>
+                    <path d="M12.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v9.5" />
+                    <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                    <path d="M13.378 15.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" />
+                  </svg>
+                }
+                label="Open in Doc"
+                onClick={choose(onOpenDoc)}
+              />
+            )}
             {showReactions && (
               <>
                 <div className="my-1 h-px bg-zinc-800" />

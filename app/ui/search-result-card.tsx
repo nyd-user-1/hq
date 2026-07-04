@@ -67,6 +67,8 @@ function openParam(h: SearchHit): string {
       return `openSession=${h.ref}`;
     case "note":
       return `openNote=${encodeURIComponent(h.ref)}`;
+    case "document":
+      return `openDocument=${encodeURIComponent(h.ref)}`;
     case "script":
       return `openScript=${encodeURIComponent(h.ref)}`;
     case "memory":

@@ -15,6 +15,7 @@ export const KIND_TAG: Record<SearchKind, string> = {
   project: "bg-fuchsia-500/15 text-fuchsia-300",
   memory: "bg-violet-500/15 text-violet-300",
   note: "bg-blue-500/15 text-blue-300",
+  document: "bg-lime-500/15 text-lime-300", // the Docs editor's own pages
   script: "bg-amber-500/15 text-amber-300",
   skill: "bg-rose-500/15 text-rose-300",
   doc: "bg-[#d97757]/15 text-[#d97757]", // Claude brand clay — marks Claude Code docs
@@ -34,6 +35,7 @@ export const SCOPE_TAGS: { value: SearchScope; label: string; chip: string }[] =
   { value: "todos", label: "Todos", chip: KIND_TAG.todo },
   { value: "projects", label: "Projects", chip: KIND_TAG.project },
   { value: "notes", label: "Notes", chip: KIND_TAG.note },
+  { value: "documents", label: "Documents", chip: KIND_TAG.document },
   { value: "memory", label: "Memory", chip: KIND_TAG.memory },
   { value: "scripts", label: "Scripts", chip: KIND_TAG.script },
   { value: "skills", label: "Skills", chip: KIND_TAG.skill },

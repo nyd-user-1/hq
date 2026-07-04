@@ -249,6 +249,8 @@ function hitIcon(kind: string): React.ReactNode {
       return <IconCommitVertical />;
     case "note":
       return <IconNotebookPen />;
+    case "document":
+      return <IconText />;
     case "script":
       return <IconFileCode />;
     case "file":
@@ -300,7 +302,9 @@ function openHref(h: Hit, q: string): string {
       ? `openSession=${h.ref}`
       : h.kind === "note"
         ? `openNote=${e(h.ref)}`
-        : h.kind === "script"
+        : h.kind === "document"
+          ? `openDocument=${e(h.ref)}`
+          : h.kind === "script"
           ? `openScript=${e(h.ref)}`
           : h.kind === "memory"
             ? `open=${e(h.ref)}`
@@ -457,6 +461,7 @@ const SCOPE_CHIPS: { scope: string; label: string }[] = [
   { scope: "sessions", label: "Sessions" },
   { scope: "memory", label: "Memory" },
   { scope: "notes", label: "Notes" },
+  { scope: "documents", label: "Documents" },
   { scope: "commits", label: "Commits" },
   { scope: "todos", label: "Todos" },
   { scope: "docs", label: "Claude" }, // corpus is exclusively the Claude Code docs mirror
@@ -497,6 +502,7 @@ const SCOPE_ALIASES: Record<string, string> = {
   commit: "commits", commits: "commits",
   todo: "todos", todos: "todos",
   doc: "docs", docs: "docs", claude: "docs", "claude-doc": "docs",
+  document: "documents", documents: "documents",
   transcript: "transcripts", transcripts: "transcripts",
   component: "components", components: "components",
   project: "projects", projects: "projects",
@@ -807,11 +813,13 @@ export default function CommandPalette() {
     [setOpen, router, q]
   );
 
-  // Editable kinds for the reader's pencil: memory notes, HQ notes, repo .md.
+  // Editable kinds for the reader's pencil: memory notes, HQ notes, HQ
+  // documents, repo .md.
   const canEdit = (h: Hit | null) =>
     !!h &&
     (h.kind === "memory" ||
       h.kind === "note" ||
+      h.kind === "document" ||
       (h.kind === "file" && h.ref.endsWith(".md")));
 
   // Live counts for the inline editor footer (mirrors the text-editor modal).

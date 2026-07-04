@@ -8,6 +8,7 @@ import {
   warmIndex,
 } from "./archive";
 import { NOTES_DIR, noteTitle } from "./notes";
+import { DOCUMENTS_DIR, documentTitle } from "./documents";
 import { getRecentSessions, getSdkSessions, type RecentSession } from "./sessions";
 import { getShipped, type Ship } from "./shipped";
 import { getTodos } from "./todo";
@@ -174,6 +175,8 @@ const memoryDocs = () =>
     return [...byName.values()];
   });
 const noteDocs = () => memoRead("noteDocs", () => readDir(NOTES_DIR, (n) => n.endsWith(".md")));
+const documentDocs = () =>
+  memoRead("documentDocs", () => readDir(DOCUMENTS_DIR, (n) => n.endsWith(".md")));
 const scriptDocs = () => memoRead("scriptDocs", () => readDir(SCRIPTS_DIR, isScript));
 
 export type SearchScope =
@@ -188,6 +191,7 @@ export type SearchScope =
   | "projects"
   | "memory"
   | "notes"
+  | "documents"
   | "scripts"
   | "skills"
   | "docs";
@@ -203,6 +207,7 @@ export type SearchKind =
   | "project"
   | "memory"
   | "note"
+  | "document"
   | "script"
   | "skill"
   | "doc";
@@ -220,10 +225,13 @@ export const SCOPES: { value: SearchScope; label: string }[] = [
   { value: "todos", label: "Todos" },
   { value: "projects", label: "Projects" },
   { value: "notes", label: "Notes" },
+  { value: "documents", label: "Documents" },
   { value: "memory", label: "Memory" },
   { value: "scripts", label: "Scripts" },
   { value: "skills", label: "Skills" },
-  { value: "docs", label: "Docs" },
+  // the fetched Claude Code documentation mirror (lib/docs.ts) — relabelled so
+  // it can't be confused with the Docs editor's own "documents" corpus above
+  { value: "docs", label: "CC Docs" },
 ];
 
 // Result order. "rel" = most relevant first (score-ranked — the default for a
@@ -316,6 +324,26 @@ function searchNotes(toks: string[]): SearchHit[] {
       kind: "note",
       ref: f.name,
       title: noteTitle(f.content),
+      snippet: snippetAround(f.content, toks[0]),
+      at: f.mtime,
+      score: mt.score,
+      phrase: mt.phrase,
+    });
+  }
+  return hits;
+}
+
+// HQ documents (~/.claude/hq/documents/*.md) — the Docs editor's living pages,
+// same substring/token read as notes. Title comes from frontmatter `title:`.
+function searchDocuments(toks: string[]): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const f of documentDocs()) {
+    const mt = scoreNorm(normalize(f.content), toks);
+    if (mt.score === 0) continue;
+    hits.push({
+      kind: "document",
+      ref: f.name,
+      title: documentTitle(f.content),
       snippet: snippetAround(f.content, toks[0]),
       at: f.mtime,
       score: mt.score,
@@ -590,6 +618,8 @@ export function search(
       : { hits: [] as SearchHit[], building: false };
   const m = scope === "all" || scope === "memory" ? searchMemory(toks) : [];
   const n = scope === "all" || scope === "notes" ? searchNotes(toks) : [];
+  const docm =
+    scope === "all" || scope === "documents" ? searchDocuments(toks) : [];
   const s = scope === "all" || scope === "scripts" ? searchScripts(toks) : [];
   const sess =
     scope === "all" || scope === "sessions"
@@ -614,7 +644,7 @@ export function search(
   // every word but not the literal phrase) — that was the relevance trap, where
   // "understand the agentic loop" hid the agent-loop doc behind a chat transcript.
   // Narrow each corpus on its own, then merge.
-  const corpora = [t.hits, m, n, s, sess, sdk, fil, comp, com, td, proj, sk, dc];
+  const corpora = [t.hits, m, n, docm, s, sess, sdk, fil, comp, com, td, proj, sk, dc];
   const narrowed = corpora.flatMap((group) =>
     group.some((h) => h.phrase) ? group.filter((h) => h.phrase) : group
   );
@@ -697,6 +727,28 @@ export function recent(
           ref: name,
           title: noteTitle(content),
           snippet: noteTitle(content),
+          at: fs.statSync(full).mtimeMs,
+          score: 0,
+          phrase: false,
+        });
+      } catch {
+        // file vanished mid-read
+      }
+    }
+  }
+  if (scope === "all" || scope === "documents") {
+    let names: string[] = [];
+    try { names = fs.readdirSync(DOCUMENTS_DIR); } catch { names = []; }
+    for (const name of names) {
+      if (!name.endsWith(".md")) continue;
+      const full = path.join(DOCUMENTS_DIR, name);
+      try {
+        const content = fs.readFileSync(full, "utf8");
+        out.push({
+          kind: "document",
+          ref: name,
+          title: documentTitle(content),
+          snippet: documentTitle(content),
           at: fs.statSync(full).mtimeMs,
           score: 0,
           phrase: false,

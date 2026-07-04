@@ -13,6 +13,7 @@ const VIEW_NAMES: Record<string, string> = {
   files: "Files",
   projects: "Projects",
   sessions: "Sessions",
+  docs: "Docs",
 };
 
 export default function Terminal1ViewChip() {

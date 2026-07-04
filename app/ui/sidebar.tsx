@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import QuickSearchItem from "@/app/ui/quick-search-item";
 import NewSessionItem from "@/app/ui/new-session-item";
+import DocsItem from "@/app/ui/docs-item";
 import FilesItem from "@/app/ui/files-item";
 import ProjectsItem from "@/app/ui/projects-item";
 import AnalyticsItem from "@/app/ui/analytics-item";
@@ -45,6 +46,16 @@ export default function Sidebar() {
       <div className="flex shrink-0 flex-col gap-1">
         <Suspense fallback={null}>
           <NewSessionItem />
+        </Suspense>
+      </div>
+
+      {/* Write — the document editor, the terminal's co-equal work surface. */}
+      <div className="flex shrink-0 flex-col gap-1">
+        <span className="px-2.5 pt-1 font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+          Write
+        </span>
+        <Suspense fallback={null}>
+          <DocsItem />
         </Suspense>
       </div>
 
