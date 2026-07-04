@@ -37,8 +37,9 @@ function teamLabel(id: string): string {
   return `Team ${id.replace(/^session-/, "")}`;
 }
 
-export default function MailboxPanel() {
+export default function MailboxPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useMailbox();
+  const active = embedded || open;
   const [teamId, setTeamId] = useState("");
   const [members, setMembers] = useState<string[]>([]);
   const [msgs, setMsgs] = useState<Mail[]>([]);
@@ -82,7 +83,7 @@ export default function MailboxPanel() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     let alive = true;
     let id = "";
     resolveTeam().then((rid) => {
@@ -95,7 +96,7 @@ export default function MailboxPanel() {
       alive = false;
       clearInterval(iv);
     };
-  }, [open, resolveTeam, load]);
+  }, [active, resolveTeam, load]);
 
   const send = async () => {
     const body = text.trim();
@@ -119,6 +120,80 @@ export default function MailboxPanel() {
 
   const unread = msgs.reduce((n, m) => n + (m.read ? 0 : 1), 0);
 
+  const content = (
+    <>
+      {/* header — Mailbox · team · counts */}
+      <div className="flex shrink-0 items-baseline gap-2">
+        <span className="font-mono text-[12px] text-zinc-300">Mailbox</span>
+        {teamId && <span className="min-w-0 truncate font-mono text-[11px] text-zinc-500">{teamLabel(teamId)}</span>}
+        <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-zinc-600">
+          {msgs.length} {msgs.length === 1 ? "message" : "messages"}
+          {unread > 0 ? ` · ${unread} new` : ""}
+        </span>
+      </div>
+
+      {/* feed — who → whom, newest first */}
+      <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-2">
+        {msgs.length === 0 ? (
+          <p className="font-mono text-[11px] text-zinc-600">no messages yet</p>
+        ) : (
+          msgs.map((m, i) => (
+            <div key={m.id || i} className="font-mono text-[11px] leading-snug">
+              <div className="flex items-center gap-1.5">
+                <span className={COLOR_MAP[m.color] ?? "text-zinc-500"} aria-hidden>
+                  ●
+                </span>
+                <span className="text-zinc-300">{m.from || "?"}</span>
+                <span className="text-zinc-600">→</span>
+                <span className="text-zinc-400">{m.to}</span>
+                {!m.read && (
+                  <span
+                    className="h-1.5 w-1.5 rounded-full bg-orange-400"
+                    title="unread — not yet consumed"
+                    aria-hidden
+                  />
+                )}
+                <span className="ml-auto shrink-0 text-zinc-600">{m.at ? ago(Date.parse(m.at)) : ""}</span>
+              </div>
+              <p className="whitespace-pre-wrap break-words pl-4 text-zinc-400">{m.text}</p>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* composer — message a member's inbox */}
+      <div className="flex shrink-0 items-center gap-1 border-t border-dashed border-zinc-800 pt-3">
+        <select
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="shrink-0 rounded border border-zinc-800 bg-zinc-950 px-1 py-1 font-mono text-[11px] text-zinc-300 focus:border-zinc-600 focus:outline-none"
+        >
+          <option value="">to…</option>
+          {members.map((mm) => (
+            <option key={mm} value={mm}>
+              {mm}
+            </option>
+          ))}
+        </select>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void send();
+            }
+          }}
+          disabled={sending}
+          placeholder={sending ? "sending…" : "message a teammate…"}
+          className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none disabled:opacity-50"
+        />
+      </div>
+    </>
+  );
+
+  if (embedded) return content;
+
   return (
     <AppPanel
       rootId="mailbox-panel-root"
@@ -126,75 +201,7 @@ export default function MailboxPanel() {
       onClose={() => setOpen(false)}
       widthClass="sm:w-[min(360px,40vw)]"
     >
-      <Boundary label="mailbox-panel.tsx">
-        {/* header — Mailbox · team · counts */}
-        <div className="flex shrink-0 items-baseline gap-2">
-          <span className="font-mono text-[12px] text-zinc-300">Mailbox</span>
-          {teamId && <span className="min-w-0 truncate font-mono text-[11px] text-zinc-500">{teamLabel(teamId)}</span>}
-          <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-zinc-600">
-            {msgs.length} {msgs.length === 1 ? "message" : "messages"}
-            {unread > 0 ? ` · ${unread} new` : ""}
-          </span>
-        </div>
-
-        {/* feed — who → whom, newest first */}
-        <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-2">
-          {msgs.length === 0 ? (
-            <p className="font-mono text-[11px] text-zinc-600">no messages yet</p>
-          ) : (
-            msgs.map((m, i) => (
-              <div key={m.id || i} className="font-mono text-[11px] leading-snug">
-                <div className="flex items-center gap-1.5">
-                  <span className={COLOR_MAP[m.color] ?? "text-zinc-500"} aria-hidden>
-                    ●
-                  </span>
-                  <span className="text-zinc-300">{m.from || "?"}</span>
-                  <span className="text-zinc-600">→</span>
-                  <span className="text-zinc-400">{m.to}</span>
-                  {!m.read && (
-                    <span
-                      className="h-1.5 w-1.5 rounded-full bg-orange-400"
-                      title="unread — not yet consumed"
-                      aria-hidden
-                    />
-                  )}
-                  <span className="ml-auto shrink-0 text-zinc-600">{m.at ? ago(Date.parse(m.at)) : ""}</span>
-                </div>
-                <p className="whitespace-pre-wrap break-words pl-4 text-zinc-400">{m.text}</p>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* composer — message a member's inbox */}
-        <div className="flex shrink-0 items-center gap-1 border-t border-dashed border-zinc-800 pt-3">
-          <select
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="shrink-0 rounded border border-zinc-800 bg-zinc-950 px-1 py-1 font-mono text-[11px] text-zinc-300 focus:border-zinc-600 focus:outline-none"
-          >
-            <option value="">to…</option>
-            {members.map((mm) => (
-              <option key={mm} value={mm}>
-                {mm}
-              </option>
-            ))}
-          </select>
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void send();
-              }
-            }}
-            disabled={sending}
-            placeholder={sending ? "sending…" : "message a teammate…"}
-            className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none disabled:opacity-50"
-          />
-        </div>
-      </Boundary>
+      <Boundary label="mailbox-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

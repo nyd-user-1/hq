@@ -119,8 +119,9 @@ function Meter({ m }: { m: UsageMeter }) {
   );
 }
 
-export default function ApiPanel() {
+export default function ApiPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useApi();
+  const active = embedded || open;
   const [data, setData] = useState<UsageStates | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -148,14 +149,14 @@ export default function ApiPanel() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     load();
     const id = setInterval(() => load(true), 15000);
     return () => {
       clearInterval(id);
       aborter.current?.abort();
     };
-  }, [open, load]);
+  }, [active, load]);
 
   const f = data?.forecast;
   // Forecast geometry — mirrors ForecastMeter: used (solid) + projected-by-reset
@@ -168,9 +169,8 @@ export default function ApiPanel() {
     projPct = Math.min(((f.blockWeighted + f.burnPerMin * mins) / f.limit) * 100, 100);
   }
 
-  return (
-    <AppPanel rootId="api-panel-root" open={open} onClose={() => setOpen(false)}>
-      <Boundary label="api-panel.tsx">
+  const content = (
+    <>
         {err && (
           <p className="rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">
             {err}
@@ -385,7 +385,12 @@ export default function ApiPanel() {
           </footer>
           </>
         )}
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel rootId="api-panel-root" open={open} onClose={() => setOpen(false)}>
+      <Boundary label="api-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

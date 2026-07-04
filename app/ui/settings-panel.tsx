@@ -32,8 +32,9 @@ function display(row: SettingRow): { value: string; masked: boolean } {
 // permissions-panel.tsx: AppPanel chrome, a live /api/settings fetch, grouped
 // key/value sections + a collapsible raw JSON dump. Read-only — the Permissions
 // panel is the one that writes.
-export default function SettingsPanel() {
+export default function SettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useSettings();
+  const active = embedded || open;
   const [data, setData] = useState<SettingsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -56,8 +57,8 @@ export default function SettingsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const sections = data?.sections ?? [];
   const total = useMemo(
@@ -65,15 +66,9 @@ export default function SettingsPanel() {
     [sections],
   );
 
-  return (
-    <AppPanel
-      rootId="settings-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="settings-panel.tsx">
-        {/* header — title + refresh */}
+  const content = (
+    <>
+      {/* header — title + refresh */}
         <div className="flex shrink-0 items-center justify-between gap-2">
           <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">settings.json</span>
           <button
@@ -181,7 +176,18 @@ export default function SettingsPanel() {
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
           {data ? `${total} setting${total === 1 ? "" : "s"} · ${sections.length} group${sections.length === 1 ? "" : "s"}` : "—"} · read-only view of ~/.claude/settings.json. Secrets masked.
         </footer>
-      </Boundary>
+      </>
+  );
+
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="settings-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="settings-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

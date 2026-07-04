@@ -61,8 +61,9 @@ const OTEL_ENV_SNIPPET = `{
   }
 }`;
 
-export default function GuardrailsPanel() {
+export default function GuardrailsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useGuardrails();
+  const active = embedded || open;
   const [g, setG] = useState<Guardrails | null>(null);
   const [configPath, setConfigPath] = useState("");
   const [loading, setLoading] = useState(false);
@@ -88,22 +89,16 @@ export default function GuardrailsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) {
+    if (active) {
       load();
       setLedgerHref(withPins("/calls", window.location.search));
     }
-  }, [open, load]);
+  }, [active, load]);
 
   const capLeft = g ? Math.max(0, g.cap.weeklyCapUSD - g.spend.week) : 0;
 
-  return (
-    <AppPanel
-      rootId="guardrails-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="guardrails-panel.tsx">
+  const content = (
+    <>
         {/* header — label + refresh */}
         <div className="flex shrink-0 items-center justify-between gap-2">
           <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">
@@ -300,7 +295,17 @@ export default function GuardrailsPanel() {
             </>
           )}
         </div>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="guardrails-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="guardrails-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

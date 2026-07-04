@@ -106,8 +106,9 @@ function FireRow({ it }: { it: FireItem }) {
   }
 }
 
-export default function FirehosePanel() {
+export default function FirehosePanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useFirehose();
+  const active = embedded || open;
   const [data, setData] = useState<Firehose | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -128,14 +129,14 @@ export default function FirehosePanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   // Live tail — reuse the firehose fs.watch SSE; re-fetch the structured items on
   // each `change`. Trailing debounce so a transcript WRITE STORM collapses to ONE
   // re-fetch (mirrors RefreshOnChange's FE-7 coalescing).
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     const es = new EventSource("/api/firehose/stream");
     let timer: ReturnType<typeof setTimeout> | null = null;
     const onChange = () => {
@@ -150,20 +151,14 @@ export default function FirehosePanel() {
       if (timer) clearTimeout(timer);
       es.close();
     };
-  }, [open, load]);
+  }, [active, load]);
 
   const id = data?.id ?? null;
   const items = data?.items ?? [];
   const full = data?.full ?? false;
 
-  return (
-    <AppPanel
-      rootId="firehose-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="firehose-panel.tsx">
+  const content = (
+    <>
         {/* header — firehose · project · id, with a live pulse + refresh */}
         <div className="flex shrink-0 items-baseline gap-2">
           <span className="font-mono text-xs text-zinc-300">firehose</span>
@@ -236,7 +231,17 @@ export default function FirehosePanel() {
         <p className="shrink-0 text-xs text-zinc-600">
           every field on disk, nothing computed · raw tokens, sealed-thinking signatures, full tool I/O · read-only
         </p>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="firehose-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="firehose-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

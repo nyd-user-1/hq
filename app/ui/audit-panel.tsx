@@ -34,8 +34,9 @@ type Audit = {
 
 const fmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
 
-export default function AuditPanel() {
+export default function AuditPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useAudit();
+  const active = embedded || open;
   const [data, setData] = useState<Audit | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -60,8 +61,8 @@ export default function AuditPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   // fetch the selected doc's markdown (path-guarded server-side via readAuditDoc)
   useEffect(() => {
@@ -97,14 +98,8 @@ export default function AuditPanel() {
     </button>
   );
 
-  return (
-    <AppPanel
-      rootId="audit-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="audit-panel.tsx">
+  const content = (
+    <>
         {sel ? (
           // ── opened .md ───────────────────────────────────────────────────
           <>
@@ -228,7 +223,17 @@ export default function AuditPanel() {
             </div>
           </>
         )}
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="audit-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="audit-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

@@ -126,15 +126,16 @@ function MetricCard({
   );
 }
 
-export default function KpiPanel() {
+export default function KpiPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen, catalog, setCatalog, placed, addMetric, removeMetric, sessions, views, applyView } = useKpis();
+  const active = embedded || open;
   const viewList = [...views, ...RECOMMENDED_VIEWS.filter((r) => !views.some((v) => v.name === r.name))];
   const [q, setQ] = useState("");
   const placedSet = useMemo(() => new Set(placed ?? []), [placed]);
 
   // self-sufficient: if opened before the board has fetched, pull the catalog.
   useEffect(() => {
-    if (!open || catalog.length) return;
+    if (!active || catalog.length) return;
     let live = true;
     fetch("/api/fleet/metrics", { cache: "no-store" })
       .then((r) => r.json())
@@ -143,7 +144,7 @@ export default function KpiPanel() {
     return () => {
       live = false;
     };
-  }, [open, catalog.length, setCatalog]);
+  }, [active, catalog.length, setCatalog]);
 
   // Surface EVERY metric regardless of scope. A session-only metric dropped in a
   // non-session scope renders as a "pick one session" placeholder card (lib/fleet
@@ -164,9 +165,8 @@ export default function KpiPanel() {
     return [...map.entries()];
   }, [catalog, q]);
 
-  return (
-    <AppPanel rootId="kpi-panel-root" open={open} onClose={() => setOpen(false)} widthClass="sm:w-[min(360px,40vw)]">
-      <Boundary label="kpi-panel.tsx">
+  const content = (
+    <>
         <div className="flex shrink-0 items-center gap-2">
           <input
             value={q}
@@ -221,7 +221,12 @@ export default function KpiPanel() {
             ))
           )}
         </div>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel rootId="kpi-panel-root" open={open} onClose={() => setOpen(false)} widthClass="sm:w-[min(360px,40vw)]">
+      <Boundary label="kpi-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

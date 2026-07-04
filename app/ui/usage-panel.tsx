@@ -120,8 +120,9 @@ function Meter({ m }: { m: UsageMeter }) {
   );
 }
 
-export default function UsagePanel() {
+export default function UsagePanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useUsage();
+  const active = embedded || open;
   const [data, setData] = useState<UsageStates | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -149,14 +150,14 @@ export default function UsagePanel() {
   // Load on open + a 15s live poll while open (mirrors ApiPanel / the route's
   // force-dynamic freshness); abort + clear on close.
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     load();
     const id = setInterval(() => load(true), 15000);
     return () => {
       clearInterval(id);
       aborter.current?.abort();
     };
-  }, [open, load]);
+  }, [active, load]);
 
   const f = data?.forecast;
   // Forecast geometry — mirrors ForecastMeter: used (solid) + projected-by-reset
@@ -169,14 +170,8 @@ export default function UsagePanel() {
     projPct = Math.min(((f.blockWeighted + f.burnPerMin * mins) / f.limit) * 100, 100);
   }
 
-  return (
-    <AppPanel
-      rootId="usage-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="usage-panel.tsx">
+  const content = (
+    <>
         {/* header — label + refresh */}
         <div className="flex shrink-0 items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-zinc-600">
@@ -281,7 +276,17 @@ export default function UsagePanel() {
             </p>
           </div>
         )}
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="usage-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="usage-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

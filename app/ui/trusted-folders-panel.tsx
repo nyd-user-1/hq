@@ -24,8 +24,9 @@ const baseName = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p;
 // standalone toggle panel (its own portal root #trusted-folders-panel-root),
 // mirroring Permissions/Changelog: AppPanel chrome + a live /api/trusted-folders
 // fetch. Read-only: HQ reflects the on-disk trust state, the CLI is the writer.
-export default function TrustedFoldersPanel() {
+export default function TrustedFoldersPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useTrustedFolders();
+  const active = embedded || open;
   const [folders, setFolders] = useState<TrustedFolder[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,8 +47,8 @@ export default function TrustedFoldersPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const query = q.trim().toLowerCase();
   const shown = useMemo(
@@ -56,15 +57,9 @@ export default function TrustedFoldersPanel() {
   );
   const trustedCount = useMemo(() => folders.filter((f) => f.trusted).length, [folders]);
 
-  return (
-    <AppPanel
-      rootId="trusted-folders-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="trusted-folders-panel.tsx">
-        {/* search + refresh */}
+  const content = (
+    <>
+      {/* search + refresh */}
         <div className="flex shrink-0 items-center gap-2">
           <input
             value={q}
@@ -108,7 +103,18 @@ export default function TrustedFoldersPanel() {
             ? `${trustedCount} of ${folders.length} trusted · from ~/.claude.json. The CLI sets trust; HQ reflects it.`
             : "Reads ~/.claude.json — the folders Claude Code knows about."}
         </footer>
-      </Boundary>
+      </>
+  );
+
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="trusted-folders-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="trusted-folders-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

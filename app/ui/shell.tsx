@@ -19,6 +19,12 @@ import { ActivityProvider } from "@/app/ui/activity-state";
 import ActivityPanel from "@/app/ui/activity-panel";
 import { ToolsProvider } from "@/app/ui/tools-state";
 import ToolsPanel from "@/app/ui/tools-panel";
+import { ConfigProvider } from "@/app/ui/config-state";
+import ConfigPanel from "@/app/ui/config-panel";
+import { TeamsGroupProvider } from "@/app/ui/teams-group-state";
+import TeamsGroupPanel from "@/app/ui/teams-group-panel";
+import { MetricsProvider } from "@/app/ui/metrics-state";
+import MetricsPanel from "@/app/ui/metrics-panel";
 import { KpiProvider } from "@/app/ui/kpi-state";
 import KpiPanel from "@/app/ui/kpi-panel";
 import { CommandsProvider } from "@/app/ui/commands-state";
@@ -120,6 +126,9 @@ export default async function Shell({
       <ConsoleProvider>
       <ActivityProvider>
       <ToolsProvider>
+      <ConfigProvider>
+      <TeamsGroupProvider>
+      <MetricsProvider>
       <HooksProvider>
       <McpProvider>
       <AgentsProvider>
@@ -220,6 +229,12 @@ export default async function Shell({
               tools panel is active (Compose · Preview · Text · Tree) and swaps
               between them in place. */}
           <div id="tools-panel-root" className="flex h-full min-w-0" />
+          {/* The Config / Teams / Metrics container roots — groups 5, 6, and the
+              metrics group (Permissions·Settings·Environment·Trusted / Teams·Mailbox /
+              Usage·Calls·Guardrails·Savings·Audit·KPIs·API·Firehose). */}
+          <div id="config-panel-root" className="flex h-full min-w-0" />
+          <div id="teams-group-panel-root" className="flex h-full min-w-0" />
+          <div id="metrics-panel-root" className="flex h-full min-w-0" />
           {/* The Console capability panels — Hooks · MCP · Agents · Output Styles,
               each its own client-state portal, siblings of Skills/Commands. */}
           <div id="hooks-panel-root" className="flex h-full min-w-0" />
@@ -284,6 +299,9 @@ export default async function Shell({
       <ConsolePanel />
       <ActivityPanel />
       <ToolsPanel />
+      <ConfigPanel />
+      <TeamsGroupPanel />
+      <MetricsPanel />
       <HooksPanel />
       <McpPanel />
       <AgentsPanel />
@@ -338,6 +356,9 @@ export default async function Shell({
       </AgentsProvider>
       </McpProvider>
       </HooksProvider>
+      </MetricsProvider>
+      </TeamsGroupProvider>
+      </ConfigProvider>
       </ToolsProvider>
       </ActivityProvider>
       </ConsoleProvider>

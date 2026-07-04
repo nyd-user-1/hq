@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { wallTokens, MAX_TERMINALS } from "@/app/ui/terminals";
 import { useFocus } from "@/app/ui/focus-state";
-import { useTeams } from "@/app/ui/teams-state";
+import { useTeamsGroup } from "@/app/ui/teams-group-state";
 
 // The boundary-chip "▾" menu on a terminal. Two actions:
 //   • Split       — open a fresh pane beside this one (a "new" home picker).
@@ -41,7 +41,7 @@ export default function TerminalChipMenu() {
   const pathname = usePathname() ?? "/";
   const params = useSearchParams();
   const { setActive } = useFocus();
-  const { setOpen: setTeamsOpen } = useTeams();
+  const { setOpen: setTeamsOpen } = useTeamsGroup();
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

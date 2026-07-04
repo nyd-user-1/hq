@@ -57,8 +57,9 @@ const IDEAS: { title: string; where: string; how: string }[] = [
   },
 ];
 
-export default function SavingsPanel() {
+export default function SavingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useSavings();
+  const active = embedded || open;
   const [data, setData] = useState<SavingsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -78,20 +79,14 @@ export default function SavingsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const cacheRead = data?.cacheRead ?? 0;
   const savedDollars = (cacheRead / 1e6) * (INPUT_PER_M - CACHE_READ_PER_M);
 
-  return (
-    <AppPanel
-      rootId="savings-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="savings-panel.tsx">
+  const content = (
+    <>
         {/* header — title + refresh */}
         <div className="flex shrink-0 items-center justify-between gap-2">
           <span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">savings</span>
@@ -190,7 +185,17 @@ export default function SavingsPanel() {
           One live number — cache reads from the last 7 days, via /api/savings. The rest is the
           savings roadmap.
         </footer>
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="savings-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="savings-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

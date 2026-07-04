@@ -24,8 +24,9 @@ const MODES: { key: string; hint: string }[] = [
 
 const CAT_DOT: Record<string, string> = { bash: "text-amber-400", mcp: "text-purple-400", tool: "text-sky-400" };
 
-export default function PermissionsPanel() {
+export default function PermissionsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = usePermissions();
+  const active = embedded || open;
   const [state, setState] = useState<PermState | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | Bucket | "dangerous">("all");
@@ -49,8 +50,8 @@ export default function PermissionsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const post = async (body: object, key: string) => {
     setBusy(key);
@@ -84,15 +85,9 @@ export default function PermissionsPanel() {
 
   const c = state?.counts;
 
-  return (
-    <AppPanel
-      rootId="permissions-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(360px,40vw)]"
-    >
-      <Boundary label="permissions-panel.tsx">
-        {/* search + refresh */}
+  const content = (
+    <>
+      {/* search + refresh */}
         <div className="flex shrink-0 items-center gap-2">
           <input
             value={q}
@@ -192,7 +187,18 @@ export default function PermissionsPanel() {
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
           {c ? `${c.allow} allow · ${c.ask} ask · ${c.deny} deny` : "—"} · writes ~/.claude/settings.json. Changes apply to new sessions.
         </footer>
-      </Boundary>
+      </>
+  );
+
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="permissions-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(360px,40vw)]"
+    >
+      <Boundary label="permissions-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

@@ -15,8 +15,9 @@ import { useEnvironment } from "@/app/ui/environment-state";
 // node:fs/os into this client bundle — it mirrors the API's JSON shape.
 type EnvVar = { key: string; value: string };
 
-export default function EnvironmentPanel() {
+export default function EnvironmentPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useEnvironment();
+  const active = embedded || open;
   const [items, setItems] = useState<EnvVar[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,8 +38,8 @@ export default function EnvironmentPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const query = q.trim().toLowerCase();
   const shown = useMemo(
@@ -49,15 +50,9 @@ export default function EnvironmentPanel() {
     [items, query],
   );
 
-  return (
-    <AppPanel
-      rootId="environment-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="environment-panel.tsx">
-        {/* search + refresh */}
+  const content = (
+    <>
+      {/* search + refresh */}
         <div className="flex shrink-0 items-center gap-2">
           <input
             value={q}
@@ -106,7 +101,18 @@ export default function EnvironmentPanel() {
         <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
           {items.length} variables · safe allowlist · credential values masked.
         </footer>
-      </Boundary>
+      </>
+  );
+
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="environment-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="environment-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

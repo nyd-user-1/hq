@@ -2,10 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { usePermissions } from "@/app/ui/permissions-state";
-import { useSettings } from "@/app/ui/settings-state";
-import { useEnvironment } from "@/app/ui/environment-state";
-import { useTrustedFolders } from "@/app/ui/trusted-folders-state";
+import { useConfig } from "@/app/ui/config-state";
 
 // The account chip at the bottom of the sidebar. A lean "hq/settings" trigger + a
 // ▲▼ chevron that opens an UPWARD menu: Config (the four control panels, moved here
@@ -158,17 +155,13 @@ export default function AccountChip() {
   // local-only for now (presentational, like the rest of this menu).
   const [langOpen, setLangOpen] = useState(false);
   const [lang, setLang] = useState("English");
-  // Config — the four control panels, moved here from the terminal kebab. Expands
-  // inline (like Language). Toggles come from the same panel-state providers.
-  const [configOpen, setConfigOpen] = useState(false);
+  // Config — opens the Config container (Permissions · Settings · Environment ·
+  // Trusted Folders) with its own boundary dropdown + chevrons.
   // The identity label. Derived from the running user's HOME (already surfaced by
   // /api/environment's allowlist) rather than a hardcoded address, so every install
   // shows its own account, not the author's. Falls back to a neutral label.
   const [identity, setIdentity] = useState("hq · localhost");
-  const permissions = usePermissions();
-  const settings = useSettings();
-  const environment = useEnvironment();
-  const trustedFolders = useTrustedFolders();
+  const config = useConfig();
   const ref = useRef<HTMLDivElement>(null);
 
   // Pull the live toggle state each time the menu opens (cheap; reflects edits made
@@ -259,42 +252,16 @@ export default function AccountChip() {
           <div className="truncate px-2 py-1.5 font-mono text-[11px] text-zinc-500">
             {identity}
           </div>
-          {/* Config — moved out of the terminal kebab; expands inline into its four
-              control panels, sitting just above Settings. */}
+          {/* Config — opens the Config container; its boundary dropdown + chevrons
+              switch among Permissions · Settings · Environment · Trusted Folders. */}
           <button
             role="menuitem"
-            aria-haspopup="menu"
-            aria-expanded={configOpen}
-            onClick={() => setConfigOpen((v) => !v)}
-            className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+            onClick={() => { config.setOpen(true); close(); }}
+            className={`flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-900 ${config.open ? "text-zinc-100" : "text-zinc-300"}`}
           >
             <span className="shrink-0 text-zinc-400"><IconConfig /></span>
             <span className="min-w-0 flex-1 truncate">Config</span>
-            <span className={`shrink-0 text-zinc-600 transition-transform ${configOpen ? "rotate-90" : ""}`}>
-              <IconChevronRight />
-            </span>
           </button>
-          {configOpen && (
-            <div role="menu" className="ml-[1.0625rem] border-l border-zinc-800 pl-1">
-              {[
-                { label: "Permissions", t: permissions },
-                { label: "Settings", t: settings },
-                { label: "Environment", t: environment },
-                { label: "Trusted Folders", t: trustedFolders },
-              ].map(({ label, t }) => (
-                <button
-                  key={label}
-                  role="menuitem"
-                  onClick={() => { t.toggle(); close(); }}
-                  className={`flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-zinc-900 ${
-                    t.open ? "text-zinc-100" : "text-zinc-300"
-                  }`}
-                >
-                  <span className="min-w-0 flex-1 truncate">{label}</span>
-                </button>
-              ))}
-            </div>
-          )}
           <MenuRow icon={<IconSettings />} label="Settings" hint="⇧⌘," onClick={close} />
           {/* The experimental channel-in toggle. A single stateful row (not two
               On/Off items) so the pill always reflects reality. Stays open on click

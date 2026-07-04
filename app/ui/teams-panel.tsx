@@ -52,8 +52,9 @@ function memberColor(c: string): string {
   return COLOR_MAP[(c ?? "").toLowerCase()] ?? "text-zinc-400";
 }
 
-export default function TeamsPanel() {
+export default function TeamsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useTeams();
+  const active = embedded || open;
   const { setOpen: setTasksOpen } = useTasks();
   const { setOpen: setMailboxOpen } = useMailbox();
   const router = useRouter();
@@ -82,11 +83,11 @@ export default function TeamsPanel() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     load();
     const iv = setInterval(load, 5000); // auto-surface a freshly spawned team
     return () => clearInterval(iv);
-  }, [open, load]);
+  }, [active, load]);
 
   // Spawn a brand-new team FROM hq: a managed tmux split-pane session.
   const spawn = async () => {
@@ -155,6 +156,103 @@ export default function TeamsPanel() {
     setMailboxOpen(true);
   };
 
+  const content = (
+    <>
+      {/* header — title + refresh */}
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="font-mono text-[12px] text-zinc-300">Teams</span>
+        <span className="font-mono text-[10px] tabular-nums text-zinc-600">{teams.length}</span>
+        <button
+          onClick={() => load()}
+          disabled={loading}
+          title="Refresh"
+          aria-label="Refresh"
+          className="ml-auto flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+        >
+          <svg className={loading ? "animate-spin" : ""} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M3 21v-5h5" />
+          </svg>
+        </button>
+      </div>
+
+      {err && (
+        <p className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">{err}</p>
+      )}
+
+      {/* Spawn a team FROM hq — a managed tmux split-pane session (real,
+          drivable agents). */}
+      <div className="shrink-0">
+        {spawnOpen ? (
+          <div className="flex flex-col gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/30 p-2">
+            <input
+              value={spawnCwd}
+              onChange={(e) => setSpawnCwd(e.target.value)}
+              placeholder="working dir — e.g. ~/code/my-project"
+              className="rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+            />
+            <textarea
+              value={spawnPrompt}
+              onChange={(e) => setSpawnPrompt(e.target.value)}
+              rows={3}
+              placeholder="the team's task — e.g. “Spawn 3 teammates to review PR #142: security, performance, tests.”"
+              className="scrollbar-none resize-none rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSpawnOpen(false)}
+                className="rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+              >
+                cancel
+              </button>
+              <button
+                type="button"
+                onClick={spawn}
+                disabled={spawning}
+                className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25 disabled:opacity-50"
+              >
+                {spawning ? "spawning…" : "Spawn team"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSpawnOpen(true)}
+            className="w-full rounded-md border border-dashed border-zinc-700 px-2 py-1.5 font-mono text-[11px] text-zinc-400 transition-colors hover:border-emerald-500/50 hover:text-emerald-300"
+          >
+            + Spawn team
+          </button>
+        )}
+        {spawnMsg && <p className="mt-1 font-mono text-[10px] text-zinc-500">{spawnMsg}</p>}
+      </div>
+
+      <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2">
+        {teams.length ? (
+          teams.map((t) => (
+            <TeamCard key={t.id} team={t} onOpen={openWall} onTasks={openTasks} onMailbox={openMailbox} />
+          ))
+        ) : (
+          <p className="px-0.5 font-mono text-[11px] leading-relaxed text-zinc-600">
+            {loading ? "loading…" : "No active agent teams. Spawn a team from a Claude Code session."}
+          </p>
+        )}
+      </div>
+
+      {/* footer */}
+      <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
+        {teams.length
+          ? "Click a card to fill the wall with its team · Tasks / Mailbox drill in."
+          : "Teams spawn when a session orchestrates a multi-agent crew."}
+      </footer>
+    </>
+  );
+
+  if (embedded) return content;
+
   return (
     <AppPanel
       rootId="teams-panel-root"
@@ -162,98 +260,7 @@ export default function TeamsPanel() {
       onClose={() => setOpen(false)}
       widthClass="sm:w-[min(360px,40vw)]"
     >
-      <Boundary label="teams-panel.tsx">
-        {/* header — title + refresh */}
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="font-mono text-[12px] text-zinc-300">Teams</span>
-          <span className="font-mono text-[10px] tabular-nums text-zinc-600">{teams.length}</span>
-          <button
-            onClick={() => load()}
-            disabled={loading}
-            title="Refresh"
-            aria-label="Refresh"
-            className="ml-auto flex shrink-0 items-center rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
-          >
-            <svg className={loading ? "animate-spin" : ""} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-              <path d="M21 3v5h-5" />
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-              <path d="M3 21v-5h5" />
-            </svg>
-          </button>
-        </div>
-
-        {err && (
-          <p className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 font-mono text-[10px] text-red-300">{err}</p>
-        )}
-
-        {/* Spawn a team FROM hq — a managed tmux split-pane session (real,
-            drivable agents). */}
-        <div className="shrink-0">
-          {spawnOpen ? (
-            <div className="flex flex-col gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/30 p-2">
-              <input
-                value={spawnCwd}
-                onChange={(e) => setSpawnCwd(e.target.value)}
-                placeholder="working dir — e.g. ~/code/my-project"
-                className="rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
-              />
-              <textarea
-                value={spawnPrompt}
-                onChange={(e) => setSpawnPrompt(e.target.value)}
-                rows={3}
-                placeholder="the team's task — e.g. “Spawn 3 teammates to review PR #142: security, performance, tests.”"
-                className="scrollbar-none resize-none rounded border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSpawnOpen(false)}
-                  className="rounded-md border border-zinc-700 px-2 py-0.5 font-mono text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-                >
-                  cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={spawn}
-                  disabled={spawning}
-                  className="rounded-md border border-emerald-600/50 bg-emerald-600/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-600/25 disabled:opacity-50"
-                >
-                  {spawning ? "spawning…" : "Spawn team"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setSpawnOpen(true)}
-              className="w-full rounded-md border border-dashed border-zinc-700 px-2 py-1.5 font-mono text-[11px] text-zinc-400 transition-colors hover:border-emerald-500/50 hover:text-emerald-300"
-            >
-              + Spawn team
-            </button>
-          )}
-          {spawnMsg && <p className="mt-1 font-mono text-[10px] text-zinc-500">{spawnMsg}</p>}
-        </div>
-
-        <div className="scrollbar-none -mr-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2">
-          {teams.length ? (
-            teams.map((t) => (
-              <TeamCard key={t.id} team={t} onOpen={openWall} onTasks={openTasks} onMailbox={openMailbox} />
-            ))
-          ) : (
-            <p className="px-0.5 font-mono text-[11px] leading-relaxed text-zinc-600">
-              {loading ? "loading…" : "No active agent teams. Spawn a team from a Claude Code session."}
-            </p>
-          )}
-        </div>
-
-        {/* footer */}
-        <footer className="shrink-0 border-t border-dashed border-zinc-800 pt-3 font-mono text-[10px] leading-relaxed text-zinc-600">
-          {teams.length
-            ? "Click a card to fill the wall with its team · Tasks / Mailbox drill in."
-            : "Teams spawn when a session orchestrates a multi-agent crew."}
-        </footer>
-      </Boundary>
+      <Boundary label="teams-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }

@@ -18,6 +18,7 @@ import { useOutputStyles } from "@/app/ui/output-styles-state";
 import { useConsole } from "@/app/ui/console-state";
 import { useActivity } from "@/app/ui/activity-state";
 import { useTools } from "@/app/ui/tools-state";
+import { useMetrics } from "@/app/ui/metrics-state";
 import { usePermissions } from "@/app/ui/permissions-state";
 import { useKpis } from "@/app/ui/kpi-state";
 import { useChangelog } from "@/app/ui/changelog-state";
@@ -113,6 +114,7 @@ export default function TerminalNavMenu({
   const consoleCtx = useConsole();
   const activityCtx = useActivity();
   const toolsCtx = useTools();
+  const metricsCtx = useMetrics();
   const params = useSearchParams();
   const pathname = usePathname() ?? "/";
   const [open, setOpen] = useState(false);
@@ -178,7 +180,7 @@ export default function TerminalNavMenu({
           {ITEMS.map(({ key, Icon }) => {
             // Activity + Console open their drill-down container DIRECTLY (no flyout);
             // the container's own "⌄" switches panels. Metrics stays a flyout.
-            const container = key === "Console" ? consoleCtx : key === "Activity" ? activityCtx : key === "Tools" ? toolsCtx : null;
+            const container = key === "Console" ? consoleCtx : key === "Activity" ? activityCtx : key === "Tools" ? toolsCtx : key === "Metrics" ? metricsCtx : null;
             return container ? (
               <button
                 key={key}

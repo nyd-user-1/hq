@@ -39,8 +39,9 @@ type Feed = { calls: Call[]; total: number; totalCost: number; cap: number; spen
 // opens its full token/$ breakdown IN the panel (drill-down + back). The clicked
 // row's Call object is already in the loaded feed, so the drill-down needs no
 // second fetch.
-export default function CallsPanel() {
+export default function CallsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const { open, setOpen } = useCalls();
+  const active = embedded || open;
   const [feed, setFeed] = useState<Feed | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -62,20 +63,14 @@ export default function CallsPanel() {
   }, []);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (active) load();
+  }, [active, load]);
 
   const spend = feed?.spend;
   const calls = feed?.calls ?? [];
 
-  return (
-    <AppPanel
-      rootId="calls-panel-root"
-      open={open}
-      onClose={() => setOpen(false)}
-      widthClass="sm:w-[min(420px,40vw)]"
-    >
-      <Boundary label="calls-panel.tsx">
+  const content = (
+    <>
         {sel ? (
           // ── call drill-down ──────────────────────────────────────────────
           <>
@@ -237,7 +232,17 @@ export default function CallsPanel() {
             )}
           </>
         )}
-      </Boundary>
+    </>
+  );
+  if (embedded) return content;
+  return (
+    <AppPanel
+      rootId="calls-panel-root"
+      open={open}
+      onClose={() => setOpen(false)}
+      widthClass="sm:w-[min(420px,40vw)]"
+    >
+      <Boundary label="calls-panel.tsx">{content}</Boundary>
     </AppPanel>
   );
 }
