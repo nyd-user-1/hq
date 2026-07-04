@@ -13,10 +13,10 @@ export default function DashboardSection() {
           className="max-w-2xl text-3xl leading-[1.08] tracking-[-0.02em] sm:text-[38px]"
           style={{ fontWeight: 590, color: "#f7f8f8" }}
         >
-          Numbers for every session.
+          Runtime usage data.
         </h2>
         <p className="mt-3 max-w-xl text-[14px] leading-relaxed" style={{ color: "#8a8f98" }}>
-          Every metric computed from the transcripts on disk, at request time — no warehouse, no ETL.
+          Live and accurate token data available per session, turn, tool, and user. No warehouse or ETL required.
         </p>
 
         {/* the frame — the same Linear app-shot chrome as the hero */}
