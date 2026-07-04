@@ -128,8 +128,8 @@
    across the button on hover. The overlay sits off-screen left at rest and travels
    across once per hover-enter. */
 @keyframes hq-shimmer {
-  from { transform: translateX(-160%) skewX(-16deg); }
-  to { transform: translateX(160%) skewX(-16deg); }
+  0% { transform: translateX(-160%) skewX(-16deg); }
+  55%, 100% { transform: translateX(160%) skewX(-16deg); }
 }
 
 /* Landing $ cards (app/ui/landing/cost.tsx) — the ledger/savings/memory lists

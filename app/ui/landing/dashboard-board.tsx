@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MetricItem, Shape, Tone } from "@/lib/fleet";
-import { ShapeCard } from "@/app/ui/fleet-view";
+import { ShapeCard, smoothPath } from "@/app/ui/fleet-view";
 import { useInView } from "./use-in-view";
 
 // Parse a formatted stat ("55.3M", "$7.5k", "4,418", "26%", "48") into its animatable
@@ -104,6 +104,14 @@ function fakeSessionSeries(n: number): { name: string; tone: Tone; points: numbe
     { name: "f2c7a5d3", tone: "zinc", points: hump(n, 0.94, 0.045, 16000) },
   ];
 }
+// a smooth rolling daily curve (gentle hills + slow uptrend, no sharp noise)
+function fakeDayPoints(n: number): number[] {
+  return Array.from({ length: n }, (_, i) => {
+    const t = i / Math.max(1, n - 1);
+    const v = 60 + 26 * Math.sin(t * 6.1) + 15 * Math.sin(t * 12.7 + 1.2) + 10 * Math.sin(t * 3.1 + 0.5) + 16 * t;
+    return Math.round(Math.max(6, v));
+  });
+}
 
 // ── global range filter (the header "live" control) ───────────────────────────
 // Reshapes every card: charts window to the last N days, stats scale by a factor.
@@ -146,10 +154,9 @@ function prepare(items: MetricItem[], range: GlobalRange): MetricItem[] {
   const { n, f } = RANGE_CFG[range];
   return items.map((it) => {
     let shape = it.shape;
-    if (shape?.kind === "stackedArea") {
-      if (it.id === "tokens_stacked_area") shape = { ...shape, series: fakeModelSeries(shape.dayLabels.length) };
-      else if (it.id === "tokens_by_session_area") shape = { ...shape, series: fakeSessionSeries(shape.dayLabels.length) };
-    }
+    if (shape?.kind === "stackedArea" && it.id === "tokens_stacked_area") shape = { ...shape, series: fakeModelSeries(shape.dayLabels.length) };
+    else if (shape?.kind === "stackedArea" && it.id === "tokens_by_session_area") shape = { ...shape, series: fakeSessionSeries(shape.dayLabels.length) };
+    else if (shape?.kind === "area" && it.id === "tokens_day_area") shape = { ...shape, points: fakeDayPoints(shape.points.length) };
     if (shape) shape = windowShape(shape, n);
     const stat = it.stat && f !== 1 ? { ...it.stat, value: scaleStatValue(it.stat.value, f) } : it.stat;
     return { ...it, shape, stat };
@@ -190,28 +197,29 @@ function Sparkline({ points, color, className }: { points: number[]; color: stri
   const max = Math.max(...points);
   const min = Math.min(...points);
   const rng = max - min || 1;
-  const d = points
-    .map((p, i) => `${i ? "L" : "M"}${((i / (points.length - 1)) * W).toFixed(1)},${(H - ((p - min) / rng) * (H - 4) - 2).toFixed(1)}`)
-    .join(" ");
+  const xy = points.map((p, i) => [(i / (points.length - 1)) * W, H - ((p - min) / rng) * (H - 4) - 2] as [number, number]);
+  const d = smoothPath(xy);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={className} aria-hidden>
-      <path d={`${d} L${W},${H} L0,${H} Z`} fill={color} fillOpacity="0.12" />
+      <path d={`${d} L${W},${H} L0,${H} Z`} fill={color} fillOpacity="0.14" />
       <path d={d} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
 
+// A KPI tile: label above the number, delta chip right beside it, and a full-width
+// trend sparkline across the bottom (brightens on hover).
 function ShotStat({ value, label, tone, idx }: { value: string; label?: string; tone?: string; idx: number }) {
   const spark = SPARKS[idx % SPARKS.length];
   const delta = DELTAS[idx % DELTAS.length];
   const ink = INK[tone ?? "zinc"] ?? INK.zinc;
   return (
-    <div className="group relative flex h-[64px] flex-col justify-start overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 px-4 pt-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900/60">
-      <div className="relative z-[1] flex items-start justify-between gap-2">
-        <CountUp value={value} className={`text-[24px] leading-none tracking-tight ${TONE[tone ?? "zinc"] ?? TONE.zinc}`} />
-        <div className="flex flex-col items-end gap-1">
-          {label && <span className="text-[10px] uppercase tracking-widest text-zinc-500">{label}</span>}
-          <span className={`font-mono text-[10px] ${delta.up ? "text-emerald-400" : "text-red-400"}`}>
+    <div className="group relative flex h-[72px] flex-col justify-start overflow-hidden rounded-lg border border-zinc-800/70 bg-zinc-900/30 px-4 pt-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900/60">
+      <div className="relative z-[1]">
+        {label && <div className="text-[10px] uppercase tracking-widest text-zinc-500">{label}</div>}
+        <div className="mt-1 flex items-baseline gap-2">
+          <CountUp value={value} className={`text-[24px] leading-none tracking-tight ${TONE[tone ?? "zinc"] ?? TONE.zinc}`} />
+          <span className={`font-mono text-[11px] ${delta.up ? "text-emerald-400" : "text-red-400"}`}>
             {delta.up ? "▲" : "▼"} {delta.v}
           </span>
         </div>
@@ -219,7 +227,7 @@ function ShotStat({ value, label, tone, idx }: { value: string; label?: string; 
       <Sparkline
         points={spark}
         color={ink}
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-7 opacity-30 transition-opacity duration-300 group-hover:opacity-70"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-8 w-full opacity-45 transition-opacity duration-300 group-hover:opacity-80"
       />
     </div>
   );

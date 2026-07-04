@@ -131,6 +131,9 @@ export default function Cost() {
   return (
     <Section id="cost">
       <StackedHead
+        n="2.0"
+        name="Cost"
+        specs={SPECS}
         title="Per turn token counts."
         desc={
           <>

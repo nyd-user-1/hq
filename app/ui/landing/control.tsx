@@ -1,5 +1,31 @@
 import { Section, StackedHead, SpinRing } from "./primitives";
 import { ToolStep } from "./terminal-pane";
+import type { Spec } from "./spec-drawer";
+
+const SPECS: Spec[] = [
+  {
+    n: "3.1",
+    title: "The warm REPL daemon",
+    desc: <>A unix-socket daemon owns the session pool, so warm sessions survive server restarts. hq&apos;s send box types into a session that is already running.</>,
+    file: "lib/repl-daemon.mjs",
+  },
+  {
+    n: "3.2",
+    title: "channel-in",
+    desc: <>An MCP channel pushes your message into a live terminal session in real time — <span className="text-zinc-200">no fork, one transcript</span>. Terminal-to-hq-and-back is one conversation.</>,
+  },
+  {
+    n: "3.3",
+    title: "Drives agent teams",
+    desc: <>tmux teammates take real keystrokes; in-process teammates take mailbox messages. Either way the pane you&apos;re reading is the pane you&apos;re driving.</>,
+    file: "lib/team-tmux.ts",
+  },
+  {
+    n: "3.4",
+    title: "Why not --resume",
+    desc: <><span className="font-mono text-zinc-300">claude --resume</span> forks from the on-disk transcript — it never attaches to the running process. hq refuses to split your history in two.</>,
+  },
+];
 
 // The differentiator, shown not told: a message typed in hq's send-box lands in the
 // live terminal (the orange "thinking" ring reappears here — same vocabulary as the
@@ -8,6 +34,9 @@ export default function Control() {
   return (
     <Section id="control">
       <StackedHead
+        n="3.0"
+        name="Control"
+        specs={SPECS}
         title={
           <>
             It doesn&apos;t just watch.

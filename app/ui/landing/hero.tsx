@@ -33,7 +33,7 @@ export default function Hero() {
             </span>
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-0 -translate-x-[160%] bg-gradient-to-r from-transparent via-white/25 to-transparent motion-safe:group-hover:animate-[hq-shimmer_0.9s_ease-out]"
+              className="pointer-events-none absolute inset-0 -translate-x-[160%] bg-gradient-to-r from-transparent via-white/30 to-transparent motion-safe:group-hover:animate-[hq-shimmer_1.2s_ease-out_infinite]"
             />
           </a>
         </div>

@@ -27,7 +27,7 @@ export function SpinRing({
     inset: "-2px",
     borderRadius: radius,
     padding: "2px",
-    background: `conic-gradient(from var(--hq-spin), transparent 0deg, ${from} 40deg, ${to} 60deg, transparent 100deg, transparent 360deg)`,
+    background: `conic-gradient(from var(--hq-spin), transparent 0deg, ${from} 34deg, ${to} 74deg, transparent 108deg, transparent 360deg)`,
     WebkitMask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
     WebkitMaskComposite: "xor",
     maskComposite: "exclude",
@@ -111,15 +111,34 @@ export function SectionHead({
 }
 
 // A stacked section header (the dashboard/manifesto layout): a headline with its
-// description left-aligned directly underneath — no right-hand column, no pill. Used
-// by the sections that read as full-width feature statements.
-export function StackedHead({ title, desc }: { title: ReactNode; desc: ReactNode }) {
+// description left-aligned directly underneath. When `specs` are given, the section's
+// "N.0 NAME" TECH SPECS pill sits at the top-right, opposite the headline.
+export function StackedHead({
+  title,
+  desc,
+  n,
+  name,
+  specs,
+}: {
+  title: ReactNode;
+  desc: ReactNode;
+  n?: string;
+  name?: string;
+  specs?: Spec[];
+}) {
   return (
-    <div className="max-w-3xl">
-      <h2 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] text-zinc-50 sm:text-[38px]">
-        {title}
-      </h2>
-      <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-zinc-400">{desc}</p>
+    <div className="flex items-start justify-between gap-6">
+      <div className="max-w-3xl">
+        <h2 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] text-zinc-50 sm:text-[38px]">
+          {title}
+        </h2>
+        <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-zinc-400">{desc}</p>
+      </div>
+      {specs && n && name && (
+        <div className="shrink-0 pt-1">
+          <SpecDrawer n={n} name={name} specs={specs} />
+        </div>
+      )}
     </div>
   );
 }
