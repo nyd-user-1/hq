@@ -5,6 +5,7 @@ import Observe from "@/app/ui/landing/observe";
 import Cost from "@/app/ui/landing/cost";
 import Control from "@/app/ui/landing/control";
 import Moat from "@/app/ui/landing/moat";
+import Pricing from "@/app/ui/landing/pricing";
 import Footer from "@/app/ui/landing/footer";
 import { Reveal } from "@/app/ui/landing/reveal";
 
@@ -37,6 +38,9 @@ export default function RootLanding() {
         <Reveal><Cost /></Reveal>
         <Reveal><Control /></Reveal>
         <Reveal><Moat /></Reveal>
+        {/* Remounted for the checkout mission (was built 7/1, dropped in a later
+            restructure): the purchase entry point — middle tier → /checkout. */}
+        <Reveal><Pricing /></Reveal>
       </main>
       <Footer />
     </div>
