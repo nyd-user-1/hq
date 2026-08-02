@@ -38,7 +38,16 @@ function forbid(why: string): NextResponse {
   return new NextResponse(`HQ blocked a non-local request (${why}).`, { status: 403 });
 }
 
+// The boundary exists to keep a foreign page from driving a LOCAL hq — one with
+// a real ~/.claude on disk and a spawnable `claude`. The public Vercel deploy has
+// neither (serverless FS is empty and ephemeral), and every Host there is foreign
+// by definition, so enforcing the check 403s the entire public site. Gate it off
+// on the platform (`VERCEL=1` is set at build + runtime); local runs keep it.
+const PUBLIC_DEPLOY = !!process.env.VERCEL;
+
 export function proxy(req: NextRequest): NextResponse {
+  if (PUBLIC_DEPLOY) return NextResponse.next();
+
   // DNS-rebinding defense: the Host must be a loopback name on every request.
   if (!hostIsLocal(req.headers.get("host"))) return forbid("host");
 
