@@ -60,8 +60,8 @@ const writeJson = (p, obj) => {
 };
 
 const COMMAND_BODY = `---
-description: Unfreeze every open session on hq backstop capacity when you hit your usage limit. \`/backstop off\` releases it.
-argument-hint: [off|status]
+description: Unfreeze every open session on hq backstop capacity when you hit your usage limit. Run it again to release.
+argument-hint: [off|status|force]
 ---
 
 Reply with exactly one line: "backstop is handled locally — nothing to do."
@@ -201,10 +201,19 @@ if (ensureHook(settings)) say("  · UserPromptSubmit hook registered");
 writeJson(SETTINGS, settings);
 
 fs.writeFileSync(PLIST, PLIST_BODY);
+
+// bootout is asynchronous: bootstrapping too soon fails with EIO and leaves the
+// agent unloaded entirely — which on a reinstall means no gateway at all, and
+// every session's base url pointing at a dead port. Wait for the old job to
+// actually go away, then retry.
 launchctl(["bootout", `gui/${uid}/${LABEL}`]);
-const booted = launchctl(["bootstrap", `gui/${uid}`, PLIST]);
+let booted = false;
+for (let i = 0; i < 25 && !booted; i++) {
+  booted = launchctl(["bootstrap", `gui/${uid}`, PLIST]);
+  if (!booted) execFileSync("sleep", ["0.2"]);
+}
 launchctl(["kickstart", "-k", `gui/${uid}/${LABEL}`]);
-say(`  · launchd agent ${booted ? "loaded" : "reloaded"} (KeepAlive on)`);
+say(`  · launchd agent ${booted ? "loaded" : "NOT LOADED — run: launchctl bootstrap gui/" + uid + " " + PLIST}`);
 
 // Confirm it answers before claiming success.
 let up = false;

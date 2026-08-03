@@ -8,13 +8,16 @@
 //
 //   node scripts/backstop-selftest.mjs
 import http from "node:http";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { encodeEventStreamFrame } from "../lib/backstop/eventstream.mjs";
 
+const execFile = promisify(execFileCb);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATEWAY = path.join(HERE, "..", "lib", "backstop", "gateway.mjs");
 const PORT = 3199;
@@ -24,6 +27,48 @@ const STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-selftest-"));
 
 // A phrase that must never appear in any log or ledger written by passthrough.
 const SECRET = "PRIVACY-CANARY-b7f2c1";
+
+const AWS_KEY = process.env.AWS_ACCESS_KEY_ID ?? "AKIAMOCKSELFTEST0000";
+const AWS_SECRET = process.env.AWS_SECRET_ACCESS_KEY ?? "mockSecretForSelfTestOnly000000000000000";
+
+// -------------------------------------------------------- independent SigV4
+// Deliberately NOT imported from lib/backstop/sigv4.mjs — a mock that trusts
+// our own signer cannot catch our own signing bug. Written from the AWS spec:
+// for every service but S3 the canonical URI is the wire path encoded a SECOND
+// time, which is what a Bedrock profile id's colon ("-v1:0" -> %3A -> %253A)
+// depends on.
+const hmac = (k, s) => crypto.createHmac("sha256", k).update(s, "utf8").digest();
+const sha = (d) => crypto.createHash("sha256").update(d ?? "").digest("hex");
+const encSegment = (s) =>
+  encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+
+function verifySigV4(req, body) {
+  const auth = req.headers.authorization ?? "";
+  const m = auth.match(
+    /Credential=([^/]+)\/(\d{8})\/([^/]+)\/([^/]+)\/aws4_request,\s*SignedHeaders=([^,]+),\s*Signature=([0-9a-f]+)/,
+  );
+  if (!m) return { ok: false, why: "authorization header did not parse" };
+  const [, , dateStamp, region, service, signedHeaders, signature] = m;
+
+  const [pathOnly, query = ""] = req.url.split("?");
+  const canonicalUri = pathOnly.split("/").map(encSegment).join("/");
+  const names = signedHeaders.split(";");
+  const canonicalHeaders = names
+    .map((n) => `${n}:${String(req.headers[n] ?? "").trim().replace(/\s+/g, " ")}\n`)
+    .join("");
+  const payloadHash = sha(body);
+  const canonicalRequest = ["POST", canonicalUri, query, canonicalHeaders, signedHeaders, payloadHash].join("\n");
+
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", req.headers["x-amz-date"], scope, sha(canonicalRequest)].join("\n");
+  let key = hmac(`AWS4${AWS_SECRET}`, dateStamp);
+  for (const part of [region, service, "aws4_request"]) key = hmac(key, part);
+  const expected = hmac(key, stringToSign).toString("hex");
+
+  return expected === signature
+    ? { ok: true, canonicalUri }
+    : { ok: false, why: `signature mismatch — canonical uri should be ${canonicalUri}` };
+}
 
 let passes = 0;
 let failures = 0;
@@ -39,7 +84,11 @@ const check = (name, cond, detail = "") => (cond ? ok(name, detail) : fail(name,
 
 // ------------------------------------------------------------- mock upstream
 
-const seen = { passthrough: 0, bedrockInvoke: 0, bedrockStream: 0, sigv4: [] };
+const seen = { passthrough: 0, bedrockInvoke: 0, bedrockStream: 0, bedrockRefused: 0, sigv4: [] };
+
+// Flip this to make the mock's Bedrock side answer the way a 0-tokens-per-day
+// account does. This is the exact upstream that locked an account out.
+let bedrockRefuses = null; // null = healthy, else { status, body }
 
 const ANTHROPIC_REPLY = (text, model) => ({
   id: "msg_mock",
@@ -60,7 +109,20 @@ const mock = http.createServer((req, res) => {
     if (m) {
       const profile = decodeURIComponent(m[1]);
       const auth = req.headers.authorization ?? "";
-      seen.sigv4.push({ profile, auth, hasDate: Boolean(req.headers["x-amz-date"]), body });
+      seen.sigv4.push({
+        profile,
+        auth,
+        hasDate: Boolean(req.headers["x-amz-date"]),
+        body,
+        url: req.url,
+        sig: verifySigV4(req, body),
+      });
+
+      if (bedrockRefuses) {
+        seen.bedrockRefused++;
+        res.writeHead(bedrockRefuses.status, { "content-type": "application/json" });
+        return res.end(JSON.stringify(bedrockRefuses.body));
+      }
 
       if (m[2] === "invoke") {
         seen.bedrockInvoke++;
@@ -145,13 +207,21 @@ const gateway = spawn(process.execPath, [GATEWAY], {
     ...process.env,
     HQ_BACKSTOP_PORT: String(PORT),
     HQ_BACKSTOP_DIR: STATE_DIR,
-    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ?? "AKIAMOCKSELFTEST0000",
-    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "mockSecretForSelfTestOnly000000000000000",
+    AWS_ACCESS_KEY_ID: AWS_KEY,
+    AWS_SECRET_ACCESS_KEY: AWS_SECRET,
     AWS_REGION: "us-east-1",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
 gateway.stderr.on("data", (d) => process.stderr.write(`  [gateway] ${d}`));
+gateway.stdout.on("data", (d) => process.stderr.write(`  [gateway] ${d}`));
+// A gateway that dies mid-run makes every later assertion fail as "fetch
+// failed", which says nothing. Say what actually happened.
+let gatewayExit = null;
+gateway.on("exit", (code, signal) => {
+  gatewayExit = `code=${code} signal=${signal}`;
+  process.stderr.write(`  \x1b[31m[gateway] EXITED ${gatewayExit}\x1b[0m\n`);
+});
 
 async function main() {
   await new Promise((r) => mock.listen(MOCK_PORT, "127.0.0.1", r));
@@ -189,6 +259,10 @@ async function main() {
     const sig = seen.sigv4.at(-1);
     check("request was SigV4-signed", sig.auth.startsWith("AWS4-HMAC-SHA256 Credential="), sig.auth.slice(0, 42));
     check("credential scope targets bedrock", sig.auth.includes("/us-east-1/bedrock/aws4_request"));
+    // The regression guard: AWS rejected every real call before this landed.
+    check("signature validates against an independent SigV4 implementation", sig.sig.ok, sig.sig.why);
+    check("wire path keeps the profile colon single-encoded", sig.url.includes("-v1%3A0"), sig.url);
+    check("canonical uri double-encodes it for signing", sig.sig.canonicalUri?.includes("-v1%253A0"), sig.sig.canonicalUri);
     check("model mapped to a cross-region inference profile", sig.profile === "us.anthropic.claude-haiku-4-5-20251001-v1:0", sig.profile);
     check("subscription OAuth token never forwarded upstream", !sig.auth.includes("oat01") && !JSON.stringify(seen.sigv4).includes("FAKE-SUBSCRIPTION-TOKEN"));
     check("anthropic_version rewritten for Bedrock", JSON.parse(sig.body).anthropic_version === "bedrock-2023-05-31");
@@ -224,10 +298,92 @@ async function main() {
     const j = await r.json();
     check("traffic returns to the user's plan", r.status === 200 && j.content?.[0]?.text === "PASSTHROUGH-OK");
   }
+
+  // ---------------------------------------------------------------- regression
+  // Everything below rehearses the failure that locked a real account out:
+  // backstop engaged against a Bedrock account whose tokens-per-day quota was 0.
+
+  console.log("\n\x1b[1m7. The backstop itself fails — the session must NOT\x1b[0m");
+  {
+    await post(`${BASE}/_backstop/on`, { provider: "bedrock", reason: "selftest" });
+    // Verbatim what AWS returns on a 0 tokens-per-day account.
+    bedrockRefuses = {
+      status: 429,
+      body: { message: "Too many tokens per day, please wait before trying again." },
+    };
+    const before = seen.passthrough;
+
+    const r = await sendMessage();
+    const j = await r.json();
+    check("a refusing upstream does not reach the client", r.status === 200, `got ${r.status}`);
+    check("the turn is served by the user's own plan instead", j.content?.[0]?.text === "PASSTHROUGH-OK");
+    check("the fallback really went upstream", seen.passthrough === before + 1);
+
+    const st = await fetch(`${BASE}/_backstop/status`).then((x) => x.json());
+    check("the failure is recorded, not swallowed", /too many tokens per day/i.test(st.lastDriverError ?? ""), st.lastDriverError);
+    check("backstop stays engaged for when the quota returns", st.mode === "on");
+  }
+
+  console.log("\n\x1b[1m8. Circuit breaker — a dead upstream stops costing a round-trip\x1b[0m");
+  {
+    await sendMessage();
+    await sendMessage(); // three consecutive failures total
+    const st = await fetch(`${BASE}/_backstop/status`).then((x) => x.json());
+    check("breaker opens after repeated failure", st.degraded === true, `failures=${st.consecutiveFailures}`);
+
+    const refusedBefore = seen.bedrockRefused;
+    const r = await sendMessage();
+    check("further turns skip the dead upstream entirely", seen.bedrockRefused === refusedBefore);
+    check("and are still served", r.status === 200 && (await r.json()).content?.[0]?.text === "PASSTHROUGH-OK");
+    await post(`${BASE}/_backstop/off`);
+  }
+
+  console.log("\n\x1b[1m9. Preflight — /backstop refuses to promise what it cannot deliver\x1b[0m");
+  {
+    const refused = await post(`${BASE}/_backstop/on`, { provider: "bedrock", reason: "selftest" });
+    check("engage is refused when the provider cannot serve", refused.ok === false && refused.engaged === false);
+    check("the refusal carries the real upstream reason", /too many tokens per day/i.test(refused.reason ?? ""), refused.reason);
+
+    const st = await fetch(`${BASE}/_backstop/status`).then((x) => x.json());
+    check("the user is left on their own plan, unchanged", st.mode === "off");
+
+    const forced = await post(`${BASE}/_backstop/on`, { provider: "bedrock", force: true });
+    check("force engages anyway, unverified", forced.ok === true && forced.verified === false);
+    await post(`${BASE}/_backstop/off`);
+    bedrockRefuses = null;
+  }
+
+  console.log("\n\x1b[1m10. /backstop toggles — the same command out as in\x1b[0m");
+  {
+    // Must be async: the ctl script's engage triggers a preflight that comes
+    // back to the mock server living in THIS process. Blocking the event loop
+    // here would deadlock the request we are waiting on.
+    const ctl = async (arg = "") =>
+      (
+        await execFile("bash", [path.join(HERE, "..", "lib", "backstop", "backstop-ctl.sh"), arg], {
+          encoding: "utf8",
+          env: { ...process.env, HQ_BACKSTOP_PORT: String(PORT) },
+        })
+      ).stdout;
+
+    const onOut = await ctl();
+    const afterOn = await fetch(`${BASE}/_backstop/status`).then((x) => x.json());
+    check("bare /backstop engages when released", afterOn.mode === "on", onOut.trim());
+
+    const offOut = await ctl();
+    const afterOff = await fetch(`${BASE}/_backstop/status`).then((x) => x.json());
+    check("bare /backstop releases when engaged", afterOff.mode === "off", offOut.trim());
+    check("and says so", /released/.test(offOut));
+
+    await ctl();
+    await ctl("off");
+    const explicit = await fetch(`${BASE}/_backstop/status`).then((x) => x.json());
+    check("explicit /backstop off still releases", explicit.mode === "off");
+  }
 }
 
 main()
-  .catch((e) => fail("harness", e.stack ?? String(e)))
+  .catch((e) => fail("harness", `${e.stack ?? String(e)}${gatewayExit ? `\n      gateway exited: ${gatewayExit}` : ""}`))
   .finally(async () => {
     gateway.kill("SIGTERM");
     mock.close();
