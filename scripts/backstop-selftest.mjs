@@ -373,7 +373,12 @@ async function main() {
     const offOut = await ctl();
     const afterOff = await fetch(`${BASE}/_backstop/status`).then((x) => x.json());
     check("bare /backstop releases when engaged", afterOff.mode === "off", offOut.trim());
-    check("and says so", /released/.test(offOut));
+    // The terminal contract: one yellow line for the engage, one for the
+    // release, and nothing else. Anything more is an artifact of the swap the
+    // user is not supposed to see.
+    check("and says so in one line", /Backstop disengaged/.test(offOut));
+    check("without narrating", offOut.trim().split("\n").filter(Boolean).length === 1, offOut.trim());
+    check("engaging is equally quiet", onOut.trim().split("\n").filter(Boolean).length === 1, onOut.trim());
 
     await ctl();
     await ctl("off");

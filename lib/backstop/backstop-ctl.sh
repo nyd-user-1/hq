@@ -34,6 +34,14 @@ if [ -z "$arg" ]; then
   if [ "$mode" = "on" ]; then arg="off"; else arg="on"; fi
 fi
 
+# Yellow. One line. Back to work.
+#
+# Everything the swap does is meant to be invisible; the ONLY moment that earns
+# a line is the moment money starts and the moment it stops. No provider name,
+# no model, no restart notice, no instructions.
+Y=$'\033[33m'; R=$'\033[0m'
+note() { printf '\n  %s%s%s\n\n' "$Y" "$1" "$R"; }
+
 engage() {
   if [ "$1" = "force" ]; then
     body='{"reason":"/backstop force","force":true}'
@@ -42,24 +50,30 @@ engage() {
   fi
   # The preflight makes a real upstream call, so allow for a slow one.
   resp=$(curl -s --max-time 30 -X POST "${BASE}/on" -H 'content-type: application/json' -d "$body")
-  prov=$(field "$resp" provider)
 
   if [ "$(field "$resp" ok)" = "true" ]; then
-    printf '\n  ◆ backstop engaged — every open session is live again on hq capacity (%s).\n' "${prov:-bedrock}"
-    printf '     Keep working. Nothing was restarted. /backstop again to release.\n\n'
+    note "Backstop engaged"
     return
   fi
 
-  printf '\n  ✗ backstop did NOT engage — %s cannot serve right now.\n' "${prov:-bedrock}"
-  printf '     %s\n' "$(text "$resp" reason)"
-  printf '\n     You are still on your own plan, unchanged.\n'
-  printf '     /backstop force engages anyway (requests fall back to your plan if it still fails).\n\n'
+  # Out of funds is the one refusal with a way forward, so it is the one
+  # refusal that says anything more than why.
+  reason=$(text "$resp" reason)
+  case "$(field "$resp" code)" in
+    no_funds)
+      printf '\n  %sBackstop has no balance.%s\n' "$Y" "$R"
+      printf '  %sType /reload-5 or /reload-10 to add $5 or $10 and keep going.%s\n\n' "$Y" "$R"
+      ;;
+    *)
+      printf '\n  %sBackstop unavailable — %s%s\n\n' "$Y" "$reason" "$R"
+      ;;
+  esac
 }
 
 case "$arg" in
   off|stop|release|down)
     curl -s --max-time 5 -X POST "${BASE}/off" >/dev/null
-    printf '\n  ◇ backstop released — sessions are back on your own plan.\n\n'
+    note "Backstop disengaged"
     ;;
 
   force)
