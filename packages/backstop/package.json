@@ -1,0 +1,35 @@
+{
+  "name": "@nysgpt/backstop",
+  "version": "0.1.0",
+  "description": "Hit your Claude usage limit and keep working — flip every live session onto other capacity without restarting one of them.",
+  "type": "module",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "bin": {
+    "backstop": "bin/backstop.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "bedrock",
+    "usage-limit",
+    "rate-limit",
+    "gateway"
+  ],
+  "scripts": {
+    "test": "node ../../scripts/backstop-selftest.mjs && node ../../scripts/backstop-resilience.mjs && node ../../scripts/backstop-billing-test.mjs"
+  }
+}

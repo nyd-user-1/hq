@@ -27,13 +27,21 @@ case "$prompt" in
   *) exit 0 ;;
 esac
 
-CTL="${HQ_BACKSTOP_CTL:-$HOME/.claude/hq/backstop/backstop-ctl.sh}"
-[ -x "$CTL" ] || CTL="$HOME/.claude/hq/backstop-ctl.sh"
+# Resolve siblings from where this script actually lives, not from $HOME. The
+# installer puts the hook and the control script in the same directory, and the
+# hook is always invoked by absolute path — so its own location is the one
+# signal that is exact. Hardcoding $HOME/.claude sent a CLAUDE_CONFIG_DIR
+# session looking in the primary account's directory, where the answer is either
+# missing or, worse, another account's gateway.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+CTL="${HQ_BACKSTOP_CTL:-$HERE/backstop-ctl.sh}"
+[ -x "$CTL" ] || CTL="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hq/backstop/backstop-ctl.sh"
+[ -x "$CTL" ] || CTL="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hq/backstop-ctl.sh"
 
 if [ -x "$CTL" ]; then
   "$CTL" "$args" >&2 2>&1
 else
-  echo "backstop: control script missing at $CTL — reinstall with: node scripts/backstop-install.mjs" >&2
+  echo "backstop: control script missing at $CTL — reinstall with: $(cat "$HERE/how" 2>/dev/null || echo "npx @nysgpt/backstop")" >&2
 fi
 
 exit 2

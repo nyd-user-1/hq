@@ -1,5 +1,5 @@
 // Backstop state, ledger, and model mapping. Pure node — shared by the daemon
-// and the installer. hq's Next app reads the same files through lib/backstop.ts.
+// and the installer. hq reads the same files with its own readers; nothing here imports from the app.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

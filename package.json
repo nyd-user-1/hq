@@ -7,6 +7,9 @@
   "engines": {
     "node": ">=22.5.0"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "bin": {
     "hq": "bin/hq",
     "hq-offline": "bin/hq-offline"

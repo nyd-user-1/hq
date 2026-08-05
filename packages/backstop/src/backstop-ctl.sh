@@ -13,9 +13,12 @@
 # The user's shell has no HQ_BACKSTOP_PORT, so a non-default install would
 # otherwise talk to the wrong port and report a dead gateway. The installer
 # writes the port it armed next to the runtime.
-CFG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-PORT="${HQ_BACKSTOP_PORT:-$(cat "$CFG_DIR/hq/backstop/port" 2>/dev/null || echo 3141)}"
+# Read it from next to this script rather than from $HOME, so a second account
+# talks to its own gateway and not the primary account's.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PORT="${HQ_BACKSTOP_PORT:-$(cat "$HERE/port" 2>/dev/null || cat "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hq/backstop/port" 2>/dev/null || echo 3141)}"
 BASE="http://127.0.0.1:${PORT}/_backstop"
+if [ "$PORT" = "3141" ]; then LABEL="com.hq.backstop"; else LABEL="com.hq.backstop.${PORT}"; fi
 
 arg="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]/')"
 
@@ -26,7 +29,7 @@ text() { printf '%s' "$1" | sed -n "s/.*\"$2\":\"\([^\"]*\)\".*/\1/p" | head -1;
 
 if ! out=$(curl -s --max-time 5 "${BASE}/status" 2>/dev/null) || [ -z "$out" ]; then
   echo "backstop: gateway is not answering on 127.0.0.1:${PORT}."
-  echo "          start it with:  launchctl kickstart -k gui/$(id -u)/com.hq.backstop"
+  echo "          start it with:  launchctl kickstart -k gui/$(id -u)/${LABEL}"
   exit 1
 fi
 

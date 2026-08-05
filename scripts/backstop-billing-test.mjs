@@ -19,9 +19,9 @@ const DIR = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-billing-"));
 process.env.HQ_BACKSTOP_DIR = DIR;
 
 const { PASSES, activePass, grantPass, topUpPass, offerFor, createCheckout, stripeKey } = await import(
-  "../lib/backstop/billing.mjs"
+  "../packages/backstop/src/billing.mjs"
 );
-const { appendLedger } = await import("../lib/backstop/state.mjs");
+const { appendLedger } = await import("../packages/backstop/src/state.mjs");
 
 const b = (s) => `\x1b[1m${s}\x1b[0m`;
 const dim = (s) => `\x1b[2m${s}\x1b[0m`;

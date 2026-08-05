@@ -19,7 +19,12 @@
 # Exit 2 -> disarmed; stderr is shown to the user in the transcript, which is
 #           the only channel that still works when the API is refusing.
 
-CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+# This script is installed at <config>/hq/backstop/ and always invoked by
+# absolute path, so its own location identifies the account it belongs to more
+# reliably than any environment variable. CLAUDE_CONFIG_DIR is the fallback.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+CFG="$(cd "$HERE/../.." 2>/dev/null && pwd)"
+[ -f "$CFG/settings.json" ] || CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 PORT="${HQ_BACKSTOP_PORT:-$(cat "$CFG/hq/backstop/port" 2>/dev/null || echo 3141)}"
 HEALTH="http://127.0.0.1:${PORT}/_backstop/health"
 # One daemon per port — a test install on another port has its own label, so
@@ -27,6 +32,9 @@ HEALTH="http://127.0.0.1:${PORT}/_backstop/health"
 if [ "$PORT" = "3141" ]; then LABEL="com.hq.backstop"; else LABEL="com.hq.backstop.${PORT}"; fi
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 DISARM="$CFG/hq/backstop/disarm.mjs"
+# The installer stamps how it was invoked, so these messages name a command that
+# exists here — a repo checkout and an npx install are told different things.
+HOW="$(cat "$CFG/hq/backstop/how" 2>/dev/null || echo "npx @nysgpt/backstop")"
 SETTINGS="$CFG/settings.json"
 ME=$(id -u)
 
@@ -49,7 +57,7 @@ launchctl kickstart -k "gui/${ME}/${LABEL}" 2>/dev/null
 # The gateway binds in ~200ms; 3s is generous headroom on a cold boot.
 for _ in $(seq 1 15); do
   if alive; then
-    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"backstop: gateway was down at session start and was restarted automatically. This session is healthy. Worth checking `node scripts/backstop-install.mjs --doctor` for why it stopped."}}\n'
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"backstop: gateway was down at session start and was restarted automatically. This session is healthy. Worth checking `'"$HOW"' doctor` for why it stopped."}}\n'
     exit 0
   fi
   sleep 0.2
@@ -69,8 +77,8 @@ if [ "$disarmed" -eq 0 ]; then
   account hostage. THIS session is still pointed at the dead port and will
   fail — open a new terminal window and it will go straight to the API.
 
-  Diagnose:  node scripts/backstop-install.mjs --doctor
-  Remove:    node scripts/backstop-install.mjs --eject
+  Diagnose:  ${HOW} doctor
+  Remove:    ${HOW} eject
 
 EOF
 else
@@ -79,7 +87,7 @@ else
   backstop: the gateway on 127.0.0.1:${PORT} is not answering, and settings.json
   could not be edited to remove it. Every session will fail until you run:
 
-      node scripts/backstop-install.mjs --eject
+      ${HOW} eject
 
 EOF
 fi

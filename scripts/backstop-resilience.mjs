@@ -126,7 +126,15 @@ try {
   ok("the preflight disarms backstop", !routed(), "ANTHROPIC_BASE_URL removed");
   ok("so the NEXT session goes straight to the API", settings().env?.ANTHROPIC_BASE_URL === undefined);
   ok("exit 2 — stderr reaches the user in the transcript", disarm.code === 2);
-  ok("and it says how to recover", disarm.out.includes("--eject") && disarm.out.includes("new terminal window"));
+  // Not just "some text appeared": the message has to name a command that
+  // exists on THIS machine. The installer stamps its own invocation next to the
+  // runtime precisely so an npx install is never told to run a repo path.
+  const stamped = fs.readFileSync(path.join(CFG, "hq", "backstop", "how"), "utf8").trim();
+  ok(
+    "and it says how to recover, in a command that exists here",
+    disarm.out.includes(`${stamped} eject`) && disarm.out.includes("new terminal window"),
+    stamped,
+  );
   ok("everything else in settings.json is intact", settings().env.SOMETHING_ELSE === "keep-me" && settings().permissions.allow.length === 2 && settings().theme === "dark");
   const state = JSON.parse(fs.readFileSync(path.join(CFG, "hq", "backstop.json"), "utf8"));
   ok("the reason is recorded for later", !!state.disarmedAt && !!state.disarmReason, state.disarmReason);

@@ -14,7 +14,7 @@ if ! env -u NODE_ENV npm run build:check >/tmp/hq-prepush.log 2>&1; then
   exit 1
 fi
 
-if ! npx eslint app lib scripts; then
+if ! npx eslint app lib scripts packages; then
   echo "✗ eslint failed — push aborted."
   exit 1
 fi

@@ -15,11 +15,11 @@ import path from "node:path";
 import { spawn, execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { encodeEventStreamFrame } from "../lib/backstop/eventstream.mjs";
+import { encodeEventStreamFrame } from "../packages/backstop/src/eventstream.mjs";
 
 const execFile = promisify(execFileCb);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const GATEWAY = path.join(HERE, "..", "lib", "backstop", "gateway.mjs");
+const GATEWAY = path.join(HERE, "..", "packages", "backstop", "src", "gateway.mjs");
 const PORT = 3199;
 const MOCK_PORT = 3198;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -32,7 +32,7 @@ const AWS_KEY = process.env.AWS_ACCESS_KEY_ID ?? "AKIAMOCKSELFTEST0000";
 const AWS_SECRET = process.env.AWS_SECRET_ACCESS_KEY ?? "mockSecretForSelfTestOnly000000000000000";
 
 // -------------------------------------------------------- independent SigV4
-// Deliberately NOT imported from lib/backstop/sigv4.mjs — a mock that trusts
+// Deliberately NOT imported from packages/backstop/src/sigv4.mjs — a mock that trusts
 // our own signer cannot catch our own signing bug. Written from the AWS spec:
 // for every service but S3 the canonical URI is the wire path encoded a SECOND
 // time, which is what a Bedrock profile id's colon ("-v1:0" -> %3A -> %253A)
@@ -378,7 +378,7 @@ async function main() {
     // here would deadlock the request we are waiting on.
     const ctl = async (arg = "") =>
       (
-        await execFile("bash", [path.join(HERE, "..", "lib", "backstop", "backstop-ctl.sh"), arg], {
+        await execFile("bash", [path.join(HERE, "..", "packages", "backstop", "src", "backstop-ctl.sh"), arg], {
           encoding: "utf8",
           env: { ...process.env, HQ_BACKSTOP_PORT: String(PORT) },
         })
