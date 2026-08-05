@@ -202,6 +202,24 @@ const waitFor = async (fn, ms = 8000) => {
 
 // -------------------------------------------------------------------- run
 
+// Engaging draws on a paid pass, so the rehearsal needs one. Written straight
+// to the scratch dir rather than bought: this suite proves the SERVING path,
+// and the purchase path has its own coverage that must not depend on a network
+// round-trip to Stripe.
+fs.writeFileSync(
+  path.join(STATE_DIR, "backstop-passes.json"),
+  JSON.stringify([
+    {
+      kind: "day",
+      stripeSessionId: "cs_test_selftest",
+      priceUsd: 20,
+      ceilingUsd: 12,
+      startedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+    },
+  ]),
+);
+
 const gateway = spawn(process.execPath, [GATEWAY], {
   env: {
     ...process.env,

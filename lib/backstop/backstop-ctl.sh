@@ -57,17 +57,52 @@ engage() {
   fi
 
   # Out of funds is the one refusal with a way forward, so it is the one
-  # refusal that says anything more than why.
+  # refusal that gets more than a line.
   reason=$(text "$resp" reason)
   case "$(field "$resp" code)" in
-    no_funds)
-      printf '\n  %sBackstop has no balance.%s\n' "$Y" "$R"
-      printf '  %sType /reload-5 or /reload-10 to add $5 or $10 and keep going.%s\n\n' "$Y" "$R"
-      ;;
-    *)
-      printf '\n  %sBackstop unavailable — %s%s\n\n' "$Y" "$reason" "$R"
-      ;;
+    no_funds) buy ;;
+    *) printf '\n  %sBackstop unavailable — %s%s\n\n' "$Y" "$reason" "$R" ;;
   esac
+}
+
+# Onboarding, and every later purchase: the same shape as /login. A browser
+# window opens, the user approves, it closes, the terminal carries on. Nobody
+# types a card into a terminal and nobody leaves for a dashboard — at the wall,
+# hunting for a credit card is the thing that breaks the save.
+buy() {
+  body="{}"
+  [ -n "$1" ] && body="{\"topUpUsd\":$1}"
+  resp=$(curl -s --max-time 20 -X POST "${BASE}/checkout" -H 'content-type: application/json' -d "$body")
+
+  if [ "$(field "$resp" ok)" != "true" ]; then
+    printf '\n  %sBackstop could not open checkout — %s%s\n\n' "$Y" "$(text "$resp" reason)" "$R"
+    return 1
+  fi
+
+  url=$(printf '%s' "$resp" | sed -n 's/.*"url":"\([^"]*\)".*/\1/p')
+  [ -z "$url" ] && { printf '\n  %sBackstop could not open checkout.%s\n\n' "$Y" "$R"; return 1; }
+
+  command -v open >/dev/null 2>&1 && open "$url" >/dev/null 2>&1
+  if [ -n "$1" ]; then
+    printf '\n  %sAdding $%s — approve in the browser window.%s\n' "$Y" "$1" "$R"
+  else
+    printf '\n  %sBackstop needs a pass — approve in the browser window.%s\n' "$Y" "$R"
+  fi
+  printf '  %s%s%s\n' "$Y" "$url" "$R"
+
+  # Wait for the browser to land back on the gateway. Two minutes is long
+  # enough to find a saved card and short enough not to strand a terminal.
+  i=0
+  while [ $i -lt 120 ]; do
+    sleep 1
+    if [ "$(curl -s --max-time 3 "${BASE}/pass" | sed -n 's/.*"remainingUsd":\([0-9.]*\).*/\1/p')" ]; then
+      printf '\n'
+      engage
+      return 0
+    fi
+    i=$((i + 1))
+  done
+  printf '\n  %sStill waiting on payment — run /backstop again once it completes.%s\n\n' "$Y" "$R"
 }
 
 case "$arg" in
@@ -79,6 +114,11 @@ case "$arg" in
   force)
     engage force
     ;;
+
+  # /reload-5, /reload-10 — top up without leaving the terminal.
+  reload5|reload-5) buy 5 ;;
+  reload10|reload-10) buy 10 ;;
+  reload20|reload-20) buy 20 ;;
 
   status|info)
     prov=$(field "$out" provider)

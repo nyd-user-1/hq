@@ -17,12 +17,18 @@ prompt=$(printf '%s' "$IN" | sed -n 's/.*"prompt"[[:space:]]*:[[:space:]]*"\(.*\
 # talking *about* backstop, a file that mentions it — must pass through
 # untouched, or the hook would eat ordinary conversation.
 case "$prompt" in
-  /backstop|/backstop\ *|/backstop\\n*) ;;
+  /backstop|/backstop\ *|/backstop\\n*) args=${prompt#/backstop} ;;
+  # /reload-N tops up the pass from the terminal. It only exists as its own
+  # command because the moment it is needed — mid-sprint, out of budget — is the
+  # worst possible moment to go looking for a dashboard.
+  /reload-5|/reload-5\ *|/reload-5\\n*) args="reload-5" ;;
+  /reload-10|/reload-10\ *|/reload-10\\n*) args="reload-10" ;;
+  /reload-20|/reload-20\ *|/reload-20\\n*) args="reload-20" ;;
   *) exit 0 ;;
 esac
 
-args=${prompt#/backstop}
-CTL="${HQ_BACKSTOP_CTL:-$HOME/.claude/hq/backstop-ctl.sh}"
+CTL="${HQ_BACKSTOP_CTL:-$HOME/.claude/hq/backstop/backstop-ctl.sh}"
+[ -x "$CTL" ] || CTL="$HOME/.claude/hq/backstop-ctl.sh"
 
 if [ -x "$CTL" ]; then
   "$CTL" "$args" >&2 2>&1

@@ -49,6 +49,9 @@ const RUNTIME_DIR = path.join(HQ_DIR, "backstop");
 const SETTINGS = path.join(CLAUDE_DIR, "settings.json");
 const COMMANDS_DIR = path.join(CLAUDE_DIR, "commands");
 const COMMAND_FILE = path.join(COMMANDS_DIR, "backstop.md");
+// /reload-N needs its own command file for the same reason /backstop does: the
+// TUI rejects an unknown slash command before any hook can see it.
+const RELOAD_FILES = [5, 10, 20].map((n) => [n, path.join(COMMANDS_DIR, `reload-${n}.md`)]);
 const CTL = path.join(RUNTIME_DIR, "backstop-ctl.sh");
 const HOOK = path.join(RUNTIME_DIR, "backstop-hook.sh");
 const PREFLIGHT = path.join(RUNTIME_DIR, "backstop-preflight.sh");
@@ -65,6 +68,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 // Everything the daemon needs at runtime, snapshotted away from the worktree.
 const RUNTIME_FILES = [
   "gateway.mjs",
+  "billing.mjs",
   "state.mjs",
   "upstreams.mjs",
   "sigv4.mjs",
@@ -320,7 +324,7 @@ if (mode === "eject") {
   if (removeHook(settings, "SessionStart", "backstop-preflight.sh")) say("  · preflight hook removed");
   writeJson(SETTINGS, settings);
 
-  for (const f of [COMMAND_FILE, PLIST, ...LEGACY]) {
+  for (const f of [COMMAND_FILE, ...RELOAD_FILES.map(([, f]) => f), PLIST, ...LEGACY]) {
     if (fs.existsSync(f)) {
       fs.rmSync(f);
       say(`  · removed ${f.replace(HOME, "~")}`);
@@ -358,13 +362,38 @@ for (const f of SHELL_FILES) {
   say(`  · ${f} installed`);
 }
 
+// The daemon runs under launchd with a bare environment — no shell, no
+// .env.local on its path. Snapshot the key next to the runtime for the same
+// reason the code is snapshotted: it must not depend on the worktree.
+const stripeKey = (() => {
+  if (process.env.STRIPE_SECRET_KEY) return process.env.STRIPE_SECRET_KEY;
+  try {
+    return fs.readFileSync(path.join(REPO, ".env.local"), "utf8").match(/^STRIPE_SECRET_KEY\s*=\s*["']?([^"'\s]+)/m)?.[1];
+  } catch {
+    return null;
+  }
+})();
+if (stripeKey) {
+  const kp = path.join(RUNTIME_DIR, "stripe.key");
+  fs.writeFileSync(kp, `STRIPE_SECRET_KEY=${stripeKey}\n`, { mode: 0o600 });
+  say(`  · stripe key snapshotted (${stripeKey.slice(0, 8)}…)`);
+} else {
+  say("  ! no STRIPE_SECRET_KEY found — /backstop can engage but cannot sell a pass");
+}
+
 fs.writeFileSync(
   STAMP,
   `${JSON.stringify({ installedAt: new Date().toISOString(), fromRepo: REPO, port: PORT }, null, 2)}\n`,
 );
 
 fs.writeFileSync(COMMAND_FILE, COMMAND_BODY);
-say("  · /backstop command registered");
+for (const [n, f] of RELOAD_FILES) {
+  fs.writeFileSync(
+    f,
+    `---\ndescription: Add $${n} of backstop capacity without leaving the terminal.\n---\n\nReply with exactly one line: "backstop is handled locally — nothing to do."\n`,
+  );
+}
+say("  · /backstop + /reload-5|10|20 commands registered");
 
 const settings = readSettings();
 settings.env ??= {};
