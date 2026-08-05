@@ -150,8 +150,48 @@ try {
   ok("the file is left exactly as it was", fs.readFileSync(SETTINGS, "utf8") === "{ this is not json");
   fs.writeFileSync(SETTINGS, good);
 
+  // ------------------------------------------------------- the prompt hook
+  //
+  // /backstop must never reach the model. It is a local command, it is free,
+  // and at the wall the model is the one thing that cannot answer — a prompt
+  // that slips through is a billed turn at the exact moment the user has no
+  // budget. The hook stops it on stdout JSON (exit 0) for a clean render, which
+  // means a stdout that fails to parse is handed to the model as context. So
+  // the contract is: whatever happens, the prompt does not go through.
+  console.log(`\n${b("6. /backstop never reaches the model")}`);
+  installer(); // re-arm so the control script and gateway exist
+  // envOverride REPLACES the environment (sh spreads opts over its base), which
+  // is exactly what the no-node case wants and exactly what the others must not
+  // have — an empty env would leave bash without a PATH.
+  const promptHook = (prompt, envOverride) =>
+    sh("bash", [path.join(CFG, "hq", "backstop", "backstop-hook.sh")], {
+      input: JSON.stringify({ prompt }),
+      ...(envOverride ? { env: envOverride } : {}),
+    });
+
+  const status = promptHook("/backstop status");
+  ok("it is stopped, and not as an error", status.code === 0, "exit 0 + JSON, not exit 2 + stderr");
+  let parsed = null;
+  try {
+    parsed = JSON.parse(status.out);
+  } catch {
+    /* stays null — which is the failure this whole section exists to catch */
+  }
+  ok("stdout is JSON, so it is never handed to the model as context", !!parsed);
+  ok("the turn is stopped", parsed?.continue === false);
+  ok("the user is told, in text Claude never sees", typeof parsed?.stopReason === "string" && parsed.stopReason.includes("backstop"));
+  ok("no raw escape bytes — those make the JSON unparseable", !/\x1b/.test(status.out));
+
+  // The fallback. Strip node and the JSON path cannot run; the hook must still
+  // block, just less prettily.
+  const noNode = promptHook("/backstop status", { PATH: "/usr/bin:/bin" });
+  ok("with no node, it falls back to exit 2 rather than letting the prompt fly", noNode.code === 2);
+
+  ok("an ordinary prompt about backstop is untouched", promptHook("what does backstop do?").code === 0);
+  ok("...and adds nothing to the conversation", promptHook("what does backstop do?").out.trim() === "");
+
   // ------------------------------------------------------------------ eject
-  console.log(`\n${b("6. Eject leaves no trace")}`);
+  console.log(`\n${b("7. Eject leaves no trace")}`);
   installer(); // re-arm so there is something to remove
   ok("re-arms cleanly", alive() && routed());
   const ejected = installer("--eject");
