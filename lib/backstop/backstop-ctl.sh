@@ -10,7 +10,11 @@
 #   /backstop off      always release
 #   /backstop force    engage without the preflight check
 #   /backstop status   report
-PORT="${HQ_BACKSTOP_PORT:-3141}"
+# The user's shell has no HQ_BACKSTOP_PORT, so a non-default install would
+# otherwise talk to the wrong port and report a dead gateway. The installer
+# writes the port it armed next to the runtime.
+CFG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+PORT="${HQ_BACKSTOP_PORT:-$(cat "$CFG_DIR/hq/backstop/port" 2>/dev/null || echo 3141)}"
 BASE="http://127.0.0.1:${PORT}/_backstop"
 
 arg="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]/')"

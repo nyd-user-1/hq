@@ -381,6 +381,8 @@ if (stripeKey) {
   say("  ! no STRIPE_SECRET_KEY found — /backstop can engage but cannot sell a pass");
 }
 
+fs.writeFileSync(path.join(RUNTIME_DIR, "port"), `${PORT}\n`);
+
 fs.writeFileSync(
   STAMP,
   `${JSON.stringify({ installedAt: new Date().toISOString(), fromRepo: REPO, port: PORT }, null, 2)}\n`,

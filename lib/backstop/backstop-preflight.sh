@@ -19,13 +19,13 @@
 # Exit 2 -> disarmed; stderr is shown to the user in the transcript, which is
 #           the only channel that still works when the API is refusing.
 
-PORT="${HQ_BACKSTOP_PORT:-3141}"
+CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+PORT="${HQ_BACKSTOP_PORT:-$(cat "$CFG/hq/backstop/port" 2>/dev/null || echo 3141)}"
 HEALTH="http://127.0.0.1:${PORT}/_backstop/health"
 # One daemon per port — a test install on another port has its own label, so
 # this hook can never restart or disarm the wrong account's gateway.
 if [ "$PORT" = "3141" ]; then LABEL="com.hq.backstop"; else LABEL="com.hq.backstop.${PORT}"; fi
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
-CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 DISARM="$CFG/hq/backstop/disarm.mjs"
 SETTINGS="$CFG/settings.json"
 ME=$(id -u)
