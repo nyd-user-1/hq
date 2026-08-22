@@ -30,11 +30,12 @@
   .mono{font-family:var(--mono)}
 
   /* ── the app shell — fixed dashed boundary; the page scrolls inside it ── */
-  .shell{position:fixed;inset:10px;border:1px dashed var(--z700);border-radius:10px}
-  @media(min-width:640px){.shell{inset:14px}}
+  .shell{position:fixed;inset:30px;border:1px dashed var(--z700);border-radius:10px}
+  @media(min-width:640px){.shell{inset:30px}}
   .shell-chips{position:absolute;top:-9px;left:14px;display:flex;gap:4px;z-index:10}
-  .shell-chip{font-family:var(--mono);font-size:11px;line-height:1;color:var(--z400);
-    background:var(--bg);border:1px solid var(--z800);border-radius:4px;padding:3px 6px}
+  .shell-chip{font-family:var(--mono);font-size:12px;line-height:1;color:var(--z400);
+    background:var(--z800);border:0;border-radius:5px;padding:6px 9px}
+  .shell-chip.arrow{color:var(--z300);font-weight:700}
   .scroller{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth;
     border-radius:10px;scrollbar-width:none}
   .scroller::-webkit-scrollbar{display:none}
@@ -198,7 +199,7 @@
 
 <div class="shell">
   <div class="shell-chips">
-    <span class="shell-chip">›</span>
+    <span class="shell-chip arrow">›</span>
     <span class="shell-chip">terminal-1</span>
     <span class="shell-chip">⌄</span>
   </div>
@@ -387,9 +388,8 @@
               <div class="prompt"><span class="you">you</span> ❯ search any transcript live 🔎</div>
               <div class="step"><span class="a">›</span><span class="num">1.</span><span class="k">DAEMON</span><span class="t">warm processes that outlive the server</span></div>
               <div class="step"><span class="a">›</span><span class="num">2.</span><span class="k">CHANNEL</span><span class="t">replies and permission prompts come back</span></div>
-              <div class="step"><span class="a">›</span><span class="num">3.</span><span class="k">TEAMS</span><span class="t">rosters, mailboxes, tmux panes driven in place</span></div>
+              <div class="step"><span class="a">›</span><span class="num">3.</span><span class="k">TEAMS</span><span class="t">rosters, mailboxes, tmux panes driven in place</span><span class="tok"><span class="add">+82</span> <span class="del">−31</span></span></div>
               <div class="step"><span class="a">›</span><span class="num">4.</span><span class="k">RELAY</span><span class="t">approve tool calls from the dashboard, policy-checked</span></div>
-              <div class="step"><span class="a">›</span><span class="k">EDIT</span><span class="t">root-landing.tsx <span class="add">+82</span> <span class="del">−31</span></span></div>
             </div>
             <div class="pane-status"><span class="cstat">● Jitterbugging...</span><span class="pmeta">Cache 4:14</span></div>
           </div>
@@ -404,10 +404,9 @@
             <div class="pane-body">
               <div class="prompt"><span class="you">you</span> ❯ Ctx cliff warnings ‼️</div>
               <div class="step"><span class="a">›</span><span class="num">5.</span><span class="k">LEDGER</span><span class="t">tokens &amp; dollars per session, per turn — caching savings included</span></div>
-              <div class="step"><span class="a">›</span><span class="num">6.</span><span class="k">GUARDRAILS</span><span class="t">weekly caps + a live $/min burn alarm</span></div>
+              <div class="step"><span class="a">›</span><span class="num">6.</span><span class="k">GUARDRAILS</span><span class="t">weekly caps + a live $/min burn alarm</span><span class="tok">~1.5k tok</span></div>
               <div class="step"><span class="a">›</span><span class="num">7.</span><span class="k">OTLP</span><span class="t">HQ is its own telemetry receiver — no collector to run</span></div>
               <div class="step"><span class="a">›</span><span class="num">8.</span><span class="k">SWEEP</span><span class="t">nothing ages out silently; swept sessions stay searchable</span></div>
-              <div class="step"><span class="a">›</span><span class="k">READ</span><span class="t">terminal.tsx</span><span class="tok">~1.5k tok</span></div>
             </div>
             <div class="pane-status"><span class="cstat">✳ Decomposing...</span></div>
           </div>
@@ -442,7 +441,6 @@
               <div class="step"><span class="a">›</span><span class="num">14.</span><span class="k">FLIP</span><span class="t">every live session onto AWS Bedrock mid-conversation</span></div>
               <div class="step"><span class="a">›</span><span class="num">15.</span><span class="k">CONTRACT</span><span class="t">fail-open: broken backstop, unbroken session</span></div>
               <div class="step"><span class="a">›</span><span class="num">16.</span><span class="k">PRIVACY</span><span class="t">passthrough never inspects a request or response body</span></div>
-              <div class="step"><span class="a">›</span><span class="k">EDIT</span><span class="t">shell.tsx <span class="add">+9</span></span></div>
             </div>
             <div class="pane-status"><span class="cstat">Mesmerizing...</span></div>
           </div>
