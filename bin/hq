@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
-# hq — open the HQ dashboard in the browser, pinned to the Claude Code session
-# that launched it.
+# hq — the one front door.
 #
-# Run it from inside a Claude Code session (via the /hq command, or `!hq` if it's
-# on your PATH). CLAUDE_CODE_SESSION_ID is read straight from the environment, so
-# HQ shows *this* session as Terminal 1 the moment it opens — no disk guessing,
-# works even though the transcript is only one message old.
+#   hq             macOS: open the native HQ.app (building it on first run when the
+#                  toolchain allows); everywhere else — or when the Mac has no Xcode
+#                  Command Line Tools — serve at localhost and open the browser.
+#   hq --browser   force the browser experience (any platform)
+#   hq --app       force the native app path (macOS; errors without swiftc)
 #
-# If the dev server is already running it just opens the browser; otherwise it
-# starts `npm run dev` detached and waits for it. (A packaged HQ would start its
-# bundled server here instead — everything else is identical.)
-
+# Run from inside a Claude Code session and CLAUDE_CODE_SESSION_ID pins that
+# session as Terminal 1 in the browser flow.
 set -uo pipefail
+
+MODE="auto"
+for a in "$@"; do
+  case "$a" in
+    --browser) MODE="browser" ;;
+    --app) MODE="app" ;;
+  esac
+done
 
 # Resolve our own location (following npm's bin symlink) so we find the app
 # wherever it's installed — the repo in dev, npm's global dir once published.
@@ -25,15 +31,47 @@ done
 SELF_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 HQ_DIR="${HQ_DIR:-$(cd "$SELF_DIR/.." && pwd)}"
 export HQ_DIR                       # the app reads it to locate scripts/hooks
-HQ_PORT="${HQ_PORT:-3002}"
-BASE="http://localhost:${HQ_PORT}"
 
-# Packaged install (`npm i -g` / `npx`): a prebuilt standalone bundle ships in
-# the tarball — prefer it (no dev toolchain, no install, instant start). A dev
-# clone has no standalone, so we fall through to `npm run dev` below.
+APP="${HQ_APP_INSTALL:-$HOME/Applications}/HQ.app"
+BUILDER="$HQ_DIR/scripts/make-macos-app-native.sh"
+
+app_version() {  # version baked into the installed app ("" when absent)
+  /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist" 2>/dev/null || true
+}
+pkg_version() {
+  node -p "require('$HQ_DIR/package.json').version" 2>/dev/null || echo ""
+}
+
+# ── the native path: macOS tier 1 ───────────────────────────────────────────
+if [ "$MODE" != "browser" ] && [ "$(uname -s)" = "Darwin" ]; then
+  if command -v swiftc >/dev/null 2>&1 && [ -f "$BUILDER" ]; then
+    if [ ! -d "$APP" ] || { [ -n "$(pkg_version)" ] && [ "$(app_version)" != "$(pkg_version)" ]; }; then
+      echo "Building the native HQ.app ($(pkg_version)) — first run or new version..."
+      bash "$BUILDER" || { echo "native build failed — falling back to the browser."; MODE="browser"; }
+    fi
+    if [ "$MODE" != "browser" ] && [ -d "$APP" ]; then
+      open "$APP"
+      echo "HQ is open in its own window. (⌘B inside the app opens the browser view; \`hq --browser\` starts it directly.)"
+      exit 0
+    fi
+  elif [ "$MODE" = "app" ]; then
+    echo "The native app needs the Xcode Command Line Tools: xcode-select --install"
+    exit 1
+  else
+    echo "note: install the Xcode Command Line Tools (xcode-select --install) and \`hq\` opens as a native app."
+  fi
+fi
+
+# ── the browser path: everywhere else, and every fallback ───────────────────
+# Packaged install: a prebuilt standalone bundle ships in the tarball — serve it
+# with plain node (no dev toolchain, no install, instant start). A dev clone has
+# no standalone, so fall through to `npm run dev`.
 if [ -f "$HQ_DIR/.next/standalone/server.js" ]; then
   exec "$SELF_DIR/hq-offline" "$@"
 fi
+
+HQ_PORT="${HQ_PORT:-3002}"
+BASE="http://localhost:${HQ_PORT}"
 
 # Pin to the launching session when we have its id (we always do under Claude).
 sid="${CLAUDE_CODE_SESSION_ID:-}"
@@ -64,4 +102,3 @@ if [ "$ready" = 1 ]; then
 else
   printf '\nHQ is starting on %s — give it a few seconds and refresh if the page is blank.\n' "$BASE"
 fi
-printf 'Minimize this terminal and head over to HQ. When you are done, end this terminal session.\n'

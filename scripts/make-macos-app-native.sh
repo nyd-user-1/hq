@@ -11,6 +11,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STANDALONE="$REPO/.next/standalone"
 SWIFT="$REPO/scripts/hq-shell.swift"
 APP_NAME="HQ"
+PKG_VERSION="$(node -p "require('$REPO/package.json').version" 2>/dev/null || echo 0.0.0)"
 INSTALL_DIR="${HQ_APP_INSTALL:-$HOME/Applications}"
 APP="$INSTALL_DIR/$APP_NAME.app"
 
@@ -91,8 +92,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>hq</string>
   <key>CFBundleIconFile</key><string>hq</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleVersion</key><string>0.1.0</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleVersion</key><string>__HQ_VERSION__</string>
+  <key>CFBundleShortVersionString</key><string>__HQ_VERSION__</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSPrincipalClass</key><string>NSApplication</string>
@@ -108,6 +109,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+sed -i '' "s/__HQ_VERSION__/$PKG_VERSION/g" "$APP/Contents/Info.plist"
 
 # compile the native shell into the app's executable
 swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit -framework Carbon -framework CoreSpotlight

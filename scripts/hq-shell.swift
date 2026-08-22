@@ -203,6 +203,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc func reload() { webView?.reloadFromOrigin() }   // ⌘R: cache-busting page reload (server untouched)
 
+    // ⌘B: the same HQ, in the default browser — the app's bundled server serves both.
+    @objc func openInBrowser() { NSWorkspace.shared.open(URL(string: URLSTR)!) }
+
     // Kill whatever holds `port` — reclaims it from an orphaned/stale server so a
     // fresh start always serves the CURRENT bundle. lsof lives in /usr/sbin, which
     // the minimal GUI PATH omits, so set PATH explicitly.
@@ -348,6 +351,8 @@ let restartItem = NSMenuItem(title: "Restart Server (load latest build)", action
 restartItem.keyEquivalentModifierMask = [.command, .shift]
 restartItem.target = delegate
 appMenu.addItem(restartItem)
+let browserItem = NSMenuItem(title: "Open in Browser", action: #selector(AppDelegate.openInBrowser), keyEquivalent: "b")
+appMenu.addItem(browserItem)
 appMenu.addItem(NSMenuItem.separator())
 appMenu.addItem(withTitle: "Hide HQ", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
 appMenu.addItem(withTitle: "Quit HQ", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

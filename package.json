@@ -28,9 +28,7 @@
   ],
   "bin": {
     "hq": "bin/hq",
-    "hq-offline": "bin/hq-offline",
-    "claude-hq": "bin/claude-hq",
-    "hq-app": "bin/hq-app"
+    "claude-hq": "bin/claude-hq"
   },
   "files": [
     "bin/",

@@ -18,23 +18,24 @@ Claude Code's own front doors, never behind its back.
 npm i -g @nysgpt/hq
 ```
 
-Then, from inside a Claude Code session:
+Then:
 
 ```bash
 hq
 ```
 
-HQ opens at `localhost:3002`, pinned to that session as Terminal 1. Keep working — it
-mirrors the transcript, tallies tokens & cost, and indexes everything for search, live.
+One command, best available surface. On a Mac with the Xcode Command Line Tools,
+`hq` builds the **native HQ.app** on first run (self-built — no signing, no
+notarization) and opens it in its own window; ⌘B inside the app, or `hq --browser`,
+gives you the same HQ in a browser tab. Everywhere else, `hq` serves at
+`localhost:3002` and opens the browser. Run it from inside a Claude Code session and
+that session pins as Terminal 1.
 
 Run it once without installing:
 
 ```bash
 npx @nysgpt/hq
 ```
-
-`hq-offline` launches the self-contained standalone build instead — plain `node`, no
-dev toolchain, no internet.
 
 ## What's inside
 
@@ -85,16 +86,10 @@ dev toolchain, no internet.
 
 **Ships as**
 
-- the npm CLI above, an offline standalone, and a native macOS app — one command:
-
-```bash
-hq-app
-```
-
-builds `HQ.app` into `~/Applications` (a Swift WKWebView shell around the bundled
-server — global hotkey, notes published to Spotlight) and opens it. Self-built on
-your machine, so no signing or notarization involved; needs the Xcode Command Line
-Tools (`xcode-select --install`). Launch it any time after from Spotlight: ⌘Space, "HQ".
+- one `hq` command with two faces: the native `HQ.app` (a Swift WKWebView shell
+  around the bundled server — global hotkey, notes published to Spotlight, launch
+  any time from ⌘Space "HQ") on Macs that can build it, and the browser at
+  `localhost:3002` everywhere else. `hq --app` / `hq --browser` force either.
 
 ## How it works
 
