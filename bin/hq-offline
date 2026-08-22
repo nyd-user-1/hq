@@ -4,7 +4,7 @@
 # Runs the standalone server bundle (.next/standalone/server.js) under plain
 # `node` — no dev toolchain, no `npm install`, no internet. This is the
 # "packaged" HQ: build it once (with a network connection) via
-# `npm run build:offline`, then this launcher serves it forever offline.
+# `npm run build:package`, then this launcher serves it forever offline.
 #
 # Door 1 (`bin/hq` -> `npm run dev` on :3002) is unchanged and still works.
 # This is the either/or you asked for: `hq` = dev server, `hq-offline` = the
@@ -31,7 +31,7 @@ up() { curl -sf -o /dev/null --max-time 2 "$BASE/"; }
 
 if [ ! -f "$SERVER" ]; then
   printf 'No offline build found at %s\n' "$SERVER"
-  printf 'Build it first (needs network once):\n  (cd "%s" && npm run build:offline)\n' "$HQ_DIR"
+  printf 'Build it first (needs network once):\n  (cd "%s" && npm run build:package)\n' "$HQ_DIR"
   exit 1
 fi
 

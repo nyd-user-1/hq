@@ -25,7 +25,7 @@ git -C "$NATIVE" merge --ff-only main \
   || { echo "✗ native-packaging diverged from main — resolve manually (it should be a strict ancestor of main)."; exit 1; }
 
 echo "▸ building the offline bundle…"
-( cd "$NATIVE" && env -u NODE_ENV npm run build:offline >/dev/null )
+( cd "$NATIVE" && env -u NODE_ENV npm run build:package >/dev/null )
 
 echo "▸ repackaging HQ.app…"
 ( cd "$NATIVE" && bash scripts/make-macos-app-native.sh | tail -2 )

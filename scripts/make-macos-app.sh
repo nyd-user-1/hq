@@ -4,7 +4,7 @@
 #
 # The app COPIES .next/standalone inside itself, so it's relocatable and won't
 # break if the source repo/worktree is deleted. It still uses the system `node`
-# (Option 1). Build the offline bundle first:  npm run build:offline
+# (Option 1). Build the offline bundle first:  npm run build:package
 #
 # Re-run this any time after a rebuild to refresh the app.
 set -euo pipefail
@@ -18,7 +18,7 @@ APP="$INSTALL_DIR/$APP_NAME.app"
 
 [ -f "$STANDALONE/server.js" ] || {
   echo "No offline build at $STANDALONE"
-  echo "Build it first:  (cd \"$REPO\" && npm run build:offline)"
+  echo "Build it first:  (cd \"$REPO\" && npm run build:package)"
   exit 1
 }
 

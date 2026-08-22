@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // The repo can hold nested git worktrees under .claude/ (parallel agent lanes)
   // plus a tsbuildinfo — none of that belongs in the shipped bundle. Keep next's
-  // output tracer from copying them into .next/standalone (build:offline also
+  // output tracer from copying them into .next/standalone (build:package also
   // strips them as a belt-and-suspenders guarantee).
   outputFileTracingExcludes: {
     "*": ["**/.claude/**", "**/*.tsbuildinfo"],

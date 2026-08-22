@@ -5,7 +5,7 @@
 # all); falls back to compiling scripts/hq-shell.swift when they're absent
 # (dev clones — see scripts/build-native-artifacts.sh).
 #
-# Build the offline bundle first:  npm run build:offline
+# Build the offline bundle first:  npm run build:package
 # Re-run after any rebuild to refresh the app.
 set -euo pipefail
 
@@ -75,7 +75,7 @@ if [ "${1:-}" = "--iconset-only" ]; then
   exit 0
 fi
 
-[ -f "$STANDALONE/server.js" ] || { echo "No offline build at $STANDALONE — run: npm run build:offline"; exit 1; }
+[ -f "$STANDALONE/server.js" ] || { echo "No offline build at $STANDALONE — run: npm run build:package"; exit 1; }
 if [ ! -f "$PREBUILT" ]; then
   command -v swiftc >/dev/null 2>&1 || { echo "no prebuilt shell in this install and swiftc not found (install Xcode Command Line Tools: xcode-select --install)"; exit 1; }
 fi
