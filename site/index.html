@@ -442,8 +442,11 @@
 <!-- ── the terminal — a faithful replica of the live center column ── -->
     <style>
       /* terminal replica (section 4) — anatomy from terminal.tsx, text from a real session */
-      .term{max-width:1030px;margin:40px auto 0;font-family:var(--mono);font-size:13px;line-height:1.65}
-      .term-head{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--z600);font-size:13px}
+      .term{margin:40px auto 0;font-family:var(--mono);font-size:13px;line-height:1.65}
+      .term-head{position:sticky;top:40px;z-index:6;background:var(--bg);display:flex;align-items:center;gap:10px;
+        padding:8px 0 12px;border-bottom:1px solid var(--z600);font-size:13px}
+      .term-head::after{content:"";position:absolute;left:0;right:0;top:100%;height:56px;
+        background:linear-gradient(to bottom,var(--bg),transparent);pointer-events:none}
       .term-head .dot{width:8px;height:8px;border-radius:999px;background:#22c55e}
       .term-head .proj{color:var(--z200)}
       .term-head .sess{color:var(--ink-green)}
@@ -467,6 +470,32 @@
       .fadeblock{border:1px solid var(--z800);border-radius:0 0 8px 8px;border-top:0;background:rgba(24,24,27,.15);
         padding:10px 16px;color:var(--z500);opacity:.35;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
         -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 70%);mask-image:linear-gradient(to bottom,transparent 0,#000 70%)}
+      .bubble b{color:var(--z100);font-weight:700}
+      .bubble i{font-style:italic}
+      .ttable{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+      .ttable th,.ttable td{border:1px solid var(--z700);padding:9px 14px;text-align:left}
+      .ttable th{color:var(--z400);font-weight:400}
+      .ttable td{color:var(--z300)}
+      .ttable tr.hot td{color:var(--z100);font-weight:700}
+      .interview{border:1px solid #c2600d;border-radius:12px;background:rgba(249,115,22,.03);padding:20px 22px;
+        font-family:var(--sans)}
+      .interview .q{font-size:17px;color:var(--z100);margin-bottom:16px}
+      .interview .opt{border:1px solid var(--z700);border-radius:10px;padding:14px 16px;background:rgba(24,24,27,.25)}
+      .interview .opt+.opt{margin-top:10px}
+      .interview .opt .t{font-family:var(--mono);font-size:14px;color:var(--z200)}
+      .interview .opt .d{margin-top:6px;font-size:14px;line-height:1.55;color:var(--z400)}
+      .monitor-div{display:flex;align-items:center;gap:12px;color:var(--z400);font-size:12px;margin:4px 0}
+      .monitor-div::before,.monitor-div::after{content:"";height:1px;background:var(--z700);flex:1}
+      .monitor-div::before{max-width:36px;flex:0 0 36px}
+      .acc{border:1px solid var(--z600);border-radius:8px;background:rgba(24,24,27,.2);overflow:hidden}
+      .acc .acc-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--z700)}
+      .acc .acc-head .a{color:var(--z600)}
+      .acc .acc-head .k{color:var(--z500)}
+      .acc .acc-head .cmd{color:var(--z200)}
+      .acc pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--z300);
+        overflow-x:auto;white-space:pre}
+      .toolrow .kebab{margin-left:auto;color:var(--z500);letter-spacing:2px}
+      .toolrow .k.red{color:var(--ink-red)}
       .term-idle{display:flex;align-items:center;gap:8px;padding:14px 2px 10px;font-size:13px;color:var(--ink-amber)}
       .term-idle .o{color:var(--ink-amber);opacity:.8}
       .sendbox{position:relative;border:1px solid var(--z600);border-radius:10px;padding:14px 16px 12px;min-height:118px;
@@ -494,6 +523,82 @@
           </div>
           <div class="term-stream">
             <div class="fadeblock">manufacturing concern again?</div>
+
+            
+            <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">10:17:40 AM</span></div>
+            <div class="bubble"><p>The number landed, and we lost. Sending the follow-up, then giving you the straight read.</p></div>
+
+            <div class="toolrow"><span class="a">›</span><span class="k">SENDMESSAGE</span><span class="cmd">rig-port</span></div>
+
+            <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">10:18:08 AM</span></div>
+            <div class="bubble">
+              <p><b>The number landed: our encoder scores 0.332 MeSH / 0.669 author-keyword. We lost to MedCPT.</b></p>
+              <table class="ttable">
+                <tr><th>arm</th><th>MeSH R@10</th><th>Author-kw R@10</th></tr>
+                <tr class="hot"><td>MedCPT</td><td>0.457</td><td>0.808</td></tr>
+                <tr><td>SPECTER2</td><td>0.351</td><td>0.726</td></tr>
+                <tr class="hot"><td>ours</td><td>0.332</td><td>0.669</td></tr>
+                <tr><td>RRF(FTS+bge-m3)</td><td>0.317</td><td>0.684</td></tr>
+                <tr><td>stock bge-m3</td><td>0.286</td><td>0.652</td></tr>
+                <tr><td>Postgres FTS</td><td>0.081</td><td>0.240</td></tr>
+              </table>
+              <p>We beat our own base model by 16% on MeSH — which is close to the minimum acceptable outcome for a
+                fine-tune <i>of</i> that model, not an achievement. We lose to MedCPT by 27%, and we also lose to
+                SPECTER2, which nobody expected.</p>
+              <p><b>But the diagnosis is specific, and it's the most valuable thing in the result.</b> We trained on
+                <b>citation-based document-to-document pairs</b> — 100% of the triplets — and then evaluated <b>query-to-document</b>
+                retrieval. That's a genuine objective mismatch: we taught the model which papers resemble
+                each other and tested whether it can find a paper from a MeSH query. And the miner had already
+                built <b>424,753 query-shaped training pairs</b> that went entirely unused.</p>
+            </div>
+
+            <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">10:22:02 AM</span></div>
+            <div class="bubble"><p>Fusion beats MedCPT — and the rig lane refused to oversell it, which makes the result trustworthy.</p></div>
+
+            <div class="interview">
+              <div class="q">Fire the second training run now (on the query-shaped pairs), or ship what we have and retrain later?</div>
+              <div class="opt">
+                <div class="t">Ship now, retrain later (Recommended)</div>
+                <div class="d">Publish the complete package immediately: benchmark, 11 scored arms, encoder, report. The retrain stays staged as one command.
+                  Nothing is lost by waiting — the benchmark is frozen and the query-pair dataset is built. You'd fire it with fresh budget and be awake for
+                  the result rather than it landing at 1pm against a $0 margin.</div>
+              </div>
+              <div class="opt">
+                <div class="t">Fire it now — ~$2.30, ~2.3h</div>
+                <div class="d">Tests the objective-mismatch hypothesis directly: we trained doc-doc, we're evaluated query-doc, and 424,753 query-shaped pairs went
+                  unused. Lands ~13:00. Fits the ceiling but leaves essentially no margin — if anything fails there's no budget to retry, and the serve box
+                  still has to come out of what's left.</div>
+              </div>
+            </div>
+
+            <div class="monitor-div">↻ Monitor event: "10-min CSHL state ticks (GPU, embeddings, lane processes, results)"</div>
+
+            <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">2:53:32 PM</span></div>
+            <div class="bubble"><p>Checking whether the package actually shipped — nothing has moved in three hours.</p></div>
+
+            <div class="toolrow"><span class="a">›</span><span class="k red">BASH</span>
+              <span class="cmd">git log --oneline -6 2&gt;/dev/null; echo "=== report:"; wc -l docs/CSHL-CPT-REPORT.md 2&gt;…</span>
+              <span class="kebab">⋮</span></div>
+
+            <div class="acc">
+              <div class="acc-head"><span class="a">⌄</span><span class="k">BASH</span><span class="cmd">python3 - &lt;&lt; 'PY'</span></div>
+              <pre>$ python3 - &lt;&lt; 'PY'
+p="docs/MORNING-BRIEF.md"
+s=open(p).read()
+add = """
+## 4. PRODUCTION BUG FOUND — keyword search is running conjunctive (AND) semantics
+
+Found by lane-mine while scoring baselines, and it is a live product defect, not a benchmark
+artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separated terms as
+**AND**. Measured match counts against the 433,449-paper corpus, five real queries:
+
+| query | family | matches (AND, production) | matches (OR, conventional) |
+|---|---|---:|---:|
+| 0 | AUTHORKW | **1** | 118,801 |
+| 1 | MESH | **6** | 188,987 |
+| 2 | AUTHORKW | **0** | 107,567 |
+| 3 | MESH | **1** | 23,592 |</pre>
+            </div>
 
             <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">7:03:28 PM</span></div>
             <div class="bubble"><p>No. There's no real reason, and I invented one again — same as the last message. The code is
