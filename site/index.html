@@ -79,7 +79,7 @@
   .copyblock svg{width:14px;height:14px}
 
   /* the Linear app-shot frame (hero.tsx / dashboard-section.tsx chrome, verbatim) */
-  .frame-wrap{position:relative;margin:52px auto 0;width:100%;max-width:1152px;padding-bottom:56px}
+  .frame-wrap{position:relative;margin:52px auto 0;width:100%;max-width:1152px;padding-bottom:80px}
   .frame{position:relative;border-radius:12px;padding:8px;background:#090a0b;box-shadow:0 7px 32px #00000059}
   .frame::before{content:"";position:absolute;inset:0;border-radius:12px;background:#101112;border:1px solid #ffffff14}
   .view{position:relative;overflow:hidden;border-radius:7px;background:#121314;border:1px solid #ffffff14;box-shadow:0 0 0 2px #0000001a}
@@ -90,9 +90,9 @@
   .mutebtn svg{width:15px;height:15px}
 
   /* ── dashboard section (dashboard-section.tsx + dashboard-board.tsx) ── */
-  .dash-inner{max-width:1152px;margin:0 auto;padding-bottom:80px;padding-top:16px}
+  .dash-inner{max-width:1152px;margin:0 auto;padding:80px 0}
   h2.dash{max-width:42rem;font-size:clamp(28px,4vw,38px);line-height:1.08;letter-spacing:-.02em;font-weight:590;color:var(--fg)}
-  .dash-sub{margin-top:12px;max-width:36rem;font-size:16px;line-height:1.625;color:var(--sub)}
+  .dash-sub{margin-top:12px;max-width:36rem;font-size:16px;line-height:1.625;color:var(--z500)}
   .dash-frame{margin-top:40px}
   .view.tall{height:640px}
   .apphead{position:relative;display:flex;align-items:center;gap:10px;border-bottom:1px solid #ffffff0d;
@@ -126,8 +126,7 @@
   /* ── the wall — SectionHead + TerminalPane (terminal-pane.tsx, verbatim anatomy) ── */
   .section{padding-left:20px;padding-right:20px;scroll-margin-top:96px}
   @media(min-width:640px){.section{padding-left:32px;padding-right:32px}}
-  .section-inner{max-width:1152px;margin:0 auto;padding:64px 0}
-  @media(min-width:640px){.section-inner{padding:96px 0}}
+  .section-inner{max-width:1152px;margin:0 auto;padding:80px 0}
   .sechead{display:grid;gap:24px}
   @media(min-width:1024px){.sechead{grid-template-columns:1.15fr .85fr;gap:64px}}
   .sechead h2{max-width:42rem;font-size:clamp(34px,5vw,52px);font-weight:600;line-height:1.02;letter-spacing:-.02em;color:var(--z50)}
@@ -240,8 +239,8 @@
     <!-- ── dashboard — dashboard-section.tsx chrome, the real board frozen ── -->
     <section id="dashboard" class="px">
       <div class="dash-inner">
-        <h2 class="dash">Every token accounted for.</h2>
-        <p class="dash-sub">Live metrics computed per disk transcripts, no api required.</p>
+        <h2 class="dash">Live metrics computed per disk.</h2>
+        <p class="dash-sub">*No api required.</p>
         <div class="frame-wrap dash-frame" style="padding-bottom:0">
           <div class="frame">
             <div class="view tall">
@@ -353,9 +352,9 @@
     <style>
       /* wall v2 — Brendan's devtools pass, 2026-08-22 */
       .pane-status{justify-content:flex-start}
-      .pane-status .cstat{color:var(--z300)}
+      .pane-status .cstat{color:var(--ink-orange)}
       .pane-status .cstat .g{color:var(--z500)}
-      .pane-status .pmeta{margin-left:14px;flex-shrink:0;color:var(--z300)}
+      .pane-status .pmeta{margin-left:14px;flex-shrink:0;color:var(--ink-amber)}
       .step .num{color:var(--z100);font-weight:700;flex-shrink:0}
       .step .add{color:#34d399}.step .del{color:#f87171}
       .wall-note{margin-top:20px;font-size:13px;color:var(--z300)}
@@ -489,18 +488,29 @@
       .monitor-div::before,.monitor-div::after{content:"";height:1px;background:var(--z700);flex:1}
       .monitor-div::before{max-width:36px;flex:0 0 36px}
       .acc{border:1px solid var(--z600);border-radius:8px;background:rgba(24,24,27,.2);overflow:hidden}
-      .acc .acc-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--z700)}
+      .acc .acc-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--z700);cursor:pointer;transition:background .12s}
+      .acc .acc-head:hover{background:rgba(39,39,42,.35)}
+      .acc.closed .acc-head{border-bottom:0}
+      .acc.closed pre{display:none}
+      .acc pre::-webkit-scrollbar{display:none}
       .acc .acc-head .a{color:var(--z600)}
       .acc .acc-head .k{color:var(--z500)}
       .acc .acc-head .cmd{color:var(--z200)}
-      .acc pre{margin:0;padding:14px 16px;max-height:340px;overflow-y:auto;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--z300);
+      .acc pre{margin:0;padding:14px 16px;max-height:340px;overflow-y:auto;scrollbar-width:none;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--z300);
         overflow-x:auto;white-space:pre}
       .tokamber{margin-left:auto;color:var(--ink-amber);font-size:12px}
       .bubble,.toolrow,.acc{position:relative}
-      .bubble::after,.toolrow::after,.acc::after{content:"⋮";position:absolute;top:9px;right:12px;
-        color:var(--z400);letter-spacing:2px;opacity:0;transition:opacity .12s;pointer-events:none}
-      .bubble:hover::after,.toolrow:hover::after,.acc:hover::after{opacity:1}
-      .acc::after{top:11px;right:14px}
+      .kb{position:absolute;top:6px;right:8px;display:flex;align-items:center;justify-content:center;
+        width:28px;height:28px;border-radius:7px;border:0;background:none;color:var(--z500);cursor:pointer;
+        opacity:0;transition:opacity .12s,background .12s}
+      .bubble:hover .kb,.toolrow:hover .kb,.acc:hover .kb,.kb.open{opacity:1}
+      .kb:hover,.kb.open{background:#27272a;color:var(--z200)}
+      .kbmenu{position:fixed;z-index:50;display:flex;width:176px;flex-direction:column;white-space:nowrap;
+        border-radius:8px;border:1px solid var(--z800);background:#09090b;padding:4px;box-shadow:0 18px 40px #000000a0;
+        font-family:var(--sans);font-size:13.5px}
+      .kbmenu .mi{display:flex;align-items:center;gap:10px;border-radius:6px;padding:7px 9px;color:var(--z300);cursor:pointer}
+      .kbmenu .mi:hover{background:#27272a;color:var(--z100)}
+      .kbmenu .div{height:1px;background:var(--z800);margin:4px 6px}
       .bubble.you{background:rgba(39,39,42,.45)}
       .toolrow .k.red{color:var(--ink-red)}
       .sb-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;
@@ -510,14 +520,16 @@
       .sonly{display:none!important}
       .term.searching .sonly{display:flex!important}
       .term.searching .donly{display:none!important}
-      .searchbar{display:none;align-items:center;gap:10px;border:1px solid var(--z600);border-radius:10px;
-        padding:11px 14px;margin-bottom:10px;font-size:13px;color:var(--z300)}
+      .searchbar{display:none;align-items:center;gap:10px;border:1px solid var(--z600);border-bottom:0;
+        border-radius:10px 10px 0 0;background:rgba(24,24,27,.6);
+        padding:7px 14px 20px;margin-bottom:-12px;font-size:12px;color:var(--z400)}
       .term.searching .searchbar{display:flex}
-      .searchbar .sid{color:var(--ink-amber)}
+      .searchbar .sid{color:#fde047}
       .searchinput{display:none;background:none;border:0;outline:none;color:var(--z200);
         font-family:var(--mono);font-size:13px;width:100%;padding:0;margin-top:2px}
       .searchinput::placeholder{color:var(--z500)}
-      .term.searching .searchinput{display:block}
+      .term.searching .searchinput#ssearch{display:block}
+      .term.searching #sendinput{display:none!important}
       .term.searching .boxchip{background:#facc15;color:#111}
       .plusmenu{display:none;position:absolute;bottom:58px;left:8px;min-width:240px;background:#141416;
         border:1px solid var(--z700);border-radius:12px;padding:6px;z-index:9;box-shadow:0 10px 30px #00000080}
@@ -527,12 +539,26 @@
       .pm-row:hover{background:#27272a}
       .pm-row svg{color:var(--z300)}
       .pm-row .chev{margin-left:auto;color:var(--z500)}
+      .pm-panel{display:none}
+      .pm-panel.open{display:block}
+      .pm-search{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--z800);
+        font-family:var(--mono);font-size:13px;color:var(--z500)}
+      .pm-search .back{cursor:pointer;color:var(--z400)}
+      .pm-item{padding:9px 12px;border-bottom:1px solid rgba(39,39,42,.5);border-radius:0;cursor:pointer}
+      .pm-item:last-child{border-bottom:0}
+      .pm-item:hover{background:#27272a;border-radius:8px}
+      .pm-item .t{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;color:var(--z200);
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .pm-item .t .dot{width:7px;height:7px;border-radius:99px;flex-shrink:0}
+      .pm-item .t .src{color:var(--z500);font-size:12px}
+      .pm-item .d{margin-top:2px;font-family:var(--mono);font-size:12px;color:var(--z500);
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .scount{font-size:12px;color:var(--z400);margin-left:4px}
       mark.hl{background:#facc15;color:#111;border-radius:2px;padding:0 1px}
       mark.hl.cur{background:#fde047;box-shadow:0 0 0 2px #fde047}
       .term-idle{display:flex;align-items:center;gap:8px;padding:14px 2px 10px;font-size:13px;color:var(--ink-amber)}
       .term-idle .o{color:var(--ink-amber);opacity:.8}
-      .sendbox{position:relative;border:1px solid var(--z600);border-radius:10px;padding:14px 16px 12px;min-height:118px;
+      .sendbox{position:relative;z-index:10;background:var(--pane);border:1px solid var(--z600);border-radius:10px;padding:14px 16px 12px;min-height:118px;
         display:flex;flex-direction:column}
       .sendbox .hint{font-size:12px;color:var(--z500)}
       .sendbox .hint .g{color:var(--z600)}
@@ -671,7 +697,7 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
               searching session <span class="sid">f20ad87e</span></div>
             <div class="sendbox">
               <span class="boxchip">send-box</span>
-              <div class="hint donly">↵ send <span class="g">·</span> ⇧↵ newline</div>
+              <input id="sendinput" class="searchinput donly" style="display:block" type="text" placeholder="↵ send · ⇧↵ newline" autocomplete="off" spellcheck="false">
               <input id="ssearch" class="searchinput" type="text" placeholder="search this session…" autocomplete="off" spellcheck="false">
               <div class="row">
                 <span class="sb-btn donly" id="plusbtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
@@ -690,10 +716,29 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
                 </div>
               </div>
               <div class="plusmenu" id="plusmenu">
-                <div class="pm-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Attach</div>
-                <div class="pm-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h.01"/><path d="M8 6h13"/><path d="M3 12h.01"/><path d="M8 12h13"/><path d="M3 18h.01"/><path d="M8 18h13"/></svg>Todo<span class="chev">›</span></div>
-                <div class="pm-row"><span style="font-size:16px;line-height:1;color:var(--z300)">⌘</span>Command<span class="chev">›</span></div>
-              </div>
+                <div class="pm-panel open" id="pm-main">
+                  <div class="pm-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Attach</div>
+                  <div class="pm-row" id="pm-todo-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h.01"/><path d="M8 6h13"/><path d="M3 12h.01"/><path d="M8 12h13"/><path d="M3 18h.01"/><path d="M8 18h13"/></svg>Todo<span class="chev">›</span></div>
+                  <div class="pm-row" id="pm-cmd-btn"><span style="font-size:16px;line-height:1;color:var(--z300)">⌘</span>Command<span class="chev">›</span></div>
+                </div>
+                <div class="pm-panel" id="pm-todo">
+                  <div class="pm-search"><span class="back">←</span>Search to-dos…</div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#eab308"></span>Study Orb pricing page — usage-base…</div><div class="d">https://www.withorb.com/pricing The fe…</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#eab308"></span>44b: "best of the archive" — a hand…</div><div class="d">The Aug-2 crawler storm left the bulk …</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#eab308"></span>Docs: transcript read-only tabs + t…</div><div class="d">DocTab supports readOnly and docs.tsx …</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#eab308"></span>Docs v2: checklists, tables, wikili…</div><div class="d">Deliberate v1 cuts in the ProseMirror …</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#eab308"></span>Docs: diff-tint code blocks (```dif…</div><div class="d">Tool-step output opens in Docs as a fe…</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#eab308"></span>Merge feat/docs into main after eva…</div><div class="d">The Docs editor (ProseMirror @docs pan…</div></div>
+                </div>
+                <div class="pm-panel" id="pm-cmd">
+                  <div class="pm-search"><span class="back">←</span>Search 168 commands…</div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#22c55e"></span>/_conventions <span class="src">vercel</span></div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#71717a"></span>/add-dir <span class="src">Built-in</span></div><div class="d">Add a working directory for file acces…</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#71717a"></span>/advisor <span class="src">Built-in</span></div><div class="d">Enable/disable the advisor — a second …</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#71717a"></span>/agents <span class="src">Built-in</span></div><div class="d">Manage agent (subagent) configurations.</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#22c55e"></span>/ai-gateway <span class="src">vercel</span></div><div class="d">Vercel AI Gateway expert guidance. Use…</div></div>
+                  <div class="pm-item"><div class="t"><span class="dot" style="background:#22c55e"></span>/ai-sdk <span class="src">vercel</span></div><div class="d">Vercel AI SDK expert guidance. Use whe…</div></div>
+                </div>
             </div>
           </div>
         </div>
@@ -704,7 +749,7 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
     <!-- ── principle ── -->
     <div class="principle">
       <div class="big">no database <span class="w">·</span> no auth <span class="w">·</span> no telemetry <span class="w">·</span> no deploy</div>
-      <div class="row"><span>three runtime deps</span><span>next</span><span>react</span><span>react-dom</span><span>localhost-only</span></div>
+      
     </div>
 
     <!-- ── footer — footer.tsx ── -->
@@ -795,6 +840,107 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
       if(e.key === "Enter" && marks.length){ cur=(cur+1)%marks.length; upd(true); }
       if(e.key === "Escape") exitSearch();
     });
+  })();
+
+  // block kebabs — ported from app/ui/block-menu.tsx (fixed-position menu, closes on outside/Escape/scroll)
+  (function(){
+    var stream = document.querySelector(".term-stream");
+    var KEB = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>';
+    var SW = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"';
+    var menu = document.createElement("div");
+    menu.className = "kbmenu"; menu.style.display = "none";
+    menu.innerHTML =
+      '<div class="mi" data-act="copy"><svg ' + SW + '><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Copy</div>' +
+      '<div class="mi"><svg ' + SW + '><path d="M12 2l2.9 6.3 6.8.8-5 4.6 1.3 6.7L12 17.8 5.7 21l1.3-6.7-5-4.6 6.8-.8z"/></svg>Favorite</div>' +
+      '<div class="mi"><svg ' + SW + '><path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M15 3v5h5"/><path d="M8 13h6M8 17h4"/></svg>Save as note</div>' +
+      '<div class="mi"><svg ' + SW + '><path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M15 3v5h5"/><path d="m10 13-2 2 2 2"/><path d="m14 13 2 2-2 2"/></svg>Save as code</div>' +
+      '<div class="div"></div>' +
+      '<div class="mi"><svg ' + SW + '><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/></svg>Hide</div>';
+    document.body.appendChild(menu);
+    var openBtn = null, host = null;
+    function closeMenu(){ menu.style.display = "none"; if(openBtn){ openBtn.classList.remove("open"); openBtn = null; } }
+    menu.addEventListener("click", function(e){
+      var mi = e.target.closest(".mi"); if(!mi) return;
+      if(mi.dataset.act === "copy" && host) navigator.clipboard.writeText(host.innerText);
+      closeMenu(); e.stopPropagation();
+    });
+    Array.prototype.forEach.call(stream.querySelectorAll(".bubble,.toolrow,.acc"), function(el){
+      if(el.closest(".sendbox")) return;
+      var b = document.createElement("button");
+      b.className = "kb"; b.setAttribute("aria-label","Block actions"); b.innerHTML = KEB;
+      b.addEventListener("click", function(e){
+        e.stopPropagation();
+        if(openBtn === b){ closeMenu(); return; }
+        closeMenu();
+        var r = b.getBoundingClientRect();
+        menu.style.top = (r.bottom + 4) + "px";
+        menu.style.right = (window.innerWidth - r.right) + "px";
+        menu.style.left = "auto"; menu.style.display = "flex";
+        openBtn = b; host = el; b.classList.add("open");
+      });
+      el.appendChild(b);
+    });
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("keydown", function(e){ if(e.key === "Escape") closeMenu(); });
+    window.addEventListener("scroll", closeMenu, true);
+  })();
+
+  // accordion: header toggles open/closed
+  (function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".acc"), function(acc){
+      var head = acc.querySelector(".acc-head"), a = head.querySelector(".a");
+      head.addEventListener("click", function(e){
+        if(e.target.closest(".kb")) return;
+        acc.classList.toggle("closed");
+        a.textContent = acc.classList.contains("closed") ? "\u203a" : "\u2304";
+      });
+    });
+  })();
+
+  // plus-menu second layer
+  (function(){
+    var panels = { main: document.getElementById("pm-main"), todo: document.getElementById("pm-todo"), cmd: document.getElementById("pm-cmd") };
+    function show(which){ for(var k in panels){ panels[k].classList.toggle("open", k === which); } }
+    document.getElementById("pm-todo-btn").addEventListener("click", function(e){ e.stopPropagation(); show("todo"); });
+    document.getElementById("pm-cmd-btn").addEventListener("click", function(e){ e.stopPropagation(); show("cmd"); });
+    Array.prototype.forEach.call(document.querySelectorAll(".pm-search .back"), function(b){
+      b.addEventListener("click", function(e){ e.stopPropagation(); show("main"); });
+    });
+    var menu = document.getElementById("plusmenu");
+    new MutationObserver(function(){ if(!menu.classList.contains("open")) show("main"); })
+      .observe(menu, {attributes:true, attributeFilter:["class"]});
+  })();
+
+  // demo chat: type anything, get the canned pitch back (per-session, nothing saved)
+  (function(){
+    var input = document.getElementById("sendinput");
+    var stream = document.querySelector(".term-stream");
+    var idle = stream.querySelector(".term-idle");
+    function now(){ return new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",second:"2-digit"}); }
+    function turn(who, dot){ var d = document.createElement("div"); d.className = "turnhead";
+      d.innerHTML = '<span class="td" style="background:' + dot + '"></span><span class="who">' + who + '</span><span class="at">' + now() + '</span>'; return d; }
+    function bubble(html, you){ var d = document.createElement("div"); d.className = you ? "bubble you" : "bubble";
+      d.innerHTML = "<p>" + html + "</p>"; return d; }
+    function send(){
+      var v = input.value.trim(); if(!v) return;
+      input.value = "";
+      var esc = v.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+      stream.insertBefore(turn("YOU", "#60a5fa"), idle);
+      var yb = bubble(esc, true); stream.insertBefore(yb, idle);
+      yb.scrollIntoView({block:"center", behavior:"smooth"});
+      setTimeout(function(){
+        stream.insertBefore(turn("CLAUDE", "#fb923c"), idle);
+        var cb = bubble('This page is the demo \u2014 the real thing runs on your machine, over your own sessions. ' +
+          '<span class="code">npm i -g @nysgpt/hq</span>, then type <span class="code">hq</span> inside a Claude Code session ' +
+          'and this exact terminal comes alive with your transcripts. (Nothing you type here is saved or sent anywhere.)', false);
+        stream.insertBefore(cb, idle);
+        cb.scrollIntoView({block:"center", behavior:"smooth"});
+      }, 700);
+    }
+    input.addEventListener("keydown", function(e){ if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
+    var sendBtn = document.querySelector(".sendbox .send");
+    sendBtn.style.cursor = "pointer";
+    sendBtn.addEventListener("click", send);
   })();
 </script>
 
