@@ -1,5 +1,6 @@
 "use client";
 
+import { useFirstRunStream } from "@/app/ui/first-run-stream";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
@@ -552,6 +553,10 @@ function RecentSessions({
   // passed-in rows. allMode renders even while the fetch is in flight (empty → a
   // brief "loading" rather than null).
   const source = allMode ? allRows : sessions;
+  // first-run census flood (once ever; ?firstrun=1 replays) — hooks live above
+  // the early return per rules-of-hooks; see first-run-stream.ts
+  const floodRef = useRef<HTMLDivElement>(null);
+  const floodCount = useFirstRunStream("sessions", source.filter((s) => !hidden.has(s.id) && !archived.has(s.id)).length, floodRef);
   if (!allMode && sessions.length === 0) return null;
 
   // Focus-aware open: a session picked while a WALL pane (t2..t4) is active opens
@@ -637,7 +642,7 @@ function RecentSessions({
           INLINE so the cap ships in the DOM (can't be purged from the CSS chunk).
           The −526 (vs −490) absorbs the mt-6/mt-3 spacing added above, so the gap
           above the send box is preserved on short windows. */}
-      <div className="mt-3 scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: "min(444px, calc(100dvh - 526px))" }}>
+      <div ref={floodRef} className="mt-3 scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: "min(444px, calc(100dvh - 526px))" }}>
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
@@ -654,7 +659,7 @@ function RecentSessions({
           {rows.length === 0 ? (
             <p className="px-3 py-3 text-[11px] text-zinc-600">no sessions match this filter</p>
           ) : (
-            rows.map((s) => {
+            rows.slice(0, floodCount).map((s) => {
               const isLive = s.live || s.active; // green dot + green id, mirroring the sidebar
               if (editing === s.id) {
                 return (

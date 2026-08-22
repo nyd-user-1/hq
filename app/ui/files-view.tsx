@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import SearchField from "@/app/ui/search-field";
 import TerminalNavMenu from "@/app/ui/terminal-nav-menu";
 import CmdkFilesTable, { type FilesMeta } from "@/app/ui/cmdk-files-table";
+import { useFirstRunStream } from "@/app/ui/first-run-stream";
 import type { FileRow } from "@/lib/files-index";
 
 // The full-width Files browser — HQ's macOS-Finder over every file Claude wrote to
@@ -105,6 +106,9 @@ export default function FilesView() {
     [rows],
   );
 
+  // first-run census flood (once ever; ?firstrun=1 replays) — see first-run-stream.ts
+  const floodCount = useFirstRunStream("files", filtered.length);
+
   // close = drop this view from Terminal 1 → back to home (the tab model)
   const close = () => {
     const sp = new URLSearchParams(params.toString());
@@ -196,7 +200,7 @@ export default function FilesView() {
       />
 
       {/* table — windowed; fills the rest */}
-      {loading ? <Skeleton /> : <CmdkFilesTable rows={filtered} meta={meta} onOpen={onOpen} />}
+      {loading ? <Skeleton /> : <CmdkFilesTable rows={filtered.slice(0, floodCount)} meta={meta} onOpen={onOpen} />}
     </div>
   );
 }
