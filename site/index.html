@@ -931,8 +931,9 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
       setTimeout(function(){
         stream.insertBefore(turn("CLAUDE", "#fb923c"), idle);
         var cb = bubble('This page is the demo \u2014 the real thing runs on your machine, over your own sessions. ' +
-          '<span class="code">npm i -g @nysgpt/hq</span>, then type <span class="code">hq</span> inside a Claude Code session ' +
-          'and this exact terminal comes alive with your transcripts. (Nothing you type here is saved or sent anywhere.)', false);
+          'Open any terminal and paste <span class="code">npm i -g @nysgpt/hq</span>, then <span class="code">hq</span> \u2014 ' +
+          'it opens at localhost:3002 with your own transcripts, no setup, no Claude session required. ' +
+          '(Run <span class="code">hq</span> from inside one and that session pins as Terminal 1. Nothing you type here is saved or sent anywhere.)', false);
         stream.insertBefore(cb, idle);
         cb.scrollIntoView({block:"center", behavior:"smooth"});
       }, 700);
