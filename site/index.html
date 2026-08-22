@@ -7,7 +7,7 @@
 <meta name="description" content="HQ is an interactive workspace for working with coding agents — live sessions in state-colored panels, search over everything ever run, and real two-way control. Localhost-only. Disk is the database.">
 <meta property="og:title" content="HQ">
 <meta property="og:description" content="The workspace that replaces the bare terminal for working with coding agents.">
-<meta property="og:image" content="https://hq.nysgpt.com/img/macos-split-workspace.jpg">
+<meta property="og:image" content="https://hq.nysgpt.com/img/token-dashboard.webp">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>▙</text></svg>">
 <style>
   :root{
@@ -108,8 +108,10 @@
     </div>
     <div class="alt">or try it once: <code>npx @nysgpt/hq</code></div>
 
-    <div class="shot"><span class="tag">shell.tsx</span>
-      <img src="img/macos-split-workspace.jpg" alt="HQ — sidebar, live terminal, and panels in the split workspace" width="1600" height="845">
+    <div class="shot"><span class="tag">hq in action</span>
+      <video src="img/hq-short-video.mp4" autoplay muted loop playsinline preload="auto"
+        aria-label="hq in action — a live session on the wall"
+        style="width:100%;display:block;border-radius:6px"></video>
     </div>
   </div>
 
@@ -158,18 +160,15 @@
   </section>
 
   <section>
-    <div class="kicker">surfaces</div>
-    <h2>The same disk, everywhere you work.</h2>
-    <div class="split">
-      <div class="shot"><span class="tag">HQ.app</span>
-        <img src="img/macos-launcher.jpg" alt="HQ as a native macOS app" loading="lazy">
-      </div>
-      <div class="shot"><span class="tag">ipad</span>
-        <img src="img/ipad-split-workspace.jpg" alt="HQ split workspace on iPad" loading="lazy">
-      </div>
+    <div class="kicker">usage</div>
+    <h2>Know where every token went.</h2>
+    <div class="shot" style="margin-top:34px"><span class="tag">usage insights</span>
+      <img src="img/token-dashboard.webp" alt="Usage Insights — tokens, cost, and time, computed locally" loading="lazy">
     </div>
-    <p class="lede" style="margin-top:18px">A dev server, a self-contained offline build, and a native
-      macOS app with a global hotkey — all reading the same local files. Nothing leaves your machine.</p>
+    <p class="lede" style="margin-top:18px">Tokens, dollars, and time — per project, per session, per
+      hour of the week. Computed locally; nothing leaves your browser. HQ ships as a dev server, a
+      self-contained offline build, and a native macOS app with a global hotkey — all reading the
+      same local files.</p>
   </section>
 
   <div class="principle">
