@@ -352,6 +352,16 @@
     </section>
 
     <!-- ── the wall — four panes, the border is the status ── -->
+    <style>
+      /* wall v2 — Brendan's devtools pass, 2026-08-22 */
+      .pane-status{justify-content:flex-start}
+      .pane-status .cstat{color:var(--ink-orange)}
+      .pane-status .cstat .g{color:var(--z500)}
+      .pane-status .pmeta{margin-left:auto;flex-shrink:0;color:var(--ink-amber)}
+      .step .num{color:var(--z500);flex-shrink:0}
+      .step .add{color:#34d399}.step .del{color:#f87171}
+      .wall-note{margin-top:20px;font-size:13px;color:var(--z300)}
+    </style>
     <section id="wall" class="section">
       <div class="section-inner">
         <div class="sechead">
@@ -366,82 +376,82 @@
         </div>
 
         <div class="wall">
-          <!-- control · active (blue) -->
+          <!-- Default State (blue) -->
           <div class="pane" style="border-color:#2563eb">
-            <span class="pane-chip" style="background:#2563eb"><i></i>control</span>
+            <span class="pane-chip" style="background:#2563eb"><i></i>Default State</span>
+            <div class="spinring" style="background:conic-gradient(from var(--hq-spin),transparent 0deg,#93c5fd 40deg,#60a5fa 60deg,transparent 100deg,transparent 360deg)"></div>
             <div class="pane-head">
-              <span class="dot"></span><span class="proj">hq</span><span class="sess">drive-dont-watch</span>
-              <span class="meta">cache 4:14</span>
+              <span class="dot"></span><span class="proj">hq</span><span class="sess">landing-page</span>
             </div>
             <div class="pane-body">
-              <div class="prompt"><span class="you">you</span> ❯ push into the live session</div>
-              <div class="step"><span class="a">›</span><span class="k">DAEMON</span><span class="t">warm processes that outlive the server</span></div>
-              <div class="step"><span class="a">›</span><span class="k">CHANNEL</span><span class="t">replies and permission prompts come back</span></div>
-              <div class="step"><span class="a">›</span><span class="k">TEAMS</span><span class="t">rosters, mailboxes, tmux panes driven in place</span></div>
-              <div class="step"><span class="a">›</span><span class="k">RELAY</span><span class="t">approve tool calls from the dashboard, policy-checked</span></div>
+              <div class="prompt"><span class="you">you</span> ❯ search any transcript live 🔎</div>
+              <div class="step"><span class="a">›</span><span class="num">1.</span><span class="k">DAEMON</span><span class="t">warm processes that outlive the server</span></div>
+              <div class="step"><span class="a">›</span><span class="num">2.</span><span class="k">CHANNEL</span><span class="t">replies and permission prompts come back</span></div>
+              <div class="step"><span class="a">›</span><span class="num">3.</span><span class="k">TEAMS</span><span class="t">rosters, mailboxes, tmux panes driven in place</span></div>
+              <div class="step"><span class="a">›</span><span class="num">4.</span><span class="k">RELAY</span><span class="t">approve tool calls from the dashboard, policy-checked</span></div>
+              <div class="step"><span class="a">›</span><span class="k">EDIT</span><span class="t">root-landing.tsx <span class="add">+82</span> <span class="del">−31</span></span></div>
             </div>
-            <div class="pane-status st-blue"><span>● live — 2 channels open <span class="g">· permission prompt relayed</span></span></div>
+            <div class="pane-status"><span class="cstat">● Jitterbugging...</span><span class="pmeta">Cache 4:14</span></div>
           </div>
 
-          <!-- governance · thinking (orange, spinring) -->
+          <!-- Session Working (orange) -->
           <div class="pane" style="border-color:#f97316">
-            <span class="pane-chip" style="background:#ea580c"><i></i>governance</span>
+            <span class="pane-chip" style="background:#ea580c"><i></i>Session Working</span>
             <div class="spinring" style="background:conic-gradient(from var(--hq-spin),transparent 0deg,#fbbf24 40deg,#fb923c 60deg,transparent 100deg,transparent 360deg)"></div>
             <div class="pane-head">
-              <span class="dot pulse"></span><span class="proj">hq</span><span class="sess">usage-burn</span>
-              <span class="meta">$ live</span>
+              <span class="dot pulse"></span><span class="proj">Project 2</span><span class="sess">refactoring</span>
             </div>
             <div class="pane-body">
-              <div class="prompt"><span class="you">you</span> ❯ where did every token go?</div>
-              <div class="step"><span class="a">›</span><span class="k">LEDGER</span><span class="t">tokens &amp; dollars per session, per turn — caching savings included</span></div>
-              <div class="step"><span class="a">›</span><span class="k">GUARDRAILS</span><span class="t">weekly caps + a live $/min burn alarm</span></div>
-              <div class="step"><span class="a">›</span><span class="k">OTLP</span><span class="t">HQ is its own telemetry receiver — no collector to run</span></div>
-              <div class="step"><span class="a">›</span><span class="k">SWEEP</span><span class="t">nothing ages out silently; swept sessions stay searchable</span></div>
+              <div class="prompt"><span class="you">you</span> ❯ Ctx cliff warnings ‼️</div>
+              <div class="step"><span class="a">›</span><span class="num">5.</span><span class="k">LEDGER</span><span class="t">tokens &amp; dollars per session, per turn — caching savings included</span></div>
+              <div class="step"><span class="a">›</span><span class="num">6.</span><span class="k">GUARDRAILS</span><span class="t">weekly caps + a live $/min burn alarm</span></div>
+              <div class="step"><span class="a">›</span><span class="num">7.</span><span class="k">OTLP</span><span class="t">HQ is its own telemetry receiver — no collector to run</span></div>
+              <div class="step"><span class="a">›</span><span class="num">8.</span><span class="k">SWEEP</span><span class="t">nothing ages out silently; swept sessions stay searchable</span></div>
+              <div class="step"><span class="a">›</span><span class="k">READ</span><span class="t">terminal.tsx</span><span class="tok">~1.5k tok</span></div>
             </div>
-            <div class="pane-status st-orange"><span><span style="opacity:.8">✳</span> Watching burn… <span class="g">($0.42/min · under cap)</span></span></div>
+            <div class="pane-status"><span class="cstat">✳ Decomposing...</span></div>
           </div>
 
-          <!-- workspace · done (green, spinring) -->
+          <!-- Turn Complete (green) -->
           <div class="pane" style="border-color:#22c55e">
-            <span class="pane-chip" style="background:#16a34a"><i></i>workspace</span>
+            <span class="pane-chip" style="background:#16a34a"><i></i>Turn Complete</span>
             <div class="spinring" style="background:conic-gradient(from var(--hq-spin),transparent 0deg,#86efac 40deg,#22c55e 60deg,transparent 100deg,transparent 360deg)"></div>
             <div class="pane-head">
-              <span class="dot"></span><span class="proj">hq</span><span class="sess">the-workspace</span>
-              <span class="meta">ctx 49%</span>
+              <span class="dot"></span><span class="proj">Project 3</span><span class="sess">database-session</span>
             </div>
             <div class="pane-body">
-              <div class="prompt"><span class="ok">✓</span> The bare terminal, replaced — panels orbit the session.</div>
-              <div class="step"><span class="a">›</span><span class="k">TERMINAL</span><span class="t">every session live, mounted once — panels yield to it</span></div>
-              <div class="step"><span class="a">›</span><span class="k">PANELS</span><span class="t">state-colored, each wearing its source file as a copy chip</span></div>
-              <div class="step"><span class="a">›</span><span class="k">SEARCH</span><span class="t">transcripts · memory · notes · source — if Claude wrote it, it's findable</span><span class="tok">FTS5</span></div>
-              <div class="step"><span class="a">›</span><span class="k">DRAG</span><span class="t">components drop their file path straight into the prompt</span></div>
+              <div class="prompt"><span class="ok">✓</span> Drag and drop component paths. 🚀</div>
+              <div class="step"><span class="a">›</span><span class="num">9.</span><span class="k">TERMINAL</span><span class="t">every session live, mounted once — panels yield to it</span></div>
+              <div class="step"><span class="a">›</span><span class="num">10.</span><span class="k">PANELS</span><span class="t">state-colored, each wearing its source file as a copy chip</span></div>
+              <div class="step"><span class="a">›</span><span class="num">11.</span><span class="k">SEARCH</span><span class="t">transcripts · memory · notes · source — if Claude wrote it, it's findable</span><span class="tok">FTS5</span></div>
+              <div class="step"><span class="a">›</span><span class="num">12.</span><span class="k">DRAG</span><span class="t">components drop their file path straight into the prompt</span></div>
             </div>
-            <div class="pane-status st-green"><span><span class="g">◦</span> idle — everything indexed · last activity just now</span></div>
+            <div class="pane-status"><span class="cstat"><span class="g">◦</span>Claudifying...</span><span class="pmeta">ctx 49%</span></div>
           </div>
 
-          <!-- gateway · stopped (red) -->
+          <!-- Turn Interrupted (red) -->
           <div class="pane" style="border-color:#ef4444">
-            <span class="pane-chip" style="background:#dc2626"><i></i>backstop</span>
+            <span class="pane-chip" style="background:#dc2626"><i></i>Turn Interrupted</span>
+            <div class="spinring" style="background:conic-gradient(from var(--hq-spin),transparent 0deg,#fca5a5 40deg,#f87171 60deg,transparent 100deg,transparent 360deg)"></div>
             <div class="pane-head">
-              <span class="dot" style="background:#ef4444"></span><span class="proj">hq</span><span class="sess">usage-wall</span>
-              <span class="meta">port 3141</span>
+              <span class="dot" style="background:#ef4444"></span><span class="proj">Project 18</span><span class="sess">code-review</span>
             </div>
             <div class="pane-body">
-              <div class="prompt"><span class="you">you</span> ❯ hit the usage limit mid-sprint</div>
-              <div class="step"><span class="a">›</span><span class="k">GATEWAY</span><span class="t">a local LLM proxy in the request path from session birth</span></div>
-              <div class="step"><span class="a">›</span><span class="k">FLIP</span><span class="t">every live session onto AWS Bedrock mid-conversation</span></div>
-              <div class="step"><span class="a">›</span><span class="k">CONTRACT</span><span class="t">fail-open: broken backstop, unbroken session</span></div>
-              <div class="step"><span class="a">›</span><span class="k">PRIVACY</span><span class="t">passthrough never inspects a request or response body</span></div>
+              <div class="prompt"><span class="you">you</span> ❯ pull Git Logs while working ✅</div>
+              <div class="step"><span class="a">›</span><span class="num">13.</span><span class="k">GATEWAY</span><span class="t">a local LLM proxy in the request path from session birth</span></div>
+              <div class="step"><span class="a">›</span><span class="num">14.</span><span class="k">FLIP</span><span class="t">every live session onto AWS Bedrock mid-conversation</span></div>
+              <div class="step"><span class="a">›</span><span class="num">15.</span><span class="k">CONTRACT</span><span class="t">fail-open: broken backstop, unbroken session</span></div>
+              <div class="step"><span class="a">›</span><span class="num">16.</span><span class="k">PRIVACY</span><span class="t">passthrough never inspects a request or response body</span></div>
+              <div class="step"><span class="a">›</span><span class="k">EDIT</span><span class="t">shell.tsx <span class="add">+9</span></span></div>
             </div>
-            <div class="pane-status st-red"><span>■ plan wall — flipped to bedrock <span class="g">· no restart, no lost context</span></span></div>
+            <div class="pane-status"><span class="cstat">Mesmerizing...</span></div>
           </div>
         </div>
 
-        <p class="mono" style="margin-top:20px;font-size:12px;color:var(--z600)">
-          the real <span style="color:var(--z400)">?wall</span> view — up to four controlled panes, each a live session
-        </p>
+        <p class="mono wall-note">*Up to four controlled panes, each a live session</p>
       </div>
     </section>
+
 
     <!-- ── principle ── -->
     <div class="principle">
