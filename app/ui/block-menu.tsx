@@ -85,13 +85,16 @@ export default function BlockMenu({
   triggerClass?: string; // kebab position (absolute for blocks, inline for tool steps)
   revealClass?: string; // hover-reveal class (which group it follows)
   onCopy: () => void;
-  onFavorite: () => void;
+  /** favorite is block-meta state, keyed by a committed block id — omit it on a
+   *  block that has no id yet (a live streaming turn) and the item drops out */
+  onFavorite?: () => void;
   onSaveNote: () => void;
   onSaveCode: () => void;
   /** send this block into the Docs editor as a new document (optional) */
   onOpenDoc?: () => void;
   onReact: (r: Reaction) => void;
-  onHide: () => void;
+  /** hide is block-meta state too — omitted for the same reason as onFavorite */
+  onHide?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -166,16 +169,18 @@ export default function BlockMenu({
               label="Copy"
               onClick={choose(onCopy)}
             />
-            <MenuItem
-              icon={
-                <svg {...SVG} fill={favorite ? "currentColor" : "none"}>
-                  <path d="M12 2l2.9 6.3 6.8.8-5 4.6 1.3 6.7L12 17.8 5.7 21l1.3-6.7-5-4.6 6.8-.8z" />
-                </svg>
-              }
-              label={favorite ? "Unfavorite" : "Favorite"}
-              onClick={choose(onFavorite)}
-              active={favorite}
-            />
+            {onFavorite && (
+              <MenuItem
+                icon={
+                  <svg {...SVG} fill={favorite ? "currentColor" : "none"}>
+                    <path d="M12 2l2.9 6.3 6.8.8-5 4.6 1.3 6.7L12 17.8 5.7 21l1.3-6.7-5-4.6 6.8-.8z" />
+                  </svg>
+                }
+                label={favorite ? "Unfavorite" : "Favorite"}
+                onClick={choose(onFavorite)}
+                active={favorite}
+              />
+            )}
             <MenuItem
               icon={
                 <svg {...SVG}>
@@ -240,19 +245,23 @@ export default function BlockMenu({
                 />
               </>
             )}
-            <div className="my-1 h-px bg-zinc-800" />
-            <MenuItem
-              icon={
-                <svg {...SVG}>
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <path d="m2 2 20 20" />
-                </svg>
-              }
-              label={hidden ? "Unhide" : "Hide"}
-              onClick={choose(onHide)}
-            />
+            {onHide && (
+              <>
+                <div className="my-1 h-px bg-zinc-800" />
+                <MenuItem
+                  icon={
+                    <svg {...SVG}>
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                      <path d="m2 2 20 20" />
+                    </svg>
+                  }
+                  label={hidden ? "Unhide" : "Hide"}
+                  onClick={choose(onHide)}
+                />
+              </>
+            )}
           </div>,
           document.body,
         )}

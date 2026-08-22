@@ -1030,6 +1030,31 @@ export default function Terminal({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
+  // The draft outlives navigation. Clicking Files (or any panel route) unmounts
+  // this terminal, which used to drop whatever you'd typed; sessionStorage hands
+  // it straight back on the way in. Keyed per terminal AND session so T1/T2 —
+  // and two different sessions in the same pane — never share a box.
+  const draftKey = `hq:draft:${terminalKey}:${sessionParam ?? "new"}`;
+  const draftRestoredFor = useRef<string | null>(null);
+  useEffect(() => {
+    try {
+      setDraft(sessionStorage.getItem(draftKey) ?? "");
+    } catch {
+      /* private mode / disabled storage — the box just won't persist */
+    }
+    draftRestoredFor.current = draftKey;
+  }, [draftKey]);
+  useEffect(() => {
+    // Never write before this key's restore has run, or the mount-time empty
+    // draft would clobber the very value we're about to read back.
+    if (draftRestoredFor.current !== draftKey) return;
+    try {
+      if (draft) sessionStorage.setItem(draftKey, draft);
+      else sessionStorage.removeItem(draftKey); // sent or cleared → drop the slot
+    } catch {
+      /* ignore */
+    }
+  }, [draft, draftKey]);
   const taRef = useRef<HTMLTextAreaElement>(null); // send box — for auto-grow
   const cmdOverlayRef = useRef<HTMLDivElement>(null); // command-color overlay (scroll-synced to the textarea)
   const [savedNotes, setSavedNotes] = useState<Set<string>>(new Set()); // blocks saved as notes (keyed by text)
@@ -3451,7 +3476,24 @@ export default function Terminal({
                         <span className="mr-1.5 normal-case text-emerald-400">●</span>
                         claude · live
                       </span>
-                      <div className="break-words rounded-md border border-zinc-800 bg-zinc-900/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
+                      <div className="group/turn relative break-words rounded-md border border-zinc-800 bg-zinc-900/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
+                        {/* Copy/⋮ are live from the first token — they only need
+                            the block's text, which we already have. Favorite,
+                            hide and 👍👎 are block-meta keyed by a committed id
+                            that doesn't exist until the poll lands the turn, so
+                            they're omitted here rather than shown as no-ops. */}
+                        <BlockMenu
+                          saved={savedNotes.has(b.text)}
+                          favorite={false}
+                          hidden={false}
+                          reaction={null}
+                          showReactions={false}
+                          onCopy={() => navigator.clipboard.writeText(b.text)}
+                          onSaveNote={() => saveNoteBlock({ text: b.text, role: "assistant" })}
+                          onSaveCode={() => saveCodeBlock({ text: b.text, role: "assistant" })}
+                          onOpenDoc={() => openBlockInDoc({ text: b.text, role: "assistant" })}
+                          onReact={() => {}}
+                        />
                         <Markdown text={b.text} />
                       </div>
                     </div>

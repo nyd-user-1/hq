@@ -40,8 +40,33 @@ type TeamLite = {
   id: string;
   leadSessionId: string;
   leadTranscriptId?: string;
+  createdAt?: number;
   members: { name: string; color: string; isLead: boolean }[];
 };
+
+// A team whose lead transcript isn't in the Recents list (a decoupled/dead tmux
+// team — config.leadSessionId is transcript-less and tmux is gone, so the real
+// lead uuid can't be resolved) still deserves a row, or the Agent Teams group
+// goes silently empty. Synthesize a minimal Recent so it renders like a lead row
+// (label falls to the short lead id) with its teammates reachable via the kebab.
+function synthTeamRecent(t: TeamLite, leadId: string): Recent {
+  return {
+    id: leadId,
+    project: "",
+    title: "",
+    lastActive: t.createdAt ?? 0,
+    active: false,
+    live: false,
+    branch: "",
+    aiTitle: "",
+    chainRoot: leadId,
+    customTitle: "",
+    favorite: false,
+    hidden: false,
+    archived: false,
+    related: [],
+  };
+}
 
 type GroupBy = "none" | "date" | "project" | "tree";
 const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
@@ -508,7 +533,23 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
         teammates: t.members.filter((m) => !m.isLead).map((m) => ({ name: m.name, color: m.color })),
       });
   }
-  const teamLeadRows = visible.filter((s) => leadMap.has(s.id));
+  // One row per real team: prefer its live Recents session (full row — live dot,
+  // kebab, real title); when the lead transcript isn't in the session list (a
+  // decoupled/dead tmux team), synthesize a stub so the team is still visible and
+  // its teammates reachable via the kebab. Without this, an unresolvable lead made
+  // the whole Agent Teams group vanish — the "clicking Agent Teams does nothing" bug.
+  const bySessionId = new Map(sessions.map((s) => [s.id, s]));
+  const teamLeadRows: Recent[] = [];
+  for (const t of teams) {
+    const leadId = t.leadTranscriptId || t.leadSessionId;
+    if (!leadId || teamLeadRows.some((r) => r.id === leadId)) continue;
+    const real = bySessionId.get(leadId);
+    if (real) {
+      if (!real.archived && (showHidden || !real.hidden)) teamLeadRows.push(real);
+    } else {
+      teamLeadRows.push(synthTeamRecent(t, leadId));
+    }
+  }
   // When Agent Teams is open, the lead sessions live in their own block (rendered
   // above the Recents groups) — exclude them here so they aren't listed twice. When
   // collapsed, fold them back into Recents so a team lead is never hidden entirely.
@@ -644,6 +685,11 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
     );
   };
 
+  // A session can surface in more than one bucket (a team lead that's also in Today)
+  // or be double-added by the grouping — dedupe by id per list so React keys stay
+  // unique (fixes "two children with the same key").
+  const uniq = (rows: Recent[]) => rows.filter((s, i, a) => a.findIndex((x) => x.id === s.id) === i);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
       {/* Agent Teams — the live teams' LEAD sessions, revealed by the top-group
@@ -651,7 +697,7 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
           kebab, which additionally leads with the teammates). */}
       {teamsOpen && teamLeadRows.length > 0 && (
         <div className="flex shrink-0 flex-col gap-0.5 border-b border-zinc-800/50 pb-2">
-          {teamLeadRows.map(renderRow)}
+          {uniq(teamLeadRows).map(renderRow)}
         </div>
       )}
       <div className="flex items-center justify-between px-2.5">
@@ -701,7 +747,7 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
                   {g.label}
                 </span>
               )}
-              {g.sessions.map(renderRow)}
+              {uniq(g.sessions).map(renderRow)}
             </div>
           ))}
 
@@ -729,7 +775,7 @@ export default function SidebarRecents({ teamsOpen = true }: { teamsOpen?: boole
                 </span>
                 Archived · {archivedCount}
               </button>
-              {showArchived && archivedSessions.map(renderRow)}
+              {showArchived && uniq(archivedSessions).map(renderRow)}
             </div>
           )}
         </div>

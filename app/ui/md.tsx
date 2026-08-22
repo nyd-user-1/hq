@@ -1,10 +1,15 @@
 import React from "react";
 import CommitLink from "@/app/ui/commit-link";
 import CopyCode from "@/app/ui/copy-code";
+import SessionLink from "@/app/ui/session-link";
 
 // An inline `code` token that looks like a commit hash → link it to its diff
 // (the Shipped reader resolves which repo it's in). Everything else → copy chip.
 const SHA = /^[0-9a-f]{7,40}$/i;
+// A full session uuid → an openable chip (copy the id, ↗ to read it). Only the
+// FULL form: an 8-char prefix is indistinguishable from a short sha, and
+// guessing wrong sends you to the Changelog instead of the session.
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Lightweight markdown for the terminal — no library. Handles the cases Claude's
 // replies actually use: **bold**, *italic*, `code` (accent-colored, the "purple"
@@ -44,7 +49,9 @@ function inline(text: string): React.ReactNode[] {
       );
     else if (m[4] !== undefined)
       out.push(
-        SHA.test(m[4]) ? (
+        SESSION_ID.test(m[4]) ? (
+          <SessionLink key={i} id={m[4]} />
+        ) : SHA.test(m[4]) ? (
           <CommitLink key={i} sha={m[4]} />
         ) : (
           <CopyCode key={i}>{m[4]}</CopyCode>
