@@ -43,7 +43,7 @@
     "dev": "next dev -p 3002 -H 127.0.0.1",
     "build": "next build",
     "build:check": "HQ_BUILD_DIR=.next-build next build",
-    "build:package": "next build && rm -rf .next/standalone/.next/static .next/standalone/public .next/standalone/.claude .next/standalone/tsconfig.tsbuildinfo .next/standalone/AGENTS.md .next/standalone/CLAUDE.md .next/standalone/AGENTS.public-draft.md && cp -R .next/static .next/standalone/.next/static && cp -R public .next/standalone/public && mkdir -p .next/standalone/lib .next/standalone/scripts/lib && cp lib/repl-daemon.mjs lib/permission-classify.mjs .next/standalone/lib/ && cp scripts/build-search-index.mjs scripts/fetch-docs.mjs .next/standalone/scripts/ && cp scripts/lib/extract-entry.mjs .next/standalone/scripts/lib/",
+    "build:package": "next build && rm -rf .next/standalone/.next/static .next/standalone/public .next/standalone/.claude .next/standalone/tsconfig.tsbuildinfo .next/standalone/AGENTS.md .next/standalone/CLAUDE.md .next/standalone/AGENTS.public-draft.md && cp -R .next/static .next/standalone/.next/static && mkdir -p .next/standalone/public && git ls-files -z public | xargs -0 -I% cp % .next/standalone/public/ && mkdir -p .next/standalone/lib .next/standalone/scripts/lib && cp lib/repl-daemon.mjs lib/permission-classify.mjs .next/standalone/lib/ && cp scripts/build-search-index.mjs scripts/fetch-docs.mjs .next/standalone/scripts/ && cp scripts/lib/extract-entry.mjs .next/standalone/scripts/lib/",
     "start": "next start",
     "lint": "eslint",
     "app:rebuild": "bash scripts/rebuild-app.sh",
