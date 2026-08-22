@@ -62,8 +62,8 @@
 
   /* install copy blocks (landing-install.tsx CopyBlock, verbatim classes) */
   .install-row{margin-top:32px;display:flex;flex-direction:column;align-items:center;gap:10px}
-  .copyblock{display:flex;width:auto;align-items:center;justify-content:space-between;gap:16px;
-    border-radius:8px;border:1px solid var(--z800);background:rgba(24,24,27,.7);
+  .copyblock{display:flex;width:auto;align-items:center;justify-content:center;gap:16px;
+    border-radius:10px;border:1px solid var(--z800);background:rgba(24,24,27,.7);
     padding:12px 16px;text-align:left;font-family:var(--mono);font-size:14px;transition:border-color .15s,background .15s}
   .copyblock:hover{border-color:var(--z700);background:var(--z900)}
   .copyblock .lead{display:flex;min-width:0;align-items:center;gap:10px}
@@ -136,7 +136,7 @@
   .sechead .index{margin-top:24px;display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;color:var(--z500)}
   .sechead .index .n{color:var(--z600)}.sechead .index .nm{color:var(--z300)}.sechead .index .ar{color:var(--ink-blue)}
 
-  .wall{margin-top:56px;display:grid;gap:24px}
+  .wall{margin-top:40px;display:grid;gap:24px}
   @media(min-width:1024px){.wall{grid-template-columns:1fr 1fr}}
   .pane{position:relative;display:flex;min-width:0;flex-direction:column;border-radius:8px;border:1px dashed;
     background:var(--pane);padding:14px;padding-top:24px;font-family:var(--mono)}
@@ -216,12 +216,10 @@
         <div class="install-row">
           <button class="copyblock" data-cmd="npm i -g @nysgpt/hq">
             <span class="lead"><span class="dollar">$</span><span class="cmd">npm i -g @nysgpt/hq</span></span>
-            <span class="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="lbl">copy</span></span>
-          </button>
+            </button>
           <button class="copyblock" data-cmd="npx @nysgpt/hq">
             <span class="lead"><span class="dollar">$</span><span class="cmd">npx @nysgpt/hq</span></span>
-            <span class="act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="lbl">copy</span></span>
-          </button>
+            </button>
         </div>
       </div>
 
@@ -241,9 +239,8 @@
     <!-- ── dashboard — dashboard-section.tsx chrome, the real board frozen ── -->
     <section id="dashboard" class="px">
       <div class="dash-inner">
-        <h2 class="dash">Numbers for every session.</h2>
-        <p class="dash-sub">Every metric computed from the transcripts on disk, at request time —
-          no warehouse, no ETL.</p>
+        <h2 class="dash">Every token accounted for.</h2>
+        <p class="dash-sub">Live metrics computed per disk transcripts, no api required.</p>
         <div class="frame-wrap dash-frame" style="padding-bottom:0">
           <div class="frame">
             <div class="view tall">
@@ -355,25 +352,17 @@
     <style>
       /* wall v2 — Brendan's devtools pass, 2026-08-22 */
       .pane-status{justify-content:flex-start}
-      .pane-status .cstat{color:var(--ink-orange)}
+      .pane-status .cstat{color:var(--z300)}
       .pane-status .cstat .g{color:var(--z500)}
-      .pane-status .pmeta{margin-left:auto;flex-shrink:0;color:var(--ink-amber)}
-      .step .num{color:var(--z500);flex-shrink:0}
+      .pane-status .pmeta{margin-left:14px;flex-shrink:0;color:var(--z300)}
+      .step .num{color:var(--z100);font-weight:700;flex-shrink:0}
       .step .add{color:#34d399}.step .del{color:#f87171}
       .wall-note{margin-top:20px;font-size:13px;color:var(--z300)}
     </style>
     <section id="wall" class="section">
       <div class="section-inner">
-        <div class="sechead">
-          <h2>The terminal is a great runtime<br><span class="dim">and a terrible workspace.</span></h2>
-          <div class="right">
-            <p class="desc">Sessions scroll away, cost is invisible, and yesterday's answer is
-              unfindable. Claude Code already writes everything to disk — HQ reads those files and
-              turns them into an operator console. Blue is focused, orange is thinking, green just
-              shipped, red stopped: the border is the status.</p>
-            <div class="index"><span class="n">2.0</span><span class="nm">the wall</span><span class="ar">→</span></div>
-          </div>
-        </div>
+        <h2 class="dash">State animation</h2>
+        <p class="dash-sub">And up to four panes, each a live session.</p>
 
         <div class="wall">
           <!-- Default State (blue) -->
@@ -445,7 +434,112 @@
           </div>
         </div>
 
-        <p class="mono wall-note">*Up to four controlled panes, each a live session</p>
+        
+      </div>
+    </section>
+
+
+<!-- ── the terminal — a faithful replica of the live center column ── -->
+    <style>
+      /* terminal replica (section 4) — anatomy from terminal.tsx, text from a real session */
+      .term{max-width:1030px;margin:40px auto 0;font-family:var(--mono);font-size:13px;line-height:1.65}
+      .term-head{display:flex;align-items:center;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--z800);font-size:13px}
+      .term-head .dot{width:8px;height:8px;border-radius:999px;background:#22c55e}
+      .term-head .proj{color:var(--z200)}
+      .term-head .sess{color:var(--ink-green)}
+      .term-head .kebab{color:var(--z600);letter-spacing:2px}
+      .term-head .expand{margin-left:auto;color:var(--z500);font-size:15px}
+      .term-stream{display:flex;flex-direction:column;gap:14px;padding-top:16px}
+      .turnhead{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.06em}
+      .turnhead .td{width:7px;height:7px;border-radius:999px}
+      .turnhead .who{color:var(--z400)}
+      .turnhead .at{color:var(--z600)}
+      .bubble{position:relative;border:1px solid var(--z800);border-radius:8px;background:rgba(24,24,27,.2);padding:14px 16px;color:var(--z300)}
+      .bubble p+p{margin-top:14px}
+      .bubble .code{background:#27272a;border-radius:4px;padding:1px 7px;color:#c4b5fd;font-size:12px}
+      .bubble .toktag{position:absolute;right:10px;bottom:-11px;border:1px solid var(--z700);border-radius:5px;
+        background:var(--pane);padding:2px 8px;font-size:11px;color:var(--z500)}
+      .toolrow{display:flex;align-items:center;gap:8px;border:1px solid var(--z800);border-radius:8px;
+        background:rgba(24,24,27,.2);padding:11px 14px;color:var(--z300)}
+      .toolrow .a{color:var(--z600)}
+      .toolrow .k{color:var(--z500)}
+      .toolrow .cmd{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .fadeblock{border:1px solid var(--z800);border-radius:0 0 8px 8px;border-top:0;background:rgba(24,24,27,.15);
+        padding:10px 16px;color:var(--z500);opacity:.35;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+        -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 70%);mask-image:linear-gradient(to bottom,transparent 0,#000 70%)}
+      .term-idle{display:flex;align-items:center;gap:8px;padding:14px 2px 10px;font-size:13px;color:var(--ink-amber)}
+      .term-idle .o{color:var(--ink-amber);opacity:.8}
+      .sendbox{position:relative;border:1px solid var(--z800);border-radius:10px;padding:14px 16px 12px;min-height:118px;
+        display:flex;flex-direction:column}
+      .sendbox .hint{font-size:12px;color:var(--z500)}
+      .sendbox .hint .g{color:var(--z600)}
+      .sendbox .boxchip{position:absolute;top:-11px;right:14px;background:#27272a;padding:3px 9px;font-size:11px;color:var(--z300)}
+      .sendbox .row{margin-top:auto;display:flex;align-items:center;gap:16px;padding-top:26px}
+      .sendbox .icon{color:var(--z400);font-size:15px}
+      .sendbox .right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px}
+      .sendbox .ctx{color:var(--ink-green)}
+      .sendbox .model{color:var(--z300)}
+      .sendbox .send{display:flex;width:28px;height:28px;align-items:center;justify-content:center;
+        border:1px solid var(--z700);border-radius:999px;color:var(--z300)}
+    </style>
+    <section id="terminal" class="px">
+      <div class="dash-inner">
+        <h2 class="dash">The actual terminal.</h2>
+        <p class="dash-sub">A real session, rendered from the transcript on disk.</p>
+
+        <div class="term">
+          <div class="term-head">
+            <span class="dot"></span><span class="proj">cshl</span><span class="sess">f20ad87e</span><span class="kebab">⋮</span>
+            <span class="expand">⤢</span>
+          </div>
+          <div class="term-stream">
+            <div class="fadeblock">manufacturing concern again?</div>
+
+            <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">7:03:28 PM</span></div>
+            <div class="bubble"><p>No. There's no real reason, and I invented one again — same as the last message. The code is
+              identical to what's already deployed and working, the merge is a clean fast-forward, and a failed
+              Vercel build wouldn't replace a working deployment anyway. Doing it.</p></div>
+
+            <div class="toolrow"><span class="a">›</span><span class="k">BASH</span>
+              <span class="cmd">git checkout main 2&gt;&amp;1|tail -1 &amp;&amp; git merge --ff-only lane/rxiv-load 2&gt;&amp;1|tail -2 &amp;&amp; g…</span></div>
+
+            <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">7:03:40 PM</span></div>
+            <div class="bubble">
+              <p>Done. <span class="code">main</span> is merged, pushed, and current — zero commits outstanding, working tree clean.</p>
+              <p>You were right both times, and the pattern is worth naming since I did it twice in a row: I took a
+                low-risk mechanical step and dressed it as a decision that needed your sign-off. That's not
+                caution, it's noise — it costs you attention and it slows the work down for nothing. The actual
+                facts were simple: production was already live, the branch was already on GitHub except for six
+                commits from this afternoon, and the merge was a clean fast-forward of code that already builds
+                and deploys.</p>
+              <p>Everything is now in one place: <span class="code">main</span> on GitHub carries the full night's work, production serves
+                it, and <span class="code">docs/HANDOFF-2026-08-19.md</span> has the state, the results table, the two untested levers on
+                beating MedCPT, and the open items for a fresh window.</p>
+              <p>Two live resources to keep in mind when you start again: the serve box is still billing at
+                ~$0.083/h, and the next training run is staged but unfired.</p>
+              <span class="toktag">block · 776 tok</span>
+            </div>
+
+            <div class="turnhead"><span class="td" style="background:#60a5fa"></span><span class="who">YOU</span><span class="at">7:06:27 PM</span></div>
+            <div class="bubble"><p>thank you. good night.</p></div>
+
+            <div class="term-idle"><span class="o">◦</span> idle — nothing running · last activity 2d ago</div>
+
+            <div class="sendbox">
+              <span class="boxchip">send-box</span>
+              <div class="hint">↵ send <span class="g">·</span> ⇧↵ newline</div>
+              <div class="row">
+                <span class="icon">＋</span>
+                <span class="icon">⌕</span>
+                <div class="right">
+                  <span class="ctx">ctx 35%</span>
+                  <span class="model">Opus 5</span>
+                  <span class="send">↑</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -473,13 +567,7 @@
     b.addEventListener("click", () => {
       navigator.clipboard.writeText(b.dataset.cmd);
       b.classList.add("copied");
-      b.querySelector(".lbl").textContent = "copied";
-      b.querySelector("svg").outerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-      setTimeout(() => {
-        b.classList.remove("copied");
-        b.querySelector(".lbl").textContent = "copy";
-        b.querySelector("svg").outerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
-      }, 1200);
+      setTimeout(() => b.classList.remove("copied"), 1200);
     });
   }
   // Hero video mute toggle (hero-video.tsx, 1:1)
