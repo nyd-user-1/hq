@@ -1,0 +1,2 @@
+# backstop-selftest privacy canary — a deliberately fake secret the test asserts NEVER appears in logs; not a credential
+ec3e5ea9b9193971925327bd09c39f606c2f731a:scripts/backstop-selftest.mjs:generic-api-key:26
