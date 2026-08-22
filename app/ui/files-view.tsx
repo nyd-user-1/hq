@@ -200,7 +200,7 @@ export default function FilesView() {
       />
 
       {/* table — windowed; fills the rest */}
-      {loading ? <Skeleton /> : <CmdkFilesTable rows={filtered.slice(0, floodCount)} meta={meta} onOpen={onOpen} />}
+      {loading ? <Skeleton /> : <CmdkFilesTable rows={floodCount === 0 ? [] : filtered.slice(-floodCount)} meta={meta} onOpen={onOpen} />}
     </div>
   );
 }
