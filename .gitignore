@@ -40,3 +40,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local-only: working notes, design staging, and reference images kept off the public repo
+docs/HANDOFF-*.md
+.design-sync/
+design/
+public/*antigravity*.png
+public/macos-*.png
+public/ipad-*.png
+public/token-dashboard.webp
+public/next.svg
+public/vercel.svg
+public/file.svg
+public/globe.svg
+public/window.svg
