@@ -1,8 +1,24 @@
 {
   "name": "@nysgpt/hq",
   "version": "0.1.0",
+  "description": "Localhost observability + control layer for Claude Code — live transcript mirror, token & cost accounting, cross-repo search, two-way session channel. Disk is the database: no DB, no auth, no telemetry.",
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "observability",
+    "dashboard",
+    "tokens",
+    "cost",
+    "transcripts",
+    "mcp"
+  ],
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nyd-user-1/hq.git"
   },
   "engines": {
     "node": ">=22.5.0"
@@ -12,7 +28,8 @@
   ],
   "bin": {
     "hq": "bin/hq",
-    "hq-offline": "bin/hq-offline"
+    "hq-offline": "bin/hq-offline",
+    "claude-hq": "bin/claude-hq"
   },
   "files": [
     "bin/",

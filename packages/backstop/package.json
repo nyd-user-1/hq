@@ -7,6 +7,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nyd-user-1/hq.git",
+    "directory": "packages/backstop"
+  },
   "engines": {
     "node": ">=22.5.0"
   },
