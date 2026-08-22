@@ -85,9 +85,16 @@ dev toolchain, no internet.
 
 **Ships as**
 
-- the npm CLI above, an offline standalone, and a native macOS app
-  (`scripts/make-macos-app-native.sh` — Swift WKWebView shell, global hotkey,
-  notes published to Spotlight)
+- the npm CLI above, an offline standalone, and a native macOS app — one command:
+
+```bash
+hq-app
+```
+
+builds `HQ.app` into `~/Applications` (a Swift WKWebView shell around the bundled
+server — global hotkey, notes published to Spotlight) and opens it. Self-built on
+your machine, so no signing or notarization involved; needs the Xcode Command Line
+Tools (`xcode-select --install`). Launch it any time after from Spotlight: ⌘Space, "HQ".
 
 ## How it works
 
@@ -104,8 +111,7 @@ Every feature is `node:fs` over paths Claude Code already maintains:
 - an optional Obsidian vault at `~/vaults/hq/`
 
 Pages are `force-dynamic` server components that call the `lib/*.ts` readers directly;
-`/api/*` routes handle client polling and writes. See `AGENTS.md` for the architecture
-in depth.
+`/api/*` routes handle client polling and writes.
 
 ## packages/
 

@@ -25,7 +25,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # self-contained: the standalone server bundle lives inside the app
 cp -R "$STANDALONE" "$APP/Contents/Resources/standalone"
 
-# icon: black bg, white "hq"
+# icon: black bg, white "hq" — optional (needs python3 + Pillow; skipped cleanly without)
+if python3 -c "import PIL" >/dev/null 2>&1; then
 ICONSET="$(mktemp -d)/HQ.iconset"; mkdir -p "$ICONSET"
 python3 - "$ICONSET" <<'PY'
 import sys, os
@@ -74,6 +75,9 @@ for s in (16,32,128,256,512):
         canvas.resize((px,px), Image.LANCZOS).save(os.path.join(iconset,nm))
 PY
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/hq.icns"
+else
+  echo "note: python3/Pillow not found — building without the custom icon (pip3 install Pillow to get it)"
+fi
 
 # Info.plist — note NSAllowsLocalNetworking so WKWebView may load http://localhost
 cat > "$APP/Contents/Info.plist" <<'PLIST'

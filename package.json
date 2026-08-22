@@ -29,11 +29,14 @@
   "bin": {
     "hq": "bin/hq",
     "hq-offline": "bin/hq-offline",
-    "claude-hq": "bin/claude-hq"
+    "claude-hq": "bin/claude-hq",
+    "hq-app": "bin/hq-app"
   },
   "files": [
     "bin/",
     "scripts/hooks/",
+    "scripts/hq-shell.swift",
+    "scripts/make-macos-app-native.sh",
     ".next/standalone/",
     "README.md"
   ],
