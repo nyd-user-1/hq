@@ -1,6 +1,6 @@
 {
   "name": "@nysgpt/hq",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Localhost observability + control layer for Claude Code — live transcript mirror, token & cost accounting, cross-repo search, two-way session channel. Disk is the database: no DB, no auth, no telemetry.",
   "license": "MIT",
   "keywords": [

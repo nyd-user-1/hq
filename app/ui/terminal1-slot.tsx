@@ -14,14 +14,15 @@ import { parseToken } from "@/app/ui/terminals";
 // session/panel navigation never crosses that boundary — T1 still never remounts.
 export default function Terminal1Slot({ initialFocus }: { initialFocus: boolean }) {
   const ses = useSearchParams().get("session");
-  // "/" cold open (no ?session) is the front door: the scrolling pitch landing.
-  // The working sessions index moved to the "New Session" button (?session=new),
-  // which falls through to <Terminal> below. Swapping T1 to the landing is the same
-  // deliberate content change as a view token — the session <Terminal> unmounts.
-  if (!ses) {
+  // "/" cold open (no ?session) now falls through to <Terminal>, whose staged-home
+  // logic renders the "+ New Session" index (projects band + sessions table) — the
+  // product front door for a fresh npm install. The pitch landing moved behind the
+  // account menu's "Learn more" (?session=landing); same deliberate content change
+  // as a view token — the session <Terminal> unmounts.
+  if (ses === "landing") {
     return <RootLanding />;
   }
-  const content = parseToken(ses);
+  const content = ses ? parseToken(ses) : null;
   if (content?.kind === "view") {
     return <PaneView view={content.view} terminalKey="t1" />;
   }

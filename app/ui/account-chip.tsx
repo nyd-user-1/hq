@@ -349,7 +349,16 @@ export default function AccountChip() {
           <div className="my-1 h-px bg-zinc-800" />
           <MenuRow icon={<IconPlans />} label="View all plans" onClick={close} />
           <MenuRow icon={<IconDownload />} label="Get apps and extensions" onClick={close} />
-          <MenuRow icon={<IconInfo />} label="Learn more" chevron onClick={close} />
+          <MenuRow
+            icon={<IconInfo />}
+            label="Learn more"
+            chevron
+            onClick={() => {
+              close();
+              // the pitch landing, relocated off the cold-open front door
+              window.location.assign("/?session=landing");
+            }}
+          />
           <div className="my-1 h-px bg-zinc-800" />
           <MenuRow icon={<IconLogOut />} label="Log out" onClick={close} />
         </div>
