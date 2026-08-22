@@ -12,7 +12,7 @@
 <style>
   /* ── palette: the zinc scale + hq state colors, lifted from the app ── */
   :root{
-    --bg:#010102;            /* root-landing.tsx — Linear's --color-bg-marketing */
+    --bg:#18181b;            /* root-landing.tsx — Linear's --color-bg-marketing */
     --pane:#09090b;          /* zinc-950, terminal-pane background */
     --z50:#fafafa;--z100:#f4f4f5;--z200:#e4e4e7;--z300:#d4d4d8;--z400:#a1a1aa;
     --z500:#71717a;--z600:#52525b;--z700:#3f3f46;--z800:#27272a;--z900:#18181b;
@@ -30,12 +30,14 @@
   .mono{font-family:var(--mono)}
 
   /* ── the app shell — fixed dashed boundary; the page scrolls inside it ── */
-  .shell{position:fixed;inset:30px;border:1px dashed var(--z700);border-radius:10px}
+  .shell{position:fixed;inset:30px;border:0;border-radius:10px}
+  .shell-line{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+  .shell-line rect{fill:none;stroke:#2563eb;stroke-width:1;stroke-dasharray:4 5}
   @media(min-width:640px){.shell{inset:30px}}
   .shell-chips{position:absolute;top:-9px;left:14px;display:flex;gap:4px;z-index:10}
   .shell-chip{font-family:var(--mono);font-size:12px;line-height:1;color:var(--z400);
-    background:var(--z800);border:0;border-radius:0;padding:6px 9px}
-  .shell-chip.arrow{color:var(--z300);font-weight:700}
+    background:#2563eb;border:0;border-radius:0;padding:6px 9px;color:#fff}
+  .shell-chip.arrow{color:#fff;font-weight:700}
   .scroller{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth;
     border-radius:10px;scrollbar-width:none}
   .scroller::-webkit-scrollbar{display:none}
@@ -44,7 +46,7 @@
   @media(min-width:640px){.px{padding-left:32px;padding-right:32px}}
 
   /* ── hero (hero.tsx, verbatim chrome values) ── */
-  .hero-inner{max-width:885px;margin:0 auto;padding-top:80px}
+  .hero-inner{max-width:1152px;margin:0 auto;padding-top:80px}
   @media(min-width:640px){.hero-inner{padding-top:112px}}
   h1{margin:0 auto;text-align:center;font-size:clamp(30px,5.4vw,54px);line-height:1.12;letter-spacing:-.02em;font-weight:750;color:var(--fg)}
   h1 em{font-style:normal;color:#34d399}
@@ -76,7 +78,7 @@
   .copyblock svg{width:14px;height:14px}
 
   /* the Linear app-shot frame (hero.tsx / dashboard-section.tsx chrome, verbatim) */
-  .frame-wrap{position:relative;margin:52px auto 0;width:100%;max-width:885px;padding-bottom:56px}
+  .frame-wrap{position:relative;margin:52px auto 0;width:100%;max-width:1152px;padding-bottom:56px}
   .frame{position:relative;border-radius:12px;padding:8px;background:#090a0b;box-shadow:0 7px 32px #00000059}
   .frame::before{content:"";position:absolute;inset:0;border-radius:12px;background:#101112;border:1px solid #ffffff14}
   .view{position:relative;overflow:hidden;border-radius:7px;background:#121314;border:1px solid #ffffff14;box-shadow:0 0 0 2px #0000001a}
@@ -87,7 +89,7 @@
   .mutebtn svg{width:15px;height:15px}
 
   /* ── dashboard section (dashboard-section.tsx + dashboard-board.tsx) ── */
-  .dash-inner{max-width:885px;margin:0 auto;padding-bottom:80px;padding-top:16px}
+  .dash-inner{max-width:1152px;margin:0 auto;padding-bottom:80px;padding-top:16px}
   h2.dash{max-width:42rem;font-size:clamp(28px,4vw,38px);line-height:1.08;letter-spacing:-.02em;font-weight:590;color:var(--fg)}
   .dash-sub{margin-top:12px;max-width:36rem;font-size:16px;line-height:1.625;color:var(--sub)}
   .dash-frame{margin-top:40px}
@@ -123,7 +125,7 @@
   /* ── the wall — SectionHead + TerminalPane (terminal-pane.tsx, verbatim anatomy) ── */
   .section{padding-left:20px;padding-right:20px;scroll-margin-top:96px}
   @media(min-width:640px){.section{padding-left:32px;padding-right:32px}}
-  .section-inner{max-width:885px;margin:0 auto;padding:64px 0}
+  .section-inner{max-width:1152px;margin:0 auto;padding:64px 0}
   @media(min-width:640px){.section-inner{padding:96px 0}}
   .sechead{display:grid;gap:24px}
   @media(min-width:1024px){.sechead{grid-template-columns:1.15fr .85fr;gap:64px}}
@@ -181,7 +183,7 @@
 
   /* ── footer (footer.tsx, verbatim) ── */
   footer{border-top:1px solid var(--z900)}
-  .foot-inner{max-width:885px;margin:0 auto;display:flex;flex-direction:column;gap:24px;padding:48px 20px}
+  .foot-inner{max-width:1152px;margin:0 auto;display:flex;flex-direction:column;gap:24px;padding:48px 20px}
   @media(min-width:640px){.foot-inner{flex-direction:row;align-items:center;justify-content:space-between;padding:48px 32px}}
   .foot-brand{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:14px;color:var(--z300)}
   .ping{position:relative;display:inline-flex;width:10px;height:10px}
@@ -198,6 +200,7 @@
 <body>
 
 <div class="shell">
+  <svg class="shell-line" aria-hidden="true"><rect x="0.5" y="0.5" width="99.9%" height="99.7%" rx="10"/></svg>
   <div class="shell-chips">
     <span class="shell-chip arrow">›</span>
     <span class="shell-chip">terminal-1</span>
