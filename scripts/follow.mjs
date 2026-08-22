@@ -132,7 +132,7 @@ function printEntry(e) {
     const t = clean(raw);
     if (!t) return;
     if (lastRole !== "user")
-      console.log(`${BLUE}${BOLD}● brendan${RESET} ${DIM}${time(e.timestamp)}${RESET}`);
+      console.log(`${BLUE}${BOLD}● you${RESET} ${DIM}${time(e.timestamp)}${RESET}`);
     console.log(t + "\n");
     lastRole = "user";
     return;

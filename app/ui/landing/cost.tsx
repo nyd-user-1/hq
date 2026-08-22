@@ -109,7 +109,7 @@ const SAVINGS = [
 const NOTES = [
   { k: "handoff-2026-07-01-landing", t: "12m ago" },
   { k: "agent-teams-reference", t: "1h ago" },
-  { k: "brendan-collaboration-style", t: "3h ago" },
+  { k: "collaboration-style", t: "3h ago" },
   { k: "hq-product-description", t: "1d ago" },
   { k: "live-session-control", t: "2d ago" },
   { k: "session-id-is-transcript-uuid", t: "2d ago" },
@@ -118,7 +118,7 @@ const NOTES = [
   { k: "feedback-look-at-the-render", t: "4d ago" },
   { k: "handoff-universal-projects", t: "4d ago" },
   { k: "hq-is-enterprise-marketplace", t: "5d ago" },
-  { k: "brendan-voice-prose", t: "5d ago" },
+  { k: "voice-prose", t: "5d ago" },
   { k: "feedback-no-eye-emoji-glyphs", t: "6d ago" },
   { k: "agent-teams-saga", t: "6d ago" },
   { k: "hq-two-terminal-coordination", t: "7d ago" },

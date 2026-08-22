@@ -2,7 +2,7 @@
 // BOTH the client island (terminal.tsx) and server components (sessions panel)
 // without dragging node:fs into the client bundle.
 
-// Gauge ceiling = the real context window. Brendan's default is the Opus 4.8
+// Gauge ceiling = the real context window. The default here is the Opus 4.8
 // *1M-context* tier, so the wall is 1,000,000 — NOT the 200k default window.
 // The transcript can't tell us the tier (the per-message model is the bare
 // "claude-opus-4-8" whether you launched 200k or 1M), so we trust the 1M

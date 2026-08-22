@@ -250,7 +250,7 @@ function renderUserText(e, raw) {
   const tags = [];
   if (e.isMeta) tags.push("meta");
   if (e.promptId) tags.push(`prompt ${short(e.promptId)}`);
-  console.log(`${BLUE}${BOLD}● brendan${RESET} ${DIM}${time(e.timestamp)}${tags.length ? ` · ${tags.join(" · ")}` : ""}${RESET}`);
+  console.log(`${BLUE}${BOLD}● you${RESET} ${DIM}${time(e.timestamp)}${tags.length ? ` · ${tags.join(" · ")}` : ""}${RESET}`);
   if (cmd) console.log(`${DIM}  /${cmd[1].trim()}${RESET}`);
   if (human) plainBlock(human, "");
   if (e.imagePasteIds?.length) console.log(`${DIM}  📎 imagePasteIds: ${e.imagePasteIds.join(", ")}${RESET}`);

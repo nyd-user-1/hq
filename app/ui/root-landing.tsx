@@ -28,7 +28,7 @@ export default function RootLanding() {
       className="scrollbar-none min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth"
       style={{ background: "#09090b" }}
     >
-      {/* Navbar removed (Brendan, 7/2) — the landing opens straight on the hero;
+      {/* Navbar removed — the landing opens straight on the hero;
           landing/nav.tsx kept on disk in case it returns. */}
       <main>
         <Hero />

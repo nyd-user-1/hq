@@ -3008,7 +3008,7 @@ export default function Terminal({
           </span>
         </div>
       )}
-      {/* mb-1.5 — Brendan's 6px of air between the header and the stream */}
+      {/* mb-1.5 — 6px of air between the header and the stream */}
       <div draggable={false} className={`mb-2 cursor-auto ${centered ? "mx-auto w-full max-w-3xl px-4" : ""}`}>
         {/* The whole header row — session metadata (dot · project · id · search ·
             lineage) AND the layout toggle — rides the SAME centered column as the
