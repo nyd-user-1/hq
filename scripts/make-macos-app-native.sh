@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# make-macos-app-native.sh — build HQ.app as a TRUE native window (NSWindow +
-# WKWebView), not a browser tab. Door 3, the light way: no Electron, no npm
-# deps, uses the macOS SDK already on this Mac. Compiles scripts/hq-shell.swift.
+# make-macos-app-native.sh — assemble HQ.app as a TRUE native window (NSWindow +
+# WKWebView), not a browser tab. No Electron, no npm deps. Prefers the PREBUILT
+# universal shell + icon shipped in native/ (so end users need no compiler at
+# all); falls back to compiling scripts/hq-shell.swift when they're absent
+# (dev clones — see scripts/build-native-artifacts.sh).
 #
 # Build the offline bundle first:  npm run build:offline
 # Re-run after any rebuild to refresh the app.
@@ -10,26 +12,15 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STANDALONE="$REPO/.next/standalone"
 SWIFT="$REPO/scripts/hq-shell.swift"
+PREBUILT="$REPO/native/hq-shell"
+PREICNS="$REPO/native/hq.icns"
 APP_NAME="HQ"
 PKG_VERSION="$(node -p "require('$REPO/package.json').version" 2>/dev/null || echo 0.0.0)"
 INSTALL_DIR="${HQ_APP_INSTALL:-$HOME/Applications}"
 APP="$INSTALL_DIR/$APP_NAME.app"
 
-[ -f "$STANDALONE/server.js" ] || { echo "No offline build at $STANDALONE — run: npm run build:offline"; exit 1; }
-command -v swiftc >/dev/null 2>&1 || { echo "swiftc not found (install Xcode Command Line Tools: xcode-select --install)"; exit 1; }
-
-echo "Building native $APP ..."
-mkdir -p "$INSTALL_DIR"
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-
-# self-contained: the standalone server bundle lives inside the app
-cp -R "$STANDALONE" "$APP/Contents/Resources/standalone"
-
-# icon: black bg, white "hq" — optional (needs python3 + Pillow; skipped cleanly without)
-if python3 -c "import PIL" >/dev/null 2>&1; then
-ICONSET="$(mktemp -d)/HQ.iconset"; mkdir -p "$ICONSET"
-python3 - "$ICONSET" <<'PY'
+build_iconset() {  # $1 = iconset dir to fill
+python3 - "$1" <<'PY'
 import sys, os
 from PIL import Image, ImageDraw, ImageFont
 iconset = sys.argv[1]; S = 1024
@@ -75,11 +66,38 @@ for s in (16,32,128,256,512):
         px=s*sc; nm=f"icon_{s}x{s}{'@2x' if sc==2 else ''}.png"
         canvas.resize((px,px), Image.LANCZOS).save(os.path.join(iconset,nm))
 PY
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/hq.icns"
-else
-  echo "note: python3/Pillow not found — building without the custom icon (pip3 install Pillow to get it)"
+}
+
+# --iconset-only: emit the iconset for build-native-artifacts.sh and stop.
+if [ "${1:-}" = "--iconset-only" ]; then
+  [ -n "${HQ_ICONSET_ONLY:-}" ] || { echo "HQ_ICONSET_ONLY not set"; exit 1; }
+  build_iconset "$HQ_ICONSET_ONLY"
+  exit 0
 fi
 
+[ -f "$STANDALONE/server.js" ] || { echo "No offline build at $STANDALONE — run: npm run build:offline"; exit 1; }
+if [ ! -f "$PREBUILT" ]; then
+  command -v swiftc >/dev/null 2>&1 || { echo "no prebuilt shell in this install and swiftc not found (install Xcode Command Line Tools: xcode-select --install)"; exit 1; }
+fi
+
+echo "Building native $APP ..."
+mkdir -p "$INSTALL_DIR"
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+# self-contained: the standalone server bundle lives inside the app
+cp -R "$STANDALONE" "$APP/Contents/Resources/standalone"
+
+# icon: prebuilt .icns when shipped; else generate (python3 + Pillow); else skip
+if [ -f "$PREICNS" ]; then
+  cp "$PREICNS" "$APP/Contents/Resources/hq.icns"
+elif python3 -c "import PIL" >/dev/null 2>&1; then
+  ICONSET="$(mktemp -d)/HQ.iconset"; mkdir -p "$ICONSET"
+  build_iconset "$ICONSET"
+  iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/hq.icns"
+else
+  echo "note: no prebuilt icon and python3/Pillow not found — building without the custom icon"
+fi
 # Info.plist — note NSAllowsLocalNetworking so WKWebView may load http://localhost
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -111,8 +129,13 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 sed -i '' "s/__HQ_VERSION__/$PKG_VERSION/g" "$APP/Contents/Info.plist"
 
-# compile the native shell into the app's executable
-swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit -framework Carbon -framework CoreSpotlight
+# the shell executable: prebuilt universal binary when shipped, else compile here
+if [ -f "$PREBUILT" ]; then
+  echo "using prebuilt universal shell (no compiler needed)"
+  cp "$PREBUILT" "$APP/Contents/MacOS/hq"
+else
+  swiftc -O "$SWIFT" -o "$APP/Contents/MacOS/hq" -framework AppKit -framework WebKit -framework Carbon -framework CoreSpotlight
+fi
 chmod +x "$APP/Contents/MacOS/hq"
 
 # Code signature. A signature is required for CoreSpotlight's XPC (an unsigned

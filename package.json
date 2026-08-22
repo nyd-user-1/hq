@@ -36,6 +36,7 @@
     "scripts/hq-shell.swift",
     "scripts/make-macos-app-native.sh",
     ".next/standalone/",
+    "native/",
     "README.md"
   ],
   "scripts": {
@@ -46,8 +47,9 @@
     "start": "next start",
     "lint": "eslint",
     "app:rebuild": "bash scripts/rebuild-app.sh",
+    "build:native": "bash scripts/build-native-artifacts.sh",
     "test:permission": "node --experimental-strip-types --test lib/permission-policy.test.mts",
-    "prepublishOnly": "env -u NODE_ENV npm run build:offline"
+    "prepublishOnly": "env -u NODE_ENV npm run build:offline && npm run build:native"
   },
   "dependencies": {
     "next": "16.2.9",

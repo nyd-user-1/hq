@@ -44,7 +44,7 @@ pkg_version() {
 
 # ── the native path: macOS tier 1 ───────────────────────────────────────────
 if [ "$MODE" != "browser" ] && [ "$(uname -s)" = "Darwin" ]; then
-  if command -v swiftc >/dev/null 2>&1 && [ -f "$BUILDER" ]; then
+  if [ -f "$BUILDER" ] && { [ -f "$HQ_DIR/native/hq-shell" ] || command -v swiftc >/dev/null 2>&1; }; then
     if [ ! -d "$APP" ] || { [ -n "$(pkg_version)" ] && [ "$(app_version)" != "$(pkg_version)" ]; }; then
       echo "Building the native HQ.app ($(pkg_version)) — first run or new version..."
       bash "$BUILDER" || { echo "native build failed — falling back to the browser."; MODE="browser"; }
@@ -55,10 +55,8 @@ if [ "$MODE" != "browser" ] && [ "$(uname -s)" = "Darwin" ]; then
       exit 0
     fi
   elif [ "$MODE" = "app" ]; then
-    echo "The native app needs the Xcode Command Line Tools: xcode-select --install"
+    echo "no prebuilt shell in this install and no swiftc — cannot build the native app here."
     exit 1
-  else
-    echo "note: install the Xcode Command Line Tools (xcode-select --install) and \`hq\` opens as a native app."
   fi
 fi
 

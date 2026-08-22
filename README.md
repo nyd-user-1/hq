@@ -24,12 +24,12 @@ Then:
 hq
 ```
 
-One command, best available surface. On a Mac with the Xcode Command Line Tools,
-`hq` builds the **native HQ.app** on first run (self-built — no signing, no
-notarization) and opens it in its own window; ⌘B inside the app, or `hq --browser`,
-gives you the same HQ in a browser tab. Everywhere else, `hq` serves at
-`localhost:3002` and opens the browser. Run it from inside a Claude Code session and
-that session pins as Terminal 1.
+One command, best available surface. On a Mac, `hq` assembles the **native HQ.app**
+on first run from the prebuilt shell that ships in the package — no compiler, no
+toolchain, no signing steps — and opens it in its own window; ⌘B inside the app, or
+`hq --browser`, gives you the same HQ in a browser tab. Everywhere else, `hq` serves
+at `localhost:3002` and opens the browser. Run it from inside a Claude Code session
+and that session pins as Terminal 1.
 
 Run it once without installing:
 
@@ -86,10 +86,10 @@ npx @nysgpt/hq
 
 **Ships as**
 
-- one `hq` command with two faces: the native `HQ.app` (a Swift WKWebView shell
-  around the bundled server — global hotkey, notes published to Spotlight, launch
-  any time from ⌘Space "HQ") on Macs that can build it, and the browser at
-  `localhost:3002` everywhere else. `hq --app` / `hq --browser` force either.
+- one `hq` command with two faces: the native `HQ.app` on macOS (a Swift WKWebView
+  shell around the bundled server — global hotkey, notes published to Spotlight,
+  launch any time from ⌘Space "HQ"), and the browser at `localhost:3002` everywhere
+  else. `hq --app` / `hq --browser` force either.
 
 ## How it works
 
