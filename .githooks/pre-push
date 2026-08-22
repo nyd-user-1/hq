@@ -1,10 +1,36 @@
 #!/bin/sh
 # HQ pre-push gate — automates AGENTS.md's "build before push" rule so it can't be
-# skipped by accident. Runs the isolated build (catches prerender/Suspense errors)
-# + eslint over the source. Bypass in a real pinch with `git push --no-verify`.
+# skipped by accident, plus a gitleaks scan over the exact commit range being
+# pushed (secret hygiene — catches a leak before it leaves the machine, CI is the
+# backstop, not the first line). Bypass in a real pinch with `git push --no-verify`.
 #
 # One-time setup on a fresh clone:  git config core.hooksPath .githooks
 set -e
+
+zero="0000000000000000000000000000000000000000"
+
+if command -v gitleaks >/dev/null 2>&1; then
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$local_sha" = "$zero" ]; then
+      continue # deleting a branch — nothing new to scan
+    fi
+    if [ "$remote_sha" = "$zero" ]; then
+      range="$local_sha"
+    else
+      range="$remote_sha..$local_sha"
+    fi
+    echo "▶ pre-push gate: gitleaks over $range…"
+    if ! gitleaks git --log-opts="$range" -v .; then
+      echo "✗ gitleaks found a potential secret in $range — push aborted."
+      exit 1
+    fi
+  done
+else
+  echo "⚠ gitleaks not installed (brew install gitleaks) — skipping local scan."
+  echo "  CI will still catch it on push, but install locally to catch it sooner."
+  # drain stdin so the pipe doesn't matter either way
+  cat >/dev/null
+fi
 
 echo "▶ pre-push gate: build:check + eslint (bypass with --no-verify)…"
 
