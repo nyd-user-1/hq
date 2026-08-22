@@ -697,7 +697,7 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
               searching session <span class="sid">f20ad87e</span></div>
             <div class="sendbox">
               <span class="boxchip">send-box</span>
-              <input id="sendinput" class="searchinput donly" style="display:block" type="text" placeholder="↵ send · ⇧↵ newline" autocomplete="off" spellcheck="false">
+              <input id="sendinput" class="searchinput donly" style="display:block" type="text" placeholder="Try typing: How do I install hq? ↵ send" autocomplete="off" spellcheck="false">
               <input id="ssearch" class="searchinput" type="text" placeholder="search this session…" autocomplete="off" spellcheck="false">
               <div class="row">
                 <span class="sb-btn donly" id="plusbtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
@@ -930,10 +930,7 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
       yb.scrollIntoView({block:"center", behavior:"smooth"});
       setTimeout(function(){
         stream.insertBefore(turn("CLAUDE", "#fb923c"), idle);
-        var cb = bubble('This page is the demo \u2014 the real thing runs on your machine, over your own sessions. ' +
-          'Open any terminal and paste <span class="code">npm i -g @nysgpt/hq</span>, then <span class="code">hq</span> \u2014 ' +
-          'it opens at localhost:3002 with your own transcripts, no setup, no Claude session required. ' +
-          '(Run <span class="code">hq</span> from inside one and that session pins as Terminal 1. Nothing you type here is saved or sent anywhere.)', false);
+        var cb = bubble('This page is the demo \u2014 to try hq on your machine, over your own sessions, open any terminal and type/paste <span class="code">npm i -g @nysgpt/hq</span>, then type <span class="code">hq</span> and hit enter. That\u2019s it. Then work like you normally do, but better.', false);
         stream.insertBefore(cb, idle);
         cb.scrollIntoView({block:"center", behavior:"smooth"});
       }, 700);
