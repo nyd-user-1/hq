@@ -35,8 +35,7 @@
     "bin/",
     "scripts/hooks/",
     ".next/standalone/",
-    "README.md",
-    "AGENTS.md"
+    "README.md"
   ],
   "scripts": {
     "dev": "next dev -p 3002 -H 127.0.0.1",
