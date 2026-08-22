@@ -5,6 +5,7 @@ import { scoreNorm, snippetAround, normalize } from "./text-search";
 import {
   searchTranscriptIndex,
   getArchiveSessions,
+  retainedSessionAt,
   warmIndex,
 } from "./archive";
 import { NOTES_DIR, noteTitle } from "./notes";
@@ -279,7 +280,26 @@ function searchTranscripts(toks: string[]): { hits: SearchHit[]; building: boole
   const hits: SearchHit[] = [];
   for (const h of idxHits) {
     const m = meta.get(h.id);
-    if (!m) continue; // indexed file no longer present
+    if (!m) {
+      // The .jsonl is gone but the index retained the text (retained=1). These
+      // used to be dropped, which made every swept session unreachable from
+      // inside HQ — findable only by hand-typing ?openSession=<id>. The reader
+      // already falls back to retainedTranscriptText(), so surface it: same
+      // click target, flagged so the card reads as archived rather than live.
+      const at = retainedSessionAt(h.id);
+      if (at === null) continue; // genuinely unknown — no file, no index row
+      hits.push({
+        kind: "transcript",
+        ref: h.id,
+        title: h.id.slice(0, 8),
+        snippet: h.snippet,
+        at,
+        score: h.score,
+        phrase: h.phrase,
+        meta: "archived · swept from disk",
+      });
+      continue;
+    }
     const title =
       m.project && m.project !== "~" ? m.project : m.title || h.id.slice(0, 8);
     hits.push({

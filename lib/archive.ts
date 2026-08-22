@@ -139,6 +139,26 @@ export function retainedTranscriptText(id: string): string | null {
   }
 }
 
+/**
+ * Last-activity ms for a transcript that exists ONLY in the index (its .jsonl
+ * was swept). Search needs this: without a timestamp it can't rank or date the
+ * hit, so it used to drop retained sessions entirely — leaving them readable at
+ * /search?openSession=… but unreachable from inside HQ. Null when unindexed.
+ */
+export function retainedSessionAt(id: string): number | null {
+  const db = openSearchDb();
+  if (!db) return null;
+  try {
+    const row = db
+      .prepare("SELECT mtime FROM transcripts WHERE id = ?")
+      .get(id);
+    const at = row ? Number(row.mtime) : NaN;
+    return Number.isFinite(at) && at > 0 ? at : null;
+  } catch {
+    return null;
+  }
+}
+
 // Spawn the out-of-process builder (deduped). Detached so the 2GB extract runs
 // off the server's event loop; it writes the index atomically and exits.
 // THROTTLED (floor applies to EVERY build, no bypass). Two things made rebuilds

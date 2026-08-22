@@ -94,6 +94,7 @@ import Terminal1Chip from "@/app/ui/terminal1-chip";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import TerminalChipMenu from "@/app/ui/terminal-chip-menu";
 import ReorderListener from "@/app/ui/reorder-listener";
+import SweepToast from "@/app/ui/sweep-toast";
 
 // Full-screen OS shell. Three peers: SIDEBAR (left, 210px), TERMINAL (center,
 // always mounted — the persistent heart), and the right app-panel portal anchor.
@@ -215,6 +216,10 @@ export default async function Shell({
               </Boundary>
             </TerminalRow>
             {children}
+            {/* The 30-day sweep-or-keep nudge. Fixed to the viewport's lower
+                right, so it rides above whatever's open and never steals focus —
+                clicking it opens the panel beside the still-running terminal. */}
+            <SweepToast />
             {/* Fleet / Files / Projects are no longer center overlays — they render
                 IN a terminal via the @fleet/@files/@projects view tokens (the tab
                 model: Terminal1Slot → PaneView). Nothing to mount here. */}
