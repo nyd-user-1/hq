@@ -65,7 +65,8 @@
   .copyblock{display:flex;width:auto;align-items:center;justify-content:center;gap:16px;
     border-radius:10px;border:1px solid var(--z800);background:rgba(24,24,27,.7);
     padding:12px 16px;text-align:left;font-family:var(--mono);font-size:14px;transition:border-color .15s,background .15s}
-  .copyblock:hover{border-color:var(--z700);background:var(--z900)}
+  .copyblock:hover{border-color:var(--z500);background:#27272a}
+  .copyblock:active{transform:scale(.985)}
   .copyblock .lead{display:flex;min-width:0;align-items:center;gap:10px}
   .copyblock .dollar{user-select:none;color:var(--z600)}
   .copyblock .cmd{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--z200)}
@@ -443,8 +444,8 @@
     <style>
       /* terminal replica (section 4) — anatomy from terminal.tsx, text from a real session */
       .term{margin:40px auto 0;font-family:var(--mono);font-size:13px;line-height:1.65}
-      .term-head{position:sticky;top:40px;z-index:6;background:var(--bg);display:flex;align-items:center;gap:10px;
-        padding:8px 0 12px;border-bottom:1px solid var(--z600);font-size:13px}
+      .term-head{position:sticky;top:0;z-index:6;background:var(--bg);display:flex;align-items:center;gap:10px;
+        padding:40px 0 12px;border-bottom:1px solid var(--z600);font-size:13px}
       .term-head::after{content:"";position:absolute;left:0;right:0;top:100%;height:56px;
         background:linear-gradient(to bottom,var(--bg),transparent);pointer-events:none}
       .term-head .dot{width:8px;height:8px;border-radius:999px;background:#22c55e}
@@ -492,10 +493,43 @@
       .acc .acc-head .a{color:var(--z600)}
       .acc .acc-head .k{color:var(--z500)}
       .acc .acc-head .cmd{color:var(--z200)}
-      .acc pre{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--z300);
+      .acc pre{margin:0;padding:14px 16px;max-height:340px;overflow-y:auto;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--z300);
         overflow-x:auto;white-space:pre}
-      .toolrow .kebab{margin-left:auto;color:var(--z500);letter-spacing:2px}
+      .tokamber{margin-left:auto;color:var(--ink-amber);font-size:12px}
+      .bubble,.toolrow,.acc{position:relative}
+      .bubble::after,.toolrow::after,.acc::after{content:"⋮";position:absolute;top:9px;right:12px;
+        color:var(--z400);letter-spacing:2px;opacity:0;transition:opacity .12s;pointer-events:none}
+      .bubble:hover::after,.toolrow:hover::after,.acc:hover::after{opacity:1}
+      .acc::after{top:11px;right:14px}
+      .bubble.you{background:rgba(39,39,42,.45)}
       .toolrow .k.red{color:var(--ink-red)}
+      .sb-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;
+        color:var(--z300);cursor:pointer;transition:background .12s}
+      .sb-btn:hover{background:#27272a}
+      .sb-btn.on{color:var(--ink-amber);background:rgba(250,204,21,.08);box-shadow:inset 0 0 0 1px var(--ink-amber)}
+      .sonly{display:none!important}
+      .term.searching .sonly{display:flex!important}
+      .term.searching .donly{display:none!important}
+      .searchbar{display:none;align-items:center;gap:10px;border:1px solid var(--z600);border-radius:10px;
+        padding:11px 14px;margin-bottom:10px;font-size:13px;color:var(--z300)}
+      .term.searching .searchbar{display:flex}
+      .searchbar .sid{color:var(--ink-amber)}
+      .searchinput{display:none;background:none;border:0;outline:none;color:var(--z200);
+        font-family:var(--mono);font-size:13px;width:100%;padding:0;margin-top:2px}
+      .searchinput::placeholder{color:var(--z500)}
+      .term.searching .searchinput{display:block}
+      .term.searching .boxchip{background:#facc15;color:#111}
+      .plusmenu{display:none;position:absolute;bottom:58px;left:8px;min-width:240px;background:#141416;
+        border:1px solid var(--z700);border-radius:12px;padding:6px;z-index:9;box-shadow:0 10px 30px #00000080}
+      .plusmenu.open{display:block}
+      .pm-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;
+        font-family:var(--sans);font-size:15px;color:var(--z200);cursor:pointer}
+      .pm-row:hover{background:#27272a}
+      .pm-row svg{color:var(--z300)}
+      .pm-row .chev{margin-left:auto;color:var(--z500)}
+      .scount{font-size:12px;color:var(--z400);margin-left:4px}
+      mark.hl{background:#facc15;color:#111;border-radius:2px;padding:0 1px}
+      mark.hl.cur{background:#fde047;box-shadow:0 0 0 2px #fde047}
       .term-idle{display:flex;align-items:center;gap:8px;padding:14px 2px 10px;font-size:13px;color:var(--ink-amber)}
       .term-idle .o{color:var(--ink-amber);opacity:.8}
       .sendbox{position:relative;border:1px solid var(--z600);border-radius:10px;padding:14px 16px 12px;min-height:118px;
@@ -552,6 +586,9 @@
                 built <b>424,753 query-shaped training pairs</b> that went entirely unused.</p>
             </div>
 
+            <div class="turnhead"><span class="td" style="background:#60a5fa"></span><span class="who">YOU</span><span class="at">10:21:37 AM</span></div>
+            <div class="bubble you"><p>ok give it to me straight...do we ship or do we retrain?</p></div>
+
             <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">10:22:02 AM</span></div>
             <div class="bubble"><p>Fusion beats MedCPT — and the rig lane refused to oversell it, which makes the result trustworthy.</p></div>
 
@@ -578,10 +615,10 @@
 
             <div class="toolrow"><span class="a">›</span><span class="k red">BASH</span>
               <span class="cmd">git log --oneline -6 2&gt;/dev/null; echo "=== report:"; wc -l docs/CSHL-CPT-REPORT.md 2&gt;…</span>
-              <span class="kebab">⋮</span></div>
+              </div>
 
             <div class="acc">
-              <div class="acc-head"><span class="a">⌄</span><span class="k">BASH</span><span class="cmd">python3 - &lt;&lt; 'PY'</span></div>
+              <div class="acc-head"><span class="a">⌄</span><span class="k">BASH</span><span class="cmd">python3 - &lt;&lt; 'PY'</span><span class="tokamber">~1.2k tok</span></div>
               <pre>$ python3 - &lt;&lt; 'PY'
 p="docs/MORNING-BRIEF.md"
 s=open(p).read()
@@ -599,6 +636,10 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
 | 2 | AUTHORKW | **0** | 107,567 |
 | 3 | MESH | **1** | 23,592 |</pre>
             </div>
+
+            <div class="turnhead"><span class="td" style="background:#60a5fa"></span><span class="who">YOU</span><span class="at">6:49:56 PM</span></div>
+            <div class="bubble you"><p>All great work. If you have any work outstanding that you need to commit pleasedo so now you are
+              getting up there in ctx and I want to start with a fresh window.</p></div>
 
             <div class="turnhead"><span class="td" style="background:#fb923c"></span><span class="who">CLAUDE</span><span class="at">7:03:28 PM</span></div>
             <div class="bubble"><p>No. There's no real reason, and I invented one again — same as the last message. The code is
@@ -626,17 +667,32 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
 
             <div class="term-idle"><span class="o">◦</span> idle — nothing running · last activity 2d ago</div>
 
+            <div class="searchbar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              searching session <span class="sid">f20ad87e</span></div>
             <div class="sendbox">
               <span class="boxchip">send-box</span>
-              <div class="hint">↵ send <span class="g">·</span> ⇧↵ newline</div>
+              <div class="hint donly">↵ send <span class="g">·</span> ⇧↵ newline</div>
+              <input id="ssearch" class="searchinput" type="text" placeholder="search this session…" autocomplete="off" spellcheck="false">
               <div class="row">
-                <span class="icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
-                <span class="icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
-                <div class="right">
+                <span class="sb-btn donly" id="plusbtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
+                <span class="sb-btn donly" id="searchbtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+                <span class="sb-btn sonly" id="exitbtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+                <span class="sb-btn sonly" id="youbtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                <div class="right donly">
                   <span class="ctx">ctx 35%</span>
                   <span class="model">Opus 5</span>
                   <span class="send"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></span>
                 </div>
+                <div class="right sonly">
+                  <span class="sb-btn" id="prevbtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></span>
+                  <span class="sb-btn" id="nextbtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                  <span class="scount" id="scount">0/0</span>
+                </div>
+              </div>
+              <div class="plusmenu" id="plusmenu">
+                <div class="pm-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Attach</div>
+                <div class="pm-row"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h.01"/><path d="M8 6h13"/><path d="M3 12h.01"/><path d="M8 12h13"/><path d="M3 18h.01"/><path d="M8 18h13"/></svg>Todo<span class="chev">›</span></div>
+                <div class="pm-row"><span style="font-size:16px;line-height:1;color:var(--z300)">⌘</span>Command<span class="chev">›</span></div>
               </div>
             </div>
           </div>
@@ -681,6 +737,65 @@ artifact. `api/search.ts` uses `websearch_to_tsquery`, which treats space-separa
       : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
     mb.setAttribute("aria-label", v.muted ? "Unmute" : "Mute");
   });
+
+  // terminal replica: plus-menu + a real search of the session
+  (function(){
+    var term = document.querySelector(".term");
+    var stream = term.querySelector(".term-stream");
+    var menu = document.getElementById("plusmenu");
+    document.getElementById("plusbtn").addEventListener("click", function(e){ e.stopPropagation(); menu.classList.toggle("open"); });
+    document.addEventListener("click", function(e){ if(!menu.contains(e.target)) menu.classList.remove("open"); });
+
+    var input = document.getElementById("ssearch"), count = document.getElementById("scount");
+    var searchables = Array.prototype.slice.call(
+      stream.querySelectorAll(".bubble,.toolrow,.acc pre,.interview,.monitor-div,.fadeblock"));
+    var originals = searchables.map(function(el){ return el.innerHTML; });
+    var marks = [], cur = 0, youOnly = false;
+
+    function clearHl(){ searchables.forEach(function(el,i){ if(el.innerHTML !== originals[i]) el.innerHTML = originals[i]; }); marks=[]; cur=0; }
+    function escRx(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+    function upd(jump){
+      marks.forEach(function(m,i){ m.classList.toggle("cur", i===cur); });
+      count.textContent = marks.length ? (cur+1)+"/"+marks.length : "0/0";
+      if(jump && marks.length) marks[cur].scrollIntoView({block:"center", behavior:"smooth"});
+    }
+    function doSearch(q){
+      clearHl();
+      if(!q){ count.textContent="0/0"; return; }
+      searchables.forEach(function(el){
+        if(youOnly && !el.classList.contains("you")) return;
+        var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), nodes = [], n;
+        while((n = walker.nextNode())) if(n.nodeValue.toLowerCase().indexOf(q.toLowerCase()) !== -1) nodes.push(n);
+        nodes.forEach(function(node){
+          var rx = new RegExp(escRx(q), "gi"), s = node.nodeValue, frag = document.createDocumentFragment(), last = 0, m;
+          while((m = rx.exec(s))){
+            frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+            var mk = document.createElement("mark"); mk.className = "hl"; mk.textContent = m[0];
+            frag.appendChild(mk); last = m.index + m[0].length;
+          }
+          frag.appendChild(document.createTextNode(s.slice(last)));
+          node.parentNode.replaceChild(frag, node);
+        });
+      });
+      marks = Array.prototype.slice.call(stream.querySelectorAll("mark.hl"));
+      cur = 0; upd(true);
+    }
+    document.getElementById("searchbtn").addEventListener("click", function(){
+      term.classList.add("searching"); input.focus();
+    });
+    function exitSearch(){ term.classList.remove("searching"); input.value=""; clearHl(); count.textContent="0/0"; }
+    document.getElementById("exitbtn").addEventListener("click", exitSearch);
+    document.getElementById("youbtn").addEventListener("click", function(){
+      youOnly = !youOnly; this.classList.toggle("on", youOnly); doSearch(input.value.trim());
+    });
+    document.getElementById("prevbtn").addEventListener("click", function(){ if(marks.length){ cur=(cur-1+marks.length)%marks.length; upd(true);} });
+    document.getElementById("nextbtn").addEventListener("click", function(){ if(marks.length){ cur=(cur+1)%marks.length; upd(true);} });
+    input.addEventListener("input", function(){ doSearch(this.value.trim()); });
+    input.addEventListener("keydown", function(e){
+      if(e.key === "Enter" && marks.length){ cur=(cur+1)%marks.length; upd(true); }
+      if(e.key === "Escape") exitSearch();
+    });
+  })();
 </script>
 
 </body>
