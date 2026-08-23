@@ -891,6 +891,11 @@ function RecentSessions({
       </div>
 
 
+      {/* retention consent — under the table; slides up from behind the send box
+          once the table has populated. × hides it for this load only, Keep /
+          Delete decide for good (retention-banner.tsx) */}
+      <RetentionBanner />
+
       {/* the ⋯ dropdown — fixed so the scroll box can't clip it. One at a time. */}
       {menuSession && menuPos && (
         <div
@@ -3384,7 +3389,10 @@ export default function Terminal({
           setShowJump(!atBottom && !suppressJumpRef.current);
           if (el.scrollTop < 120) loadOlder();
         }}
-        className="scrollbar-none flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
+        // The sessions view never scrolls here (the table scrolls itself, the
+        // column fills exactly), so it's overflow-VISIBLE there — which lets the
+        // retention card start out behind the send box and slide up from it.
+        className={`scrollbar-none flex min-h-0 flex-1 flex-col gap-4 ${home || compose ? "overflow-visible" : "overflow-y-auto"}`}
         // Top-edge fade — masks the top ~64px of the scroll viewport to
         // transparent so streaming text dissolves into the bg as it slides up
         // under the header (instead of a hard cut). Inline so it can't be purged
@@ -3803,10 +3811,6 @@ export default function Terminal({
       )}
 
       <div className="flex flex-col">
-        {/* Retention consent — on the sessions view it rides the send box as the
-            same kind of strip as the launch / search banners below (-mb-3 overlap,
-            see retention-banner.tsx). Yields when another strip is up. */}
-        {(home || compose) && !selectedTarget && !searchMode && <RetentionBanner />}
         {/* Launch-target banner — the Claude pattern: a strip BEHIND the input that
             peeks out the top. The input card sits in front (z-10, opaque bg) and
             overlaps the banner's lower edge via -mb-3, so only the top shows. Only
