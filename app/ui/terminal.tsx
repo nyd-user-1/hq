@@ -380,6 +380,7 @@ function RecentSessions({
   const [filter, setFilter] = useState("");
   const [filterOpen, setFilterOpen] = useState(false); // the ⋮ columns dropdown
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null); // fixed anchor (the box would clip an absolute menu)
+  const [selected, setSelected] = useState<Set<string>>(new Set()); // column-one ticks (a selection; bulk actions are the obvious next step)
   const [menuFor, setMenuFor] = useState<string | null>(null); // row whose ⋯ menu is open
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set()); // optimistic hide
@@ -620,6 +621,13 @@ function RecentSessions({
       return sort.d * ((va as number) - (vb as number));
     });
   const menuSession = menuFor ? source.find((s) => s.id === menuFor) : null;
+  // select-all is scoped to the rows currently SHOWING (filter applied)
+  const selAll = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const selSome = rows.some((r) => selected.has(r.id));
+  const toggleSel = (id: string) =>
+    setSelected((v) => { const n = new Set(v); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAll = () =>
+    setSelected((v) => { const n = new Set(v); for (const r of rows) { if (selAll) n.delete(r.id); else n.add(r.id); } return n; });
   const menuItem =
     "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
 
@@ -641,15 +649,26 @@ function RecentSessions({
               esc clears); the ⋮ show/hide-columns menu sits in the Action column's
               64px slot so it lines up over the row ⋯ buttons. */}
           <div className="flex items-center border-b border-zinc-800">
+            {/* lucide search — says "this row is a search bar"; centred over the select column */}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="ml-3 shrink-0 text-zinc-600">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
             <input
               type="search"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") setFilter(""); }}
-              placeholder={source.length === 0 ? "loading sessions…" : `${rows.length} session${rows.length === 1 ? "" : "s"}`}
+              placeholder={
+                source.length === 0
+                  ? "loading sessions…"
+                  : selected.size > 0
+                    ? `${selected.size} of ${rows.length} selected`
+                    : `${rows.length} session${rows.length === 1 ? "" : "s"}`
+              }
               aria-label="Search sessions"
               autoComplete="off"
-              className="min-w-0 flex-1 bg-transparent py-2 pl-3 font-mono text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent py-2 pl-2 font-mono text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
             />
             <div ref={filterRef} className="flex w-16 shrink-0 items-center justify-center">
               <button
@@ -694,13 +713,26 @@ function RecentSessions({
           </div>
           {/* row 2 — the sortable column header, same column widths as the rows below */}
           <div className="flex items-center whitespace-nowrap border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-600">
-          <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
-            {thBtn("session", "Session", "w-24 shrink-0")}
+          {/* column one — select all (of the rows showing); indeterminate when some */}
+          <div className="flex w-9 shrink-0 items-center justify-center py-1.5">
+            <input
+              type="checkbox"
+              checked={selAll}
+              ref={(el) => { if (el) el.indeterminate = selSome && !selAll; }}
+              onChange={toggleAll}
+              aria-label="select all"
+              className="size-3.5 cursor-pointer accent-blue-600 scheme-dark"
+            />
+          </div>
+          {/* the middle columns share the width evenly (flex-1 each, basis 0);
+              only select (w-9) and Action (w-16) are fixed */}
+          <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5">
+            {thBtn("session", "Session", "min-w-0 flex-1")}
             {cols.description && thBtn("description", "Description", "min-w-0 flex-1")}
-            {cols.project && thBtn("project", "Project", "w-20 shrink-0")}
-            {cols.context && thBtn("context", "Context", "w-16 shrink-0 justify-end", true)}
-            {cols.surface && thBtn("surface", "Surface", "w-12 shrink-0 justify-end")}
-            {cols.lastActivity && thBtn("lastActive", "Last activity", "w-24 shrink-0 justify-end", true)}
+            {cols.project && thBtn("project", "Project", "min-w-0 flex-1")}
+            {cols.context && thBtn("context", "Context", "min-w-0 flex-1 justify-end", true)}
+            {cols.surface && thBtn("surface", "Surface", "min-w-0 flex-1 justify-end")}
+            {cols.lastActivity && thBtn("lastActive", "Last activity", "min-w-0 flex-1 justify-end", true)}
           </div>
           <span className="w-16 shrink-0 text-center">Action</span>
           </div>
@@ -740,18 +772,32 @@ function RecentSessions({
                 key={s.id}
                 data-session-row
                 className={`group/row flex items-center transition-colors ${
-                  menuFor === s.id ? "bg-zinc-800/40" : "hover:bg-zinc-800/40"
+                  menuFor === s.id
+                    ? "bg-zinc-800/40"
+                    : selected.has(s.id)
+                      ? "bg-zinc-800/25 hover:bg-zinc-800/40"
+                      : "hover:bg-zinc-800/40"
                 }`}
               >
+                {/* column one — select; OUTSIDE the Link so a tick never opens the row */}
+                <div className="flex w-9 shrink-0 items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(s.id)}
+                    onChange={() => toggleSel(s.id)}
+                    aria-label={`select ${s.id.slice(0, 8)}`}
+                    className="size-3.5 cursor-pointer accent-blue-600 scheme-dark"
+                  />
+                </div>
                 <Link
                   href={openHref(s.id)}
                   scroll={false}
                   title="open this session in the terminal"
-                  className="flex min-w-0 flex-1 items-baseline gap-3 py-2 pl-3"
+                  className="flex min-w-0 flex-1 items-baseline gap-3 py-2"
                 >
                   {/* session id — a LEADING live dot + green id when live/active (a CC
                       terminal OR hq is on it), same vocabulary as the sidebar dot. */}
-                  <span className="flex w-24 shrink-0 items-center gap-1.5 truncate text-xs font-medium tabular-nums">
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-xs font-medium tabular-nums">
                     <span
                       className={`size-1.5 shrink-0 rounded-full ${
                         s.live
@@ -778,7 +824,7 @@ function RecentSessions({
                   {/* project */}
                   {cols.project && (
                     <span
-                      className={`w-20 shrink-0 truncate text-[11px] ${
+                      className={`min-w-0 flex-1 truncate text-[11px] ${
                         s.project === "Unassigned" ? "text-zinc-600" : "text-zinc-400"
                       }`}
                     >
@@ -788,7 +834,7 @@ function RecentSessions({
                   {/* ctx — amber when the 1M window is ~70%+ full */}
                   {cols.context && (
                     <span
-                      className={`w-16 shrink-0 text-right text-[11px] tabular-nums ${
+                      className={`min-w-0 flex-1 text-right text-[11px] tabular-nums ${
                         s.contextTokens >= CONTEXT_LIMIT * 0.7 ? "text-amber-500/90" : "text-zinc-500"
                       }`}
                     >
@@ -798,7 +844,7 @@ function RecentSessions({
                   {/* last surface — hq vs CC (Claude Code terminal) */}
                   {cols.surface && (
                     <span
-                      className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${
+                      className={`min-w-0 flex-1 text-right text-[11px] tabular-nums ${
                         s.surface === "hq" ? "text-emerald-500/80" : "text-zinc-600"
                       }`}
                       title={s.surface === "hq" ? "last worked on in hq" : "last worked on in a Claude Code terminal"}
@@ -808,7 +854,7 @@ function RecentSessions({
                   )}
                   {/* last activity */}
                   {cols.lastActivity && (
-                    <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">
+                    <span className="min-w-0 flex-1 text-right text-[11px] tabular-nums text-zinc-600">
                       {fmtAgo(now - s.lastActive)}
                     </span>
                   )}
@@ -835,9 +881,6 @@ function RecentSessions({
         </div>
       </div>
 
-      {/* retention consent — under the table; × hides it for this load only,
-          Keep / Delete decide for good (retention-banner.tsx) */}
-      <RetentionBanner />
 
       {/* the ⋯ dropdown — fixed so the scroll box can't clip it. One at a time. */}
       {menuSession && menuPos && (
@@ -3365,10 +3408,10 @@ export default function Terminal({
           // Terminal1Slot, not this — it never reaches the terminal.)
           // Equal margins (measured, not guessed): the header rule sits 20px above
           // this box (its mb-2 + the pane's gap-3) and the send box 12px below it
-          // (the same gap-3), so pt-1 lands the table 24px under the rule and pb-3
-          // leaves 24px above the send box. min-h-0/flex-1 let the table cap
-          // itself to the room between the two.
-          <div className="flex min-h-0 w-full flex-1 flex-col pb-3 pt-1 font-mono">
+          // (the same gap-3), so pt-9 lands the table 56px under the rule and pb-11
+          // leaves 56px above the send box (or its retention strip). min-h-0/flex-1
+          // let the table cap itself to the room between the two.
+          <div className="flex min-h-0 w-full flex-1 flex-col pb-11 pt-9 font-mono">
             {/* SESSIONS — the table (search row + header + rows live in the component).
                 allMode = the picker shows EVERY transcript (fetched from /api/sessions/all). */}
             <RecentSessions allMode sessions={resume?.sessions ?? []} now={now} />
@@ -3751,6 +3794,10 @@ export default function Terminal({
       )}
 
       <div className="flex flex-col">
+        {/* Retention consent — on the sessions view it rides the send box as the
+            same kind of strip as the launch / search banners below (-mb-3 overlap,
+            see retention-banner.tsx). Yields when another strip is up. */}
+        {(home || compose) && !selectedTarget && !searchMode && <RetentionBanner />}
         {/* Launch-target banner — the Claude pattern: a strip BEHIND the input that
             peeks out the top. The input card sits in front (z-10, opaque bg) and
             overlaps the banner's lower edge via -mb-3, so only the top shows. Only
