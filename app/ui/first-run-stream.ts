@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 // sitting exactly where the settled view starts. No scrolling, no settle
 // animation; the stream ends and you are simply there. Plays once per surface
 // (localStorage flag), capped at ~3.5s, instant on every later visit;
-// `?firstrun=1` replays it for demos.
+// `?firstrun=1` (or the catch-all `?demo=1`) replays it for demos.
 //
 // Returns how many TRAILING rows to render; callers do
 //   n === 0 ? [] : rows.slice(-n)     (rows sorted newest-first)
@@ -23,7 +23,8 @@ export function useFirstRunStream(key: string, total: number): number {
 
     let force = false;
     try {
-      force = new URLSearchParams(window.location.search).get("firstrun") === "1";
+      const sp = new URLSearchParams(window.location.search);
+      force = sp.get("firstrun") === "1" || sp.get("demo") === "1";
     } catch {}
     let seen = false;
     try {

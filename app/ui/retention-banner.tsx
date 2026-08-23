@@ -8,14 +8,15 @@ import { useEffect, useState } from "react";
 // search, the census, sweep-or-keep — quietly starves. This banner shows when
 // the pin is absent, says so plainly, and one click pins retention to 3650 via
 // /api/retention. Declining dismisses it for good (localStorage). Never a
-// silent write; the click IS the consent. `?retention=1` forces it for demos.
+// silent write; the click IS the consent. `?retention=1` (or the catch-all `?demo=1`) forces it for demos.
 export default function RetentionBanner() {
   const [state, setState] = useState<"hidden" | "ask" | "saving" | "done">("hidden");
 
   useEffect(() => {
     let force = false;
     try {
-      force = new URLSearchParams(window.location.search).get("retention") === "1";
+      const sp = new URLSearchParams(window.location.search);
+      force = sp.get("retention") === "1" || sp.get("demo") === "1";
     } catch {}
     let dismissed = false;
     try {
