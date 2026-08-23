@@ -86,7 +86,7 @@ function load<T>(key: string, ok: (v: unknown) => v is T, fallback: T): T {
 }
 
 const rowKey = (r: FileRow) => `${r.kind}:${r.ref}`;
-const PAGE = 60; // rows rendered up front; more reveal on scroll (windowed so the
+const PAGE = 300; // rows rendered up front; more reveal on scroll (windowed so the
 // corpus size never costs DOM — the whole point of moving Files out of the modal)
 // dropdown item styling — matches the session table's ⋯ menu 1:1
 const MENU_ITEM =
