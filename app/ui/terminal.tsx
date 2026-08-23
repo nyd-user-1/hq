@@ -4,9 +4,23 @@ import { markSessionsPopulated, resetSessionsPopulated, useFirstRunStream } from
 import RetentionBanner from "@/app/ui/retention-banner";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import Markdown from "@/app/ui/md";
 import BlockMenu from "@/app/ui/block-menu";
+import AnchorLayer, {
+  ANCHOR_HIGHLIGHT_CSS,
+  AnchorIndexMenu,
+  SelectionMenu,
+  UserText,
+  anchorForQuote,
+  parseQuotesFromPrompt,
+  quoteBlock,
+  type AnchorAnswer,
+  type AnchorLayerHandle,
+  type AnchorRecord,
+  type PendingQuote,
+} from "@/app/ui/anchor-layer";
+import { describeRange } from "@/app/ui/text-anchor";
 import { useDocs } from "@/app/ui/docs-state";
 import BoundaryChip from "@/app/ui/boundary-chip";
 import ComposeMenu from "@/app/ui/compose-menu";
@@ -96,7 +110,8 @@ const TERMINAL_RUNTIME_CSS = `
 /* Search: any tool-step accordion CONTAINING a match takes the send box's yellow
    search border (border-yellow-300/70) — color only, 1px stays — so the user sees
    which collapsed section holds the keyword. */
-details[data-hq-match] { border-color: rgba(253, 224, 71, 0.7) !important; }`;
+details[data-hq-match] { border-color: rgba(253, 224, 71, 0.7) !important; }
+${ANCHOR_HIGHLIGHT_CSS}`;
 function ensureTerminalRuntimeStyle() {
   if (typeof document === "undefined") return;
   const ID = "hq-terminal-runtime-style";
@@ -2252,6 +2267,107 @@ export default function Terminal({
 
   // Hydrate this session's block-meta whenever the shown session changes.
   const metaSessionId = pinned ?? resolvedId;
+
+  // ── ANCHORED QUESTIONS (anchor-layer.tsx / lib/anchors.ts) ─────────────────
+  // Select a passage → right-click → "Quote into input" → it lands in the send
+  // box as a blockquote and is remembered as PENDING; on send, every pending
+  // quote still in the prompt becomes an anchor (quote + the words that followed
+  // it = the question), saved to the ~/.claude/hq/anchors.json sidecar. The
+  // overlay then marks the passage with a ?, and every later reply carries the
+  // running Q&A index.
+  const [anchors, setAnchors] = useState<AnchorRecord[]>([]);
+  const pendingQuotesRef = useRef<PendingQuote[]>([]);
+  const [selMenu, setSelMenu] = useState<{ x: number; y: number; text: string; quote: PendingQuote } | null>(null);
+  const anchorLayerRef = useRef<AnchorLayerHandle>(null);
+  useEffect(() => {
+    if (!metaSessionId) { setAnchors([]); pendingQuotesRef.current = []; return; }
+    let alive = true;
+    fetch(`/api/anchors?session=${encodeURIComponent(metaSessionId)}`)
+      .then((r) => r.json())
+      .then((d) => { if (alive && Array.isArray(d?.anchors)) setAnchors(d.anchors); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [metaSessionId]);
+  // Pair each anchor with its turns: the user turn whose text IS the sent prompt
+  // (the optimistic turn matches too), and the first Claude turn after it.
+  const anchorAnswers = useMemo(() => {
+    const out: Record<string, AnchorAnswer> = {};
+    for (const a of anchors) {
+      const sentNorm = a.sent.trim();
+      let userIdx = items.findIndex((it) => it.kind === "turn" && it.role === "user" && it.text.trim() === sentNorm);
+      if (userIdx === -1) {
+        // edited/augmented prompt (attachments, etc.) — the first user turn at/after the send carrying the quote
+        const firstLine = quoteBlock(a.quote.exact).split("\n")[0];
+        const t0 = Date.parse(a.createdAt) - 15_000;
+        userIdx = items.findIndex(
+          (it) => it.kind === "turn" && it.role === "user" && it.text.includes(firstLine) && (!it.at || Date.parse(it.at) >= t0),
+        );
+      }
+      if (userIdx === -1) { out[a.id] = {}; continue; }
+      let answerIdx: number | undefined;
+      for (let j = userIdx + 1; j < items.length; j++) {
+        const it = items[j];
+        if (it.kind === "turn" && it.role === "assistant") { answerIdx = j; break; }
+      }
+      out[a.id] = {
+        userIdx,
+        answerIdx,
+        answerText: answerIdx != null ? (items[answerIdx] as { text: string }).text : undefined,
+      };
+    }
+    return out;
+  }, [anchors, items]);
+  // "Quote into input": the selection becomes a `> blockquote` at the end of the
+  // draft with the caret on the line after it (type the "-- huh?" right there).
+  const quoteIntoInput = () => {
+    const m = selMenu;
+    if (!m) return;
+    const block = quoteBlock(m.text);
+    setDraft((d) => { const base = d.replace(/\s+$/, ""); return (base ? base + "\n\n" : "") + block + "\n"; });
+    pendingQuotesRef.current = [...pendingQuotesRef.current, m.quote];
+    setSelMenu(null);
+    window.getSelection()?.removeAllRanges();
+    requestAnimationFrame(() => {
+      const ta = taRef.current;
+      if (!ta) return;
+      ta.focus();
+      const n = ta.value.length;
+      ta.setSelectionRange(n, n);
+    });
+  };
+  // On send: mint anchors for the pending quotes still in the prompt and persist.
+  const commitAnchors = (prompt: string) => {
+    const pend = pendingQuotesRef.current;
+    pendingQuotesRef.current = [];
+    if (!pend.length || !metaSessionId) return;
+    const recs = parseQuotesFromPrompt(prompt, pend);
+    if (!recs.length) return;
+    setAnchors((a) => [...a, ...recs]);
+    fetch("/api/anchors", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId: metaSessionId, anchors: recs }),
+    }).catch(() => {});
+  };
+  // Navigation: to a turn (the answer) — upper part of the view, then a brief
+  // orange ring; to a passage — the overlay owns the ranges, so it scrolls + flashes.
+  const jumpToAnswer = (idx: number) => {
+    const c = scrollRef.current;
+    const el = c?.querySelector<HTMLElement>(`[data-turn-idx="${idx}"]`);
+    if (!c || !el) return;
+    const eRect = el.getBoundingClientRect();
+    const cRect = c.getBoundingClientRect();
+    c.scrollTo({ top: eRect.top - cRect.top + c.scrollTop - 72, behavior: "smooth" });
+    (el.querySelector<HTMLElement>("[data-role]") ?? el).animate(
+      [{ boxShadow: "0 0 0 2px rgba(249,115,22,0.7)" }, { boxShadow: "0 0 0 2px rgba(249,115,22,0)" }],
+      { duration: 1600, easing: "ease-out" },
+    );
+  };
+  const jumpToSource = (id: string) => anchorLayerRef.current?.jumpTo(id);
+  const jumpToSourceByQuote = (quote: string) => {
+    const a = anchorForQuote(anchors, quote);
+    if (a) jumpToSource(a.id);
+  };
   useEffect(() => {
     if (!metaSessionId) {
       setBlockMeta({});
@@ -2361,7 +2477,7 @@ export default function Terminal({
   const renderTurn = (it: TurnItem, i: number) => {
     const meta = blockMeta[blockKey(it)] ?? {};
     return (
-      <div key={i} className="flex flex-col gap-1">
+      <div key={i} data-turn-idx={i} data-turn-uuid={it.uuid} className="flex flex-col gap-1">
         <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-zinc-500">
           <span>
             <span
@@ -2443,6 +2559,17 @@ export default function Terminal({
                   : "border-zinc-800 bg-zinc-900/40 text-zinc-300"
             }`}
           >
+            {/* anchored questions — the running Q&A index rides every reply from the
+                first anchored question on (a hover-only ? beside the block ⋮) */}
+            {it.role === "assistant" && (
+              <AnchorIndexMenu
+                entries={anchors
+                  .map((a) => ({ anchor: a, answerIdx: anchorAnswers[a.id]?.answerIdx }))
+                  .filter((e) => e.answerIdx != null && e.answerIdx <= i)}
+                onJumpSource={jumpToSource}
+                onJumpAnswer={jumpToAnswer}
+              />
+            )}
             <BlockMenu
               saved={savedNotes.has(it.text)}
               favorite={!!meta.favorite}
@@ -2457,7 +2584,12 @@ export default function Terminal({
               onReact={(r) => reactToBlock(it, r)}
               onHide={() => toggleBlockHidden(it)}
             />
-            {it.role === "assistant" ? <Markdown text={it.text} /> : it.text}
+            {it.role === "assistant" ? (
+              <Markdown text={it.text} />
+            ) : (
+              // your own turn — `> quote` lines draw as quote blocks that link back to their passage
+              <UserText text={it.text} onQuote={jumpToSourceByQuote} />
+            )}
             {it.role === "assistant" && it.turnTokens ? (
               <span
                 title="output tokens this whole work block burned (every API call from your prompt to this reply)"
@@ -2677,6 +2809,7 @@ export default function Terminal({
         ...t,
         { kind: "turn", role: "user", text: prompt, at: new Date().toISOString() },
       ]);
+      commitAnchors(prompt);
       setDraft("");
       setAttachments([]);
       setError(null);
@@ -2714,6 +2847,7 @@ export default function Terminal({
         ...t,
         { kind: "turn", role: "user", text: prompt, at: new Date().toISOString() },
       ]);
+      commitAnchors(prompt);
       setDraft("");
       setAttachments([]);
       setError(null);
@@ -2752,6 +2886,7 @@ export default function Terminal({
         ...t,
         { kind: "turn", role: "user", text: optimistic, at: new Date().toISOString() },
       ]);
+      commitAnchors(prompt);
       setDraft("");
       setAttachments([]);
       setError(null);
@@ -2801,6 +2936,7 @@ export default function Terminal({
       ...t,
       { kind: "turn", role: "user", text: optimistic, at: new Date().toISOString() },
     ]);
+    commitAnchors(prompt);
     setDraft("");
     setAttachments([]);
     drivenSessionRef.current = target; // bind `live` to THIS session (auto-clear tracks it)
@@ -3381,6 +3517,22 @@ export default function Terminal({
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
+        // Right-click ON A SELECTION → the quote menu (anchored questions). With no
+        // selection the native menu is untouched.
+        onContextMenu={(e) => {
+          const c = scrollRef.current;
+          const sel = window.getSelection();
+          if (!c || !sel || sel.isCollapsed || !sel.rangeCount) return;
+          const r = sel.getRangeAt(0);
+          if (!c.contains(r.commonAncestorContainer)) return;
+          const text = r.toString();
+          if (!text.trim()) return;
+          e.preventDefault();
+          const q = describeRange(c, r);
+          const startEl = r.startContainer.nodeType === 1 ? (r.startContainer as Element) : r.startContainer.parentElement;
+          const owner = startEl?.closest("[data-turn-uuid]")?.getAttribute("data-turn-uuid") ?? undefined;
+          setSelMenu({ x: e.clientX, y: e.clientY, text, quote: { ...q, sourceTurn: owner } });
+        }}
         onScroll={(e) => {
           const el = e.currentTarget;
           const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
@@ -3392,7 +3544,7 @@ export default function Terminal({
         // The sessions view never scrolls here (the table scrolls itself, the
         // column fills exactly), so it's overflow-VISIBLE there — which lets the
         // retention card start out behind the send box and slide up from it.
-        className={`scrollbar-none flex min-h-0 flex-1 flex-col gap-4 ${home || compose ? "overflow-visible" : "overflow-y-auto"}`}
+        className={`scrollbar-none relative flex min-h-0 flex-1 flex-col gap-4 ${home || compose ? "overflow-visible" : "overflow-y-auto"}`}
         // Top-edge fade — masks the top ~64px of the scroll viewport to
         // transparent so streaming text dissolves into the bg as it slides up
         // under the header (instead of a hard cut). Inline so it can't be purged
@@ -3408,6 +3560,27 @@ export default function Terminal({
               }
         }
       >
+        {/* anchored questions — the ? markers + highlights overlay (absolute, scrolls
+            with the content) and the right-click quote menu */}
+        {!staged && anchors.length > 0 && (
+          <AnchorLayer
+            ref={anchorLayerRef}
+            containerRef={scrollRef}
+            anchors={anchors}
+            answers={anchorAnswers}
+            onJumpAnswer={jumpToAnswer}
+            epoch={items.length}
+          />
+        )}
+        {selMenu && (
+          <SelectionMenu
+            x={selMenu.x}
+            y={selMenu.y}
+            onQuote={quoteIntoInput}
+            onCopy={() => { navigator.clipboard.writeText(selMenu.text); setSelMenu(null); }}
+            onClose={() => setSelMenu(null)}
+          />
+        )}
         {/* Centered column when `centered`; `display:contents` (a no-op) when not,
             so the full-width transcript is unchanged. */}
         {/* In the sessions view the column FILLS the scroll area (flex-1; inert
