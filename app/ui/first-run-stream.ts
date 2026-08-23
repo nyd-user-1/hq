@@ -55,3 +55,24 @@ export function useFirstRunStream(key: string, total: number): number {
 
   return Math.min(count, total);
 }
+
+// "THE TABLE HAS POPULATED" — a tiny signal the retention strip waits on before
+// it slides up from behind the send box: rows are in AND the first-run flood (if
+// one played) has finished. RecentSessions marks it; the strip subscribes (a late
+// subscriber fires immediately if it already happened); the table resets it on
+// unmount so a re-mounted table (another visit to the sessions view) re-gates.
+let populated = false;
+const subs = new Set<() => void>();
+export function markSessionsPopulated() {
+  if (populated) return;
+  populated = true;
+  subs.forEach((f) => f());
+}
+export function resetSessionsPopulated() {
+  populated = false;
+}
+export function onSessionsPopulated(f: () => void): () => void {
+  if (populated) f();
+  else subs.add(f);
+  return () => { subs.delete(f); };
+}

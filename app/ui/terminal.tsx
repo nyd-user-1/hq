@@ -1,6 +1,6 @@
 "use client";
 
-import { useFirstRunStream } from "@/app/ui/first-run-stream";
+import { markSessionsPopulated, resetSessionsPopulated, useFirstRunStream } from "@/app/ui/first-run-stream";
 import RetentionBanner from "@/app/ui/retention-banner";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -426,6 +426,7 @@ function RecentSessions({
   // sidebar. A meta write (favorite/hide) doesn't touch transcripts, so it won't
   // trigger a refetch that clobbers the optimistic set.
   const [allRows, setAllRows] = useState<NonNullable<ResumeOptions>["sessions"]>([]);
+  const [allLoaded, setAllLoaded] = useState(false); // first /api/sessions/all answer is in (0 rows ≠ loading)
   useEffect(() => {
     if (!allMode) return;
     let alive = true;
@@ -435,6 +436,7 @@ function RecentSessions({
         const d = await (await fetch("/api/sessions/all")).json();
         if (!alive || !d?.sessions) return;
         setAllRows(d.sessions);
+        setAllLoaded(true);
         setStarred(new Set(d.sessions.filter((s: { favorite?: boolean }) => s.favorite).map((s: { id: string }) => s.id)));
         setHidden(new Set(d.sessions.filter((s: { hidden?: boolean }) => s.hidden).map((s: { id: string }) => s.id)));
         setArchived(new Set(d.sessions.filter((s: { archived?: boolean }) => s.archived).map((s: { id: string }) => s.id)));
@@ -568,7 +570,13 @@ function RecentSessions({
   const source = allMode ? allRows : sessions;
   // first-run census flood (once ever; ?firstrun=1 replays) — hooks live above
   // the early return per rules-of-hooks; see first-run-stream.ts
-  const floodCount = useFirstRunStream("sessions", source.filter((s) => !hidden.has(s.id) && !archived.has(s.id)).length);
+  const visibleTotal = source.filter((s) => !hidden.has(s.id) && !archived.has(s.id)).length;
+  const floodCount = useFirstRunStream("sessions", visibleTotal);
+  // "populated" — the rows are in (or there are none) and the first-run flood, if
+  // one played, has finished. The retention strip waits on this to slide in.
+  const populated = (allMode ? allLoaded : true) && (visibleTotal === 0 || floodCount >= visibleTotal);
+  useEffect(() => { if (populated) markSessionsPopulated(); }, [populated]);
+  useEffect(() => () => resetSessionsPopulated(), []);
   // column sort — click a header to sort; click again to flip. Strings default
   // a→z, numbers default large→small; lastActive-desc is the resting order.
   const [sort, setSort] = useState<{ k: string; d: 1 | -1 }>({ k: "lastActive", d: -1 });
@@ -660,7 +668,7 @@ function RecentSessions({
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Escape") setFilter(""); }}
               placeholder={
-                source.length === 0
+                allMode && !allLoaded
                   ? "loading sessions…"
                   : selected.size > 0
                     ? `${selected.size} of ${rows.length} selected`
@@ -724,15 +732,16 @@ function RecentSessions({
               className="size-3.5 cursor-pointer accent-blue-600 scheme-dark"
             />
           </div>
-          {/* the middle columns share the width evenly (flex-1 each, basis 0);
-              only select (w-9) and Action (w-16) are fixed */}
+          {/* Description is the ONLY elastic column — every other cell holds a
+              short, predictable value (id, project, numbers, surface, time), so
+              they're fixed and the description absorbs all the remaining width. */}
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5">
-            {thBtn("session", "Session", "min-w-0 flex-1")}
+            {thBtn("session", "Session", "w-24 shrink-0")}
             {cols.description && thBtn("description", "Description", "min-w-0 flex-1")}
-            {cols.project && thBtn("project", "Project", "min-w-0 flex-1")}
-            {cols.context && thBtn("context", "Context", "min-w-0 flex-1 justify-end", true)}
-            {cols.surface && thBtn("surface", "Surface", "min-w-0 flex-1 justify-end")}
-            {cols.lastActivity && thBtn("lastActive", "Last activity", "min-w-0 flex-1 justify-end", true)}
+            {cols.project && thBtn("project", "Project", "w-20 shrink-0")}
+            {cols.context && thBtn("context", "Context", "w-16 shrink-0 justify-end", true)}
+            {cols.surface && thBtn("surface", "Surface", "w-12 shrink-0 justify-end")}
+            {cols.lastActivity && thBtn("lastActive", "Last activity", "w-24 shrink-0 justify-end", true)}
           </div>
           <span className="w-16 shrink-0 text-center">Action</span>
           </div>
@@ -797,7 +806,7 @@ function RecentSessions({
                 >
                   {/* session id — a LEADING live dot + green id when live/active (a CC
                       terminal OR hq is on it), same vocabulary as the sidebar dot. */}
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-xs font-medium tabular-nums">
+                  <span className="flex w-24 shrink-0 items-center gap-1.5 truncate text-xs font-medium tabular-nums">
                     <span
                       className={`size-1.5 shrink-0 rounded-full ${
                         s.live
@@ -824,7 +833,7 @@ function RecentSessions({
                   {/* project */}
                   {cols.project && (
                     <span
-                      className={`min-w-0 flex-1 truncate text-[11px] ${
+                      className={`w-20 shrink-0 truncate text-[11px] ${
                         s.project === "Unassigned" ? "text-zinc-600" : "text-zinc-400"
                       }`}
                     >
@@ -834,7 +843,7 @@ function RecentSessions({
                   {/* ctx — amber when the 1M window is ~70%+ full */}
                   {cols.context && (
                     <span
-                      className={`min-w-0 flex-1 text-right text-[11px] tabular-nums ${
+                      className={`w-16 shrink-0 text-right text-[11px] tabular-nums ${
                         s.contextTokens >= CONTEXT_LIMIT * 0.7 ? "text-amber-500/90" : "text-zinc-500"
                       }`}
                     >
@@ -844,7 +853,7 @@ function RecentSessions({
                   {/* last surface — hq vs CC (Claude Code terminal) */}
                   {cols.surface && (
                     <span
-                      className={`min-w-0 flex-1 text-right text-[11px] tabular-nums ${
+                      className={`w-12 shrink-0 text-right text-[11px] tabular-nums ${
                         s.surface === "hq" ? "text-emerald-500/80" : "text-zinc-600"
                       }`}
                       title={s.surface === "hq" ? "last worked on in hq" : "last worked on in a Claude Code terminal"}
@@ -854,7 +863,7 @@ function RecentSessions({
                   )}
                   {/* last activity */}
                   {cols.lastActivity && (
-                    <span className="min-w-0 flex-1 text-right text-[11px] tabular-nums text-zinc-600">
+                    <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-zinc-600">
                       {fmtAgo(now - s.lastActive)}
                     </span>
                   )}
