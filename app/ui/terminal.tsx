@@ -557,6 +557,26 @@ function RecentSessions({
   // first-run census flood (once ever; ?firstrun=1 replays) — hooks live above
   // the early return per rules-of-hooks; see first-run-stream.ts
   const floodCount = useFirstRunStream("sessions", source.filter((s) => !hidden.has(s.id) && !archived.has(s.id)).length);
+  // column sort — click a header to sort; click again to flip. Strings default
+  // a→z, numbers default large→small; lastActive-desc is the resting order.
+  const [sort, setSort] = useState<{ k: string; d: 1 | -1 }>({ k: "lastActive", d: -1 });
+  const sortVal = (s: { id: string; customTitle?: string; description?: string; snippet?: string; project?: string; contextTokens?: number; surface?: string; lastActive: number }, k: string): string | number =>
+    k === "session" ? s.id
+    : k === "description" ? (s.customTitle || s.description || s.snippet || "")
+    : k === "project" ? (s.project || "")
+    : k === "context" ? (s.contextTokens ?? -1)
+    : k === "surface" ? (s.surface || "")
+    : s.lastActive;
+  const thBtn = (k: string, label: string, cls: string, numeric = false) => (
+    <button
+      type="button"
+      onClick={() => setSort((p) => (p.k === k ? { k, d: (p.d * -1) as 1 | -1 } : { k, d: (numeric ? -1 : 1) as 1 | -1 }))}
+      className={`${cls} flex items-center gap-1 uppercase tracking-wider transition-colors hover:text-zinc-400 ${sort.k === k ? "text-zinc-300" : ""}`}
+    >
+      {label}
+      {sort.k === k && <span className="normal-case">{sort.d === 1 ? "↑" : "↓"}</span>}
+    </button>
+  );
   if (!allMode && sessions.length === 0) return null;
 
   // Focus-aware open: a session picked while a WALL pane (t2..t4) is active opens
@@ -581,7 +601,13 @@ function RecentSessions({
     .filter((s) => !archived.has(s.id))
     .filter((s) => !q || `${s.id} ${s.project} ${s.snippet ?? ""}`.toLowerCase().includes(q))
     .slice()
-    .sort((a, b) => b.lastActive - a.lastActive);
+    .sort((a, b) => {
+      const va = sortVal(a, sort.k);
+      const vb = sortVal(b, sort.k);
+      if (typeof va === "string" || typeof vb === "string")
+        return sort.d * String(va).localeCompare(String(vb));
+      return sort.d * ((va as number) - (vb as number));
+    });
   const menuSession = menuFor ? source.find((s) => s.id === menuFor) : null;
   const menuItem =
     "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
@@ -647,12 +673,12 @@ function RecentSessions({
         {/* fixed (sticky) column header — same column widths as the rows below */}
         <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
-            <span className="w-24 shrink-0">Session</span>
-            {cols.description && <span className="min-w-0 flex-1">Description</span>}
-            {cols.project && <span className="w-20 shrink-0">Project</span>}
-            {cols.context && <span className="w-16 shrink-0 text-right">Context</span>}
-            {cols.surface && <span className="w-12 shrink-0 text-right">Surface</span>}
-            {cols.lastActivity && <span className="w-24 shrink-0 text-right">Last activity</span>}
+            {thBtn("session", "Session", "w-24 shrink-0")}
+            {cols.description && thBtn("description", "Description", "min-w-0 flex-1")}
+            {cols.project && thBtn("project", "Project", "w-20 shrink-0")}
+            {cols.context && thBtn("context", "Context", "w-16 shrink-0 justify-end", true)}
+            {cols.surface && thBtn("surface", "Surface", "w-12 shrink-0 justify-end")}
+            {cols.lastActivity && thBtn("lastActive", "Last activity", "w-24 shrink-0 justify-end", true)}
           </div>
           <span className="w-16 shrink-0 text-center">Action</span>
         </div>
@@ -3313,76 +3339,6 @@ export default function Terminal({
           // SESSIONS (reopen one). (The "/" cold open now shows the pitch landing via
           // Terminal1Slot, not this — it never reaches the terminal.)
           <div className="flex w-full flex-col gap-6 pb-8 pt-6 font-mono">
-            {/* PROJECTS — click to SELECT a launch target (the session starts only on
-                send, never on a stray click). An even grid, clamped to 2 rows; the
-                chevron reveals the rest. */}
-            <div className="flex flex-col gap-3">
-              {/* All project chips in a 2-row band that scrolls HORIZONTALLY — no
-                  "more" expander, no clipped third row. grid-flow-col fills top-then-
-                  bottom, flowing rightward; the band scrolls x for the overflow. */}
-              <div className="scrollbar-none grid grid-flow-col grid-rows-2 auto-cols-[7.5rem] gap-2 overflow-x-auto pb-1">
-                {/* "+ new" — the FIRST cell (row 1, col 1), before the projects. Names a
-                    new project (folder created on send); expands into an input in place. */}
-                {newOpen ? (
-                  <input
-                    autoFocus
-                    value={newProjectName}
-                    onChange={(e) => setNewProjectName(e.target.value)}
-                    onKeyDown={(e) => {
-                      const name = newProjectName.trim();
-                      if (e.key === "Enter" && name) {
-                        e.preventDefault();
-                        setSelectedTarget({ name, newProject: name });
-                        setNewProjectName("");
-                        setNewOpen(false);
-                      } else if (e.key === "Escape") {
-                        setNewOpen(false);
-                        setNewProjectName("");
-                      }
-                    }}
-                    onBlur={() => {
-                      const name = newProjectName.trim();
-                      if (name) setSelectedTarget({ name, newProject: name });
-                      setNewOpen(false);
-                      setNewProjectName("");
-                    }}
-                    disabled={!!starting}
-                    placeholder="project name… ↵"
-                    className="h-9 w-full rounded-md border border-dashed border-emerald-500/50 bg-transparent px-2 text-[11px] text-emerald-200 placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    disabled={!!starting}
-                    onClick={() => setNewOpen(true)}
-                    title="name a new project (the folder is created when you send)"
-                    className="flex h-9 items-center justify-center rounded-md border border-dashed border-zinc-700 px-2 text-[11px] text-zinc-500 transition-colors hover:border-emerald-500/50 hover:text-emerald-300 disabled:opacity-50"
-                  >
-                    + new
-                  </button>
-                )}
-                {projects.map((p) => {
-                  const sel = selectedTarget?.cwd === p.path;
-                  return (
-                    <button
-                      key={p.path}
-                      type="button"
-                      disabled={!!starting}
-                      onClick={() => setSelectedTarget(sel ? null : { name: p.name, cwd: p.path })}
-                      title={`launch a session in ${p.path}`}
-                      className={`flex h-9 items-center rounded-md border px-2 transition-colors disabled:opacity-50 ${
-                        sel
-                          ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"
-                          : "border-zinc-800 text-zinc-300 hover:border-emerald-500/50 hover:text-emerald-300"
-                      }`}
-                    >
-                      <span className="w-full truncate text-center text-[11px]">{p.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* SESSIONS — its own ruled section (header + border live in the component).
                 allMode = the picker shows EVERY transcript (fetched from /api/sessions/all). */}
             <RecentSessions allMode sessions={resume?.sessions ?? []} now={now} />
@@ -3950,7 +3906,7 @@ export default function Terminal({
                       : staged
                         ? selectedTarget
                           ? `message ${selectedTarget.name} — ↵ launches it`
-                          : "write your first message — ↵ launches in ~/hq (or pick a project)"
+                          : "write your first message — ↵ launches in ~/hq"
                         : "↵ send · ⇧↵ newline"
                   }
                   className={`scrollbar-slim relative max-h-[176px] min-h-[40px] w-full resize-none overflow-y-auto bg-transparent px-1 py-0.5 font-mono text-xs placeholder:text-zinc-600 focus:outline-none ${

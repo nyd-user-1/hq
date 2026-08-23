@@ -63,9 +63,9 @@ export default function RetentionBanner() {
         </span>
       ) : (
         <>
-          <span className="min-w-0 flex-1 font-mono text-[12px] leading-relaxed text-zinc-300">
-            Claude Code deletes your transcripts after 30 days.{" "}
-            <span className="text-zinc-500">HQ can keep everything until you choose to sweep.</span>
+          <span className="min-w-0 flex-1 font-mono text-[12px] leading-relaxed">
+            <span className="block text-zinc-300">Claude Code deletes transcripts after 30 days.</span>
+            <span className="block text-zinc-500">Would you rather keep them?</span>
           </span>
           <span className="ml-auto flex shrink-0 items-center gap-2">
             <button
@@ -73,13 +73,13 @@ export default function RetentionBanner() {
               disabled={state === "saving"}
               className="rounded-md bg-blue-600 px-3 py-1 font-mono text-[12px] text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
             >
-              {state === "saving" ? "Saving…" : "Keep everything"}
+              {state === "saving" ? "Saving…" : "Keep files"}
             </button>
             <button
               onClick={dismiss}
               className="rounded-md px-2 py-1 font-mono text-[12px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
             >
-              Leave as is
+              Delete Files
             </button>
           </span>
         </>
