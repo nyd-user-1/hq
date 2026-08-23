@@ -9,7 +9,6 @@ import Markdown from "@/app/ui/md";
 import BlockMenu from "@/app/ui/block-menu";
 import { useDocs } from "@/app/ui/docs-state";
 import BoundaryChip from "@/app/ui/boundary-chip";
-import SearchField from "@/app/ui/search-field";
 import ComposeMenu from "@/app/ui/compose-menu";
 import ButtonChipIcon from "@/app/ui/button-chip-icon";
 import SendBoxSearch from "@/app/ui/send-box-search";
@@ -354,8 +353,9 @@ const MBranch = () => (
 );
 
 // Recent-session DATA TABLE, shared by the fresh pane and the "+" staging view.
-// A SearchField + a "Columns" dropdown sit on a header rule; below, each session
-// is a clickable row, with a ⋯ actions menu identical to the sidebar Recents kebab
+// ONE bordered box: row 1 is the search bar (placeholder = the live row count)
+// with a ⋮ show/hide-columns menu in the Action slot, row 2 the sortable column
+// header (both sticky), then each session as a clickable row, with a ⋯ actions menu identical to the sidebar Recents kebab
 // (Favorite / Rename / Set project / Related / Terminal 2 / Hide / Archive / copy
 // id), persisting to the same ~/.claude/hq/sessions-meta sidecar.
 function RecentSessions({
@@ -378,7 +378,8 @@ function RecentSessions({
   const sessionParam = params.get("session");
 
   const [filter, setFilter] = useState("");
-  const [filterOpen, setFilterOpen] = useState(false); // the "Columns" dropdown
+  const [filterOpen, setFilterOpen] = useState(false); // the ⋮ columns dropdown
+  const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null); // fixed anchor (the box would clip an absolute menu)
   const [menuFor, setMenuFor] = useState<string | null>(null); // row whose ⋯ menu is open
   const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set()); // optimistic hide
@@ -487,8 +488,18 @@ function RecentSessions({
       if (filterRef.current && !filterRef.current.contains(e.target as Node))
         setFilterOpen(false);
     };
+    const close = () => setFilterOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [filterOpen]);
 
   // Fire-and-forget write to the shared sidecar (~/.claude/hq/sessions-meta.json),
@@ -613,65 +624,76 @@ function RecentSessions({
     "flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900";
 
   return (
-    <div className={`flex flex-col gap-3 ${allMode ? "mt-6" : ""}`}>
-      <RetentionBanner />
-      {/* header — SearchField (left, narrowed) IN LINE with the "Filter" (by
-          project) dropdown on the right; the Shipped feed / Components control pair. */}
-      <div className="flex items-end gap-2 pb-0.5">
-        <div className="w-72 max-w-[60%] shrink-0">
-          <SearchField
-            value={filter}
-            onChange={setFilter}
-            placeholder="Search sessions…"
-            className="h-[35px] py-0"
-          />
-        </div>
-        <div ref={filterRef} className="relative ml-auto">
-          <button
-            onClick={() => setFilterOpen((o) => !o)}
-            title="show / hide columns"
-            aria-label="Columns"
-            aria-haspopup="menu"
-            aria-expanded={filterOpen}
-            className="flex max-w-full items-center gap-1 rounded-md px-1.5 py-1 font-mono text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-          >
-            Columns
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
-          {filterOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full z-30 mt-1 flex w-44 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
-            >
-              {TABLE_COLS.map(([key, label]) => (
-                <button
-                  key={key}
-                  role="menuitemcheckbox"
-                  aria-checked={cols[key]}
-                  onClick={() => toggleCol(key)}
-                  className="flex items-center justify-between rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+    <div className={`flex flex-col gap-3 ${allMode ? "min-h-0 flex-1" : ""}`}>
+      {/* The session list — ONE bordered scroll box: search row + column header
+          (sticky together) over the rows. In the sessions view (allMode) the box
+          grows with its rows and is capped by the column — min-h-0 lets it shrink
+          when the window is short, so it always clears the send box; the view's
+          own padding sets equal margins to the header rule and the send box. The
+          fresh-resume pane keeps its fixed cap. No edge fade/scrim (it read as
+          the table "running under" the send box). */}
+      <div
+        className="scrollbar-none min-h-0 overflow-y-auto rounded-lg border border-zinc-800"
+        style={allMode ? undefined : { maxHeight: "min(444px, calc(100dvh - 526px))" }}
+      >
+        <div className="sticky top-0 z-10 bg-zinc-950">
+          {/* row 1 — the search bar IS the top row (placeholder = the live count;
+              esc clears); the ⋮ show/hide-columns menu sits in the Action column's
+              64px slot so it lines up over the row ⋯ buttons. */}
+          <div className="flex items-center border-b border-zinc-800">
+            <input
+              type="search"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Escape") setFilter(""); }}
+              placeholder={source.length === 0 ? "loading sessions…" : `${rows.length} session${rows.length === 1 ? "" : "s"}`}
+              aria-label="Search sessions"
+              autoComplete="off"
+              className="min-w-0 flex-1 bg-transparent py-2 pl-3 font-mono text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+            />
+            <div ref={filterRef} className="flex w-16 shrink-0 items-center justify-center">
+              <button
+                onClick={(e) => {
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  setFilterPos({ top: r.bottom + 4, left: Math.max(8, r.right - 176) }); // 176 = the menu's w-44
+                  setFilterOpen((o) => !o);
+                }}
+                title="show / hide columns"
+                aria-label="Columns"
+                aria-haspopup="menu"
+                aria-expanded={filterOpen}
+                className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-700/60 hover:text-zinc-100"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <circle cx="12" cy="5" r="1.6" />
+                  <circle cx="12" cy="12" r="1.6" />
+                  <circle cx="12" cy="19" r="1.6" />
+                </svg>
+              </button>
+              {filterOpen && filterPos && (
+                <div
+                  role="menu"
+                  style={{ top: filterPos.top, left: filterPos.left }}
+                  className="fixed z-50 flex w-44 flex-col rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-xl"
                 >
-                  {label}
-                  {cols[key] && <span className="text-blue-400">✓</span>}
-                </button>
-              ))}
+                  {TABLE_COLS.map(([key, label]) => (
+                    <button
+                      key={key}
+                      role="menuitemcheckbox"
+                      aria-checked={cols[key]}
+                      onClick={() => toggleCol(key)}
+                      className="flex items-center justify-between rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-900"
+                    >
+                      {label}
+                      {cols[key] && <span className="text-blue-400">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* The session list — a plain bordered scroll box. NO edge fade/scrim (the
-          gradient read as the table "running under" the send box). Capped at 444px,
-          but it SHRINKS on shorter windows so it always clears the send box with a
-          gap instead of sliding behind it — min(444, viewport − everything-else).
-          INLINE so the cap ships in the DOM (can't be purged from the CSS chunk).
-          The −526 (vs −490) absorbs the mt-6/mt-3 spacing added above, so the gap
-          above the send box is preserved on short windows. */}
-      <div className="mt-3 scrollbar-none overflow-y-auto rounded-lg border border-zinc-800" style={{ maxHeight: "min(444px, calc(100dvh - 526px))" }}>
-        {/* fixed (sticky) column header — same column widths as the rows below */}
-        <div className="sticky top-0 z-10 flex items-center whitespace-nowrap border-b border-zinc-800 bg-zinc-950 text-[10px] uppercase tracking-wider text-zinc-600">
+          </div>
+          {/* row 2 — the sortable column header, same column widths as the rows below */}
+          <div className="flex items-center whitespace-nowrap border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-600">
           <div className="flex min-w-0 flex-1 items-baseline gap-3 py-1.5 pl-3">
             {thBtn("session", "Session", "w-24 shrink-0")}
             {cols.description && thBtn("description", "Description", "min-w-0 flex-1")}
@@ -681,6 +703,7 @@ function RecentSessions({
             {cols.lastActivity && thBtn("lastActive", "Last activity", "w-24 shrink-0 justify-end", true)}
           </div>
           <span className="w-16 shrink-0 text-center">Action</span>
+          </div>
         </div>
         <div className="divide-y divide-zinc-800/70">
           {rows.length === 0 ? (
@@ -812,10 +835,9 @@ function RecentSessions({
         </div>
       </div>
 
-      {/* row count — bottom-right under the table (scroll-only, no pagination) */}
-      <div className="flex justify-end px-1 font-mono text-[10px] text-zinc-600">
-        {rows.length} session{rows.length === 1 ? "" : "s"}
-      </div>
+      {/* retention consent — under the table; × hides it for this load only,
+          Keep / Delete decide for good (retention-banner.tsx) */}
+      <RetentionBanner />
 
       {/* the ⋯ dropdown — fixed so the scroll box can't clip it. One at a time. */}
       {menuSession && menuPos && (
@@ -3328,7 +3350,10 @@ export default function Terminal({
       >
         {/* Centered column when `centered`; `display:contents` (a no-op) when not,
             so the full-width transcript is unchanged. */}
-        <div draggable={false} className={`${colWrap} cursor-auto`}>
+        {/* In the sessions view the column FILLS the scroll area (flex-1; inert
+            when colWrap is `contents`) so the table can size to it — the table
+            scrolls internally, this container never does. */}
+        <div draggable={false} className={`${colWrap} ${home || compose ? "min-h-0 flex-1" : ""} cursor-auto`}>
         {/* The "+" staging view: nothing exists yet — say how a session is
             born, offer the recent list, and auto-flip when one appears. No
             handoff kickoff here: that belongs to /clear-born continuations. */}
@@ -3338,8 +3363,13 @@ export default function Terminal({
           // above). Two ruled sections — PROJECTS (pick a launch target) then
           // SESSIONS (reopen one). (The "/" cold open now shows the pitch landing via
           // Terminal1Slot, not this — it never reaches the terminal.)
-          <div className="flex w-full flex-col gap-6 pb-8 pt-6 font-mono">
-            {/* SESSIONS — its own ruled section (header + border live in the component).
+          // Equal margins (measured, not guessed): the header rule sits 20px above
+          // this box (its mb-2 + the pane's gap-3) and the send box 12px below it
+          // (the same gap-3), so pt-1 lands the table 24px under the rule and pb-3
+          // leaves 24px above the send box. min-h-0/flex-1 let the table cap
+          // itself to the room between the two.
+          <div className="flex min-h-0 w-full flex-1 flex-col pb-3 pt-1 font-mono">
+            {/* SESSIONS — the table (search row + header + rows live in the component).
                 allMode = the picker shows EVERY transcript (fetched from /api/sessions/all). */}
             <RecentSessions allMode sessions={resume?.sessions ?? []} now={now} />
           </div>
