@@ -1,6 +1,7 @@
 "use client";
 
 import { useFirstRunStream } from "@/app/ui/first-run-stream";
+import RetentionBanner from "@/app/ui/retention-banner";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
@@ -587,6 +588,7 @@ function RecentSessions({
 
   return (
     <div className={`flex flex-col gap-3 ${allMode ? "mt-6" : ""}`}>
+      <RetentionBanner />
       {/* header — SearchField (left, narrowed) IN LINE with the "Filter" (by
           project) dropdown on the right; the Shipped feed / Components control pair. */}
       <div className="flex items-end gap-2 pb-0.5">
